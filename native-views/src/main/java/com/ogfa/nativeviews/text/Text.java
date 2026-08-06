@@ -13,6 +13,9 @@ import android.view.View;
 
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
+import com.ogfa.nativeviews.component.Component;
+import com.ogfa.nativeviews.component.ComponentFactory;
+import com.ogfa.nativeviews.component.ComponentHost;
 import com.ogfa.nativeviews.text.internal.TypefaceCache;
 
 import java.util.Objects;
@@ -21,10 +24,10 @@ import java.util.Objects;
  * A non-editable native Android text component rendered directly on a Canvas.
  *
  * <p>Instances are created through {@link Builder} and owned by a
- * {@link TextGroup}. A region is supplied either as Figma-space
+ * a ZLayer. A region is supplied either as Figma-space
  * {@code Position + Size} or as an explicit runtime {@link RectF}.</p>
  */
-public final class Text {
+public final class Text implements Component {
 
     public enum Alignment {
         START,
@@ -56,7 +59,7 @@ public final class Text {
                     | TextPaint.DITHER_FLAG
     );
 
-    private TextGroup owner;
+    private ComponentHost owner;
     private CharSequence value;
     private TextStyle style;
     private StaticLayout layout;
@@ -65,6 +68,8 @@ public final class Text {
     private boolean visible = true;
     private boolean enabled;
     private boolean released;
+    private boolean touchCaptured;
+    private boolean clickCancelled;
     private OnClickListener clickListener;
 
     private Text(Builder builder, View hostView) {
@@ -250,6 +255,35 @@ public final class Text {
         return this;
     }
 
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent event) {
+        Objects.requireNonNull(event, "MotionEvent cannot be null.");
+        switch (event.getActionMasked()) {
+            case android.view.MotionEvent.ACTION_DOWN:
+                touchCaptured = acceptsTouch(event.getX(), event.getY());
+                clickCancelled = false;
+                return touchCaptured;
+            case android.view.MotionEvent.ACTION_MOVE:
+                if (!touchCaptured) return false;
+                if (!acceptsTouch(event.getX(), event.getY())) clickCancelled = true;
+                return true;
+            case android.view.MotionEvent.ACTION_UP:
+                if (!touchCaptured) return false;
+                boolean click = !clickCancelled
+                        && acceptsTouch(event.getX(), event.getY());
+                touchCaptured = false;
+                if (click) performClick();
+                return true;
+            case android.view.MotionEvent.ACTION_CANCEL:
+                boolean handled = touchCaptured;
+                touchCaptured = false;
+                clickCancelled = true;
+                return handled;
+            default:
+                return touchCaptured;
+        }
+    }
+
     public void draw(Canvas canvas) {
         Objects.requireNonNull(canvas, "Canvas cannot be null.");
         if (!visible || released || layout == null) {
@@ -271,17 +305,18 @@ public final class Text {
         layout = null;
     }
 
-    void attach(TextGroup owner) {
+    @Override
+    public void attach(ComponentHost owner) {
         ensureActive();
         if (this.owner != null && this.owner != owner) {
             throw new IllegalStateException(
-                    "Text already belongs to another TextGroup."
+                    "Text already belongs to another component host."
             );
         }
         this.owner = owner;
     }
 
-    boolean acceptsTouch(float x, float y) {
+    private boolean acceptsTouch(float x, float y) {
         return !released
                 && visible
                 && enabled
@@ -289,7 +324,7 @@ public final class Text {
                 && bounds.contains(x, y);
     }
 
-    void performClick() {
+    private void performClick() {
         if (!released
                 && visible
                 && enabled
@@ -446,7 +481,7 @@ public final class Text {
 
     private void invalidate() {
         if (owner != null) {
-            owner.invalidateHost();
+            owner.postInvalidateComponentOnAnimation();
         }
     }
 
@@ -508,7 +543,7 @@ public final class Text {
         void onClick(String id);
     }
 
-    public static final class Builder {
+    public static final class Builder implements ComponentFactory<Text> {
 
         private final Context context;
         private final String id;
@@ -680,7 +715,8 @@ public final class Text {
             return this;
         }
 
-        Text build(View hostView) {
+        @Override
+        public Text build(View hostView) {
             return new Text(this, hostView);
         }
     }

@@ -21,11 +21,14 @@ import com.ogfa.nativeviews.animator.component.layer.BitmapLayer;
 import com.ogfa.nativeviews.animator.component.layer.ComponentLayer;
 import com.ogfa.nativeviews.animator.component.layer.DynamicLayer;
 import com.ogfa.nativeviews.component.Position;
+import com.ogfa.nativeviews.component.Component;
+import com.ogfa.nativeviews.component.ComponentFactory;
+import com.ogfa.nativeviews.component.ComponentHost;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 
-public class CustomAnimatorComponent {
+public class CustomAnimatorComponent implements Component {
     private static final float SHRINK_SCALE_DEFAULT = 0.96f;
     public final ArrayList<ComponentLayer> layers;
     private final int left;
@@ -53,6 +56,9 @@ public class CustomAnimatorComponent {
 
     private long lastDownTime = 0;
     private Runnable proxySoundPlay;
+    private ComponentHost owner;
+    private boolean visible = true;
+    private boolean enabled = true;
 
     public int getLeft() {
         return left;
@@ -107,7 +113,7 @@ public class CustomAnimatorComponent {
     /**
      * Builder class for ButtonViewAnimator.
      */
-    public static class Builder {
+    public static class Builder implements ComponentFactory<CustomAnimatorComponent> {
         private RectF dynamicRectF;
         private Context context;
         private OnClickListener clickListener;
@@ -285,6 +291,11 @@ public class CustomAnimatorComponent {
 
             return animator;
         }
+
+        @Override
+        public CustomAnimatorComponent build(View hostView) {
+            return build();
+        }
     }
 
 
@@ -298,6 +309,7 @@ public class CustomAnimatorComponent {
     }
 
     public void draw(Canvas canvas) {
+        if (!visible) return;
 
         if (!isAnimationOn) {
             if (mIsPressed || (System.currentTimeMillis() - lastDownTime) < 250) {
@@ -454,6 +466,7 @@ public class CustomAnimatorComponent {
 
 
     public boolean onTouchEvent(MotionEvent event) {
+        if (!visible || !enabled) return false;
         if (!isClickable && !isLongClickable){
             return false;
         }
@@ -470,6 +483,46 @@ public class CustomAnimatorComponent {
 
         }
         return false;
+    }
+
+    @Override
+    public boolean isVisible() {
+        return visible;
+    }
+
+    public CustomAnimatorComponent setVisible(boolean visible) {
+        this.visible = visible;
+        if (owner != null) owner.invalidateComponent();
+        return this;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public CustomAnimatorComponent setEnabled(boolean enabled) {
+        this.enabled = enabled;
+        return this;
+    }
+
+    @Override
+    public void attach(ComponentHost host) {
+        if (owner != null && owner != host) {
+            throw new IllegalStateException("Component already has a host.");
+        }
+        owner = host;
+    }
+
+    @Override
+    public void release() {
+        if (pressAnimation != null) {
+            pressAnimation = null;
+        }
+        for (ComponentLayer layer : layers) {
+            layer.release();
+        }
+        owner = null;
     }
 
     private boolean checkIsAnyRegionClicked(float x, float y , boolean isUp,boolean isDown) {

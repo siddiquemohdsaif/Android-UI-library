@@ -16,7 +16,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.animation.gif.GIFViewAnimator;
 import com.ogfa.nativeviews.animator.component.CustomAnimatorComponent;
-import com.ogfa.nativeviews.animator.component.CustomAnimatorComponentGroup;
+import com.ogfa.nativeviews.zlayer.ZLayer;
+import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 import com.ogfa.nativeviews.animator.component.layer.BitmapLayer;
 import com.ogfa.nativeviews.animator.component.layer.ComponentLayer;
 import com.ogfa.nativeviews.animator.component.layer.GifLayer;
@@ -60,7 +61,8 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
         private static final String RESET_COMPONENT = "reset_button";
         private static final String GIF_COMPONENT = "gif_button";
 
-        private final CustomAnimatorComponentGroup components;
+        private final ZLayerGroup ui;
+        private final ZLayer components;
         private final Paint screenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         private BitmapLayer complexBackgroundLayer;
@@ -76,7 +78,8 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
 
         public CustomAnimatorComponentTestView(Context context) {
             super(context);
-            components = new CustomAnimatorComponentGroup(this);
+            ui = new ZLayerGroup(this);
+            components = ui.addLayer("components");
             setBackgroundColor(Color.rgb(13, 18, 31));
             setFocusable(true);
         }
@@ -197,7 +200,7 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             drawScreenText(canvas);
-            components.draw(canvas);
+            ui.draw(canvas);
         }
 
         private void drawScreenText(Canvas canvas) {
@@ -222,7 +225,7 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            return components.onTouchEvent(event)
+            return ui.onTouchEvent(event)
                     || super.onTouchEvent(event);
         }
 
@@ -281,9 +284,18 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
                     : getWidth() - dp(28) - movingStartRect.width();
             movedRight = !movedRight;
             eventMessage = "MOVE animation started; tap it at its new position";
-            components.animateToPosition(
-                    MOVE_COMPONENT, targetLeft, movingStartRect.top, 650,
-                    () -> eventMessage = "MOVE completed; hitbox moved with it");
+            CustomAnimatorComponent moving =
+                    (CustomAnimatorComponent) components.find(MOVE_COMPONENT);
+            if (moving != null) {
+                moving.animateToPositionWithValueAnimator(
+                        targetLeft,
+                        movingStartRect.top,
+                        650,
+                        this,
+                        () -> eventMessage =
+                                "MOVE completed; hitbox moved with it"
+                );
+            }
         }
 
         private void performTestFeedback() {
@@ -291,7 +303,7 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
         }
 
         public void release() {
-            components.release();
+            ui.release();
         }
 
         private float dp(float value) {

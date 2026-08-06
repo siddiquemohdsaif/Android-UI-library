@@ -24,7 +24,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.textfield.TextField;
-import com.ogfa.nativeviews.textfield.TextFieldGroup;
+import com.ogfa.nativeviews.zlayer.ZLayer;
+import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 
 import java.util.List;
 
@@ -62,7 +63,8 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         private static final String BOTTOM_FIELD = "bottom_field";
         private static final long PAN_ANIMATION_DURATION_MS = 220L;
 
-        private final TextFieldGroup textFields;
+        private final ZLayerGroup ui;
+        private final ZLayer fieldLayer;
         private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Rect visibleWindow = new Rect();
         private final int[] locationOnScreen = new int[2];
@@ -79,7 +81,8 @@ public final class TextFieldTestActivity extends AppCompatActivity {
 
         public TextFieldTestView(Context context) {
             super(context);
-            textFields = new TextFieldGroup(this);
+            ui = new ZLayerGroup(this);
+            fieldLayer = ui.addLayer("fields");
             setBackgroundColor(0xff0d121f);
             setClickable(true);
             setFocusable(true);
@@ -124,7 +127,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         }
 
         private void createTextFields() {
-            textFields.clear();
+            fieldLayer.clear();
 
             float margin = dp(40);
             float fieldHeight = dp(58);
@@ -179,7 +182,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                 RectF bounds,
                 int imeAction
         ) {
-            textFields.add(new TextField.Builder(
+            fieldLayer.add(new TextField.Builder(
                     getContext(),
                     id,
                     bounds
@@ -214,7 +217,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                         invalidate();
                     })
                     .setOnEditorActionListener((fieldId, action) -> {
-                        TextField field = textFields.find(fieldId);
+                        TextField field = (TextField) fieldLayer.find(fieldId);
                         eventMessage = "Submitted: "
                                 + (field == null ? "" : field.getText());
                         invalidate();
@@ -228,7 +231,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
             int saveCount = canvas.save();
             canvas.translate(0f, canvasTranslationY);
             drawLabels(canvas);
-            textFields.draw(canvas);
+            ui.draw(canvas);
             canvas.restoreToCount(saveCount);
         }
 
@@ -259,20 +262,20 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         public boolean onTouchEvent(MotionEvent event) {
             MotionEvent translatedEvent = MotionEvent.obtain(event);
             translatedEvent.offsetLocation(0f, -canvasTranslationY);
-            boolean handled = textFields.onTouchEvent(translatedEvent);
+            boolean handled = ui.onTouchEvent(translatedEvent);
             translatedEvent.recycle();
             return handled || super.onTouchEvent(event);
         }
 
         @Override
         public boolean onCheckIsTextEditor() {
-            return textFields.hasFocusedField();
+            return ui.onCheckIsTextEditor();
         }
 
         @Override
         public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
             InputConnection inputConnection =
-                    textFields.onCreateInputConnection(outAttrs);
+                    ui.onCreateInputConnection(outAttrs);
             return inputConnection != null
                     ? inputConnection
                     : super.onCreateInputConnection(outAttrs);
@@ -280,7 +283,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
 
         @Override
         public boolean onKeyDown(int keyCode, KeyEvent event) {
-            return textFields.onKeyDown(keyCode, event)
+            return ui.onKeyDown(keyCode, event)
                     || super.onKeyDown(keyCode, event);
         }
 
@@ -324,7 +327,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         }
 
         private void updateCanvasTranslation() {
-            TextField focusedField = textFields.getFocusedField();
+            TextField focusedField = ui.getFocusedTextField();
             float target = 0f;
             if (focusedField != null && imeInsetBottom > 0) {
                 RectF fieldBounds = focusedField.getBounds();
@@ -372,7 +375,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                 panAnimator.cancel();
                 panAnimator = null;
             }
-            textFields.release();
+            ui.release();
         }
 
         private float dp(float value) {

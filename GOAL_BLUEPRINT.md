@@ -36,12 +36,16 @@ com.ogfa.nativeviews
 3. RadioButton
 4. Progress
 
+### Canvas ViewGroup
+
+1. ZLayerGroup / ZLayer
+
 ## Current Status
 
 | Component | Status | Current implementation |
 |---|---|---|
-| Text | Implemented | `Text`, `TextStyle`, and `TextGroup` render native text directly on Canvas |
-| TextField | Implemented | `TextField` and `TextFieldGroup` |
+| Text | Implemented | `Text` and `TextStyle`, hosted by `ZLayerGroup` |
+| TextField | Implemented | `TextField`, with IME ownership in `ZLayerGroup` |
 | Button | Partial | Button behavior is currently mixed into `CustomAnimatorComponent` |
 | Image | Partial | `BitmapLayer` exists only as an `CustomAnimatorComponent` layer |
 | Card | Not started | — |
@@ -56,6 +60,8 @@ com.ogfa.nativeviews
 | CheckBox | Not started | — |
 | RadioButton | Not started | — |
 | Progress | Not started | — |
+
+| ZLayerGroup / ZLayer | Implemented foundation | Mixed-component scene, ordering, touch capture, IME, and lifecycle |
 
 ## Shared Component Architecture
 
@@ -156,7 +162,7 @@ movement, bounds calculation, drawing, and cleanup.
 
 ```text
 AnimatedButton       -> CustomAnimatorComponent
-AnimatedButtonGroup  -> CustomAnimatorComponentGroup
+AnimatedButtonGroup  -> removed; use ZLayerGroup + ZLayer
 ViewLayer            -> ComponentLayer
 
 BitmapView           -> BitmapLayer
@@ -254,7 +260,7 @@ This removes the current requirement that a position-based component must contai
 | Current API | Target API |
 |---|---|
 | `AnimatedButton` | `CustomAnimatorComponent` |
-| `AnimatedButtonGroup` | `CustomAnimatorComponentGroup` |
+| `AnimatedButtonGroup` | Removed; use `ZLayerGroup` + `ZLayer` |
 | `ViewLayer` | `ComponentLayer` |
 | `BitmapView.get(...)` | `BitmapLayer.create(...)` |
 | `GIFView.get(...)` | `GifLayer.create(...)` |
@@ -305,9 +311,9 @@ com.ogfa.nativeviews.progress
 - Reusable immutable `TextStyle`.
 - Runtime text, style, visibility, and region updates.
 - Optional lightweight click callback and enabled state.
-- Topmost-first `TextGroup` touch dispatch with move-out and cancel handling.
+- Topmost-first `ZLayerGroup` touch dispatch with move-out and cancel handling.
 - Clickable text has no implicit sound, haptic, press animation, or long-click behavior.
-- `TextGroup` drawing order, ID lookup, invalidation, and cleanup.
+- `ZLayerGroup` drawing order, ID lookup, invalidation, and cleanup.
 - Direct Canvas rendering; bitmap composition remains a separate utility.
 
 ### TextField
@@ -317,7 +323,7 @@ com.ogfa.nativeviews.progress
 - Native Android IME connection.
 - Cursor placement by tap and continuous cursor movement by drag.
 - Selection, composition, clipboard, maximum length, password mode, and editor actions.
-- `TextFieldGroup` focus and keyboard ownership.
+- `ZLayerGroup` focus and keyboard ownership.
 - Full-Canvas keyboard avoidance supported by a reusable viewport/pan helper.
 
 ### Button
@@ -493,13 +499,49 @@ Every activity must test:
 - cleanup on detach/destroy;
 - failure behavior for invalid input.
 
+## Documentation Architecture
+
+The root `README.md` is limited to:
+
+- SDK purpose and requirements;
+- Gradle module and fat-AAR integration;
+- component status and documentation index;
+- shared region/lifecycle conventions;
+- build, artifact, and validation commands.
+
+Every completed UI component owns a detailed guide:
+
+```text
+docs/components/COMPONENT_NAME.md
+```
+
+Each component guide must document:
+
+- purpose, responsibilities, package, and imports;
+- every supported `Position + Size` and `RectF` construction path;
+- complete custom-View host integration;
+- builder and runtime APIs;
+- callbacks, drawing order, and touch behavior;
+- resource ownership, cleanup, and failure behavior;
+- practical examples and its dedicated test activity.
+
+Non-component helpers use:
+
+```text
+docs/utilities/UTILITY_NAME.md
+```
+
+Do not document a planned API as implemented. Components awaiting implementation or
+API hardening remain identified as planned/pending in the root component index.
+
 ## Definition of Done
 
 A component is complete only when:
 
 1. Its public API is independent of any game or consuming project.
 2. It has a dedicated test activity.
-3. It has README examples for creation, drawing, input, and cleanup.
+3. It has a dedicated `docs/components/COMPONENT_NAME.md` guide covering creation,
+   drawing, input, runtime APIs, validation, and cleanup.
 4. It has clear runtime validation and errors.
 5. It releases all animation, bitmap, audio, and loader resources it owns.
 6. It works from the Gradle module and from the generated fat AAR.

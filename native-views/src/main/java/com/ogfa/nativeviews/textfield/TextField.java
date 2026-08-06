@@ -19,18 +19,22 @@ import android.view.inputmethod.EditorInfo;
 import androidx.core.content.res.ResourcesCompat;
 
 import com.ogfa.nativeviews.component.Position;
+import com.ogfa.nativeviews.component.Size;
+import com.ogfa.nativeviews.component.Component;
+import com.ogfa.nativeviews.component.ComponentFactory;
+import com.ogfa.nativeviews.component.ComponentHost;
 
 import java.util.Objects;
 
 /**
  * A single-line, Canvas-rendered text editor backed by Android's native IME APIs.
  *
- * <p>Instances are owned by {@link TextFieldGroup}. The field draws with an
+ * <p>Instances are owned by a ZLayer. The field draws with an
  * Android {@link Typeface}; it does not create a bitmap for each keystroke.</p>
  */
-public final class TextField {
+public final class TextField implements Component {
 
-    static final long CURSOR_BLINK_INTERVAL_MS = 500L;
+    public static final long CURSOR_BLINK_INTERVAL_MS = 500L;
 
     private final String id;
     private final RectF bounds;
@@ -47,7 +51,7 @@ public final class TextField {
     private final Paint selectionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF contentBounds = new RectF();
 
-    private TextFieldGroup owner;
+    private TextFieldHost owner;
     private String hint;
     private int inputType;
     private int imeOptions;
@@ -68,6 +72,8 @@ public final class TextField {
     private float cursorWidthPx;
     private float horizontalScrollPx;
     private boolean enabled;
+    private boolean visible = true;
+    private boolean touchCaptured;
     private boolean password;
     private boolean focused;
     private long cursorBlinkStartedAt;
@@ -225,7 +231,7 @@ public final class TextField {
     public TextField setEnabled(boolean enabled) {
         this.enabled = enabled;
         if (!enabled && focused && owner != null) {
-            owner.clearFocus();
+            owner.clearFocus(this);
         }
         invalidate();
         return this;
@@ -242,16 +248,16 @@ public final class TextField {
     public TextField requestFocus() {
         if (owner == null) {
             throw new IllegalStateException(
-                    "Add the field to TextFieldGroup before requesting focus."
+                    "Add the field to a ZLayer before requesting focus."
             );
         }
-        owner.requestFocus(id);
+        owner.requestFocus(this);
         return this;
     }
 
     public TextField clearFocus() {
         if (owner != null && focused) {
-            owner.clearFocus();
+            owner.clearFocus(this);
         }
         return this;
     }
@@ -300,13 +306,20 @@ public final class TextField {
         return this;
     }
 
-    void attach(TextFieldGroup owner) {
+    @Override
+    public void attach(ComponentHost owner) {
+        if (!(owner instanceof TextFieldHost)) {
+            throw new IllegalArgumentException(
+                    "TextField requires a TextFieldHost."
+            );
+        }
+        TextFieldHost textFieldHost = (TextFieldHost) owner;
         if (this.owner != null && this.owner != owner) {
             throw new IllegalStateException(
                     "TextField already belongs to another group."
             );
         }
-        this.owner = owner;
+        this.owner = textFieldHost;
     }
 
     void detach() {
@@ -331,7 +344,7 @@ public final class TextField {
     }
 
     boolean contains(float x, float y) {
-        return enabled && bounds.contains(x, y);
+        return visible && enabled && bounds.contains(x, y);
     }
 
     void placeCursorFromTouch(float touchX) {
@@ -350,7 +363,9 @@ public final class TextField {
         setSelection(Math.min(bestIndex, editable.length()));
     }
 
-    void draw(Canvas canvas) {
+    @Override
+    public void draw(Canvas canvas) {
+        if (!visible) return;
         backgroundPaint.setColor(
                 focused ? focusedBackgroundColor : backgroundColor
         );
@@ -405,6 +420,46 @@ public final class TextField {
             );
         }
         canvas.restoreToCount(saveCount);
+    }
+
+    @Override
+    public boolean onTouchEvent(android.view.MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case android.view.MotionEvent.ACTION_DOWN:
+                touchCaptured = contains(event.getX(), event.getY());
+                if (touchCaptured) {
+                    owner.requestFocus(this);
+                    placeCursorFromTouch(event.getX());
+                }
+                return touchCaptured;
+            case android.view.MotionEvent.ACTION_MOVE:
+                if (!touchCaptured) return false;
+                placeCursorFromTouch(event.getX());
+                return true;
+            case android.view.MotionEvent.ACTION_UP:
+            case android.view.MotionEvent.ACTION_CANCEL:
+                boolean handled = touchCaptured;
+                touchCaptured = false;
+                return handled;
+            default:
+                return touchCaptured;
+        }
+    }
+
+    @Override
+    public boolean isVisible() {
+        return visible;
+    }
+
+    public TextField setVisible(boolean visible) {
+        this.visible = visible;
+        invalidate();
+        return this;
+    }
+
+    @Override
+    public void release() {
+        detach();
     }
 
     private void drawSelection(
@@ -581,7 +636,7 @@ public final class TextField {
 
     void invalidate() {
         if (owner != null) {
-            owner.invalidateHost();
+            owner.invalidateComponent();
         }
     }
 
@@ -787,7 +842,7 @@ public final class TextField {
         void onFocusChanged(String id, boolean focused);
     }
 
-    public static final class Builder {
+    public static final class Builder implements ComponentFactory<TextField> {
         private final Context context;
         private final String id;
         private final Position position;
@@ -848,6 +903,21 @@ public final class TextField {
             this.figmaWidth = figmaWidth;
             this.figmaHeight = figmaHeight;
             explicitBounds = null;
+        }
+
+        public Builder(
+                Context context,
+                String id,
+                Position position,
+                Size size
+        ) {
+            this(
+                    context,
+                    id,
+                    position,
+                    Objects.requireNonNull(size, "Size cannot be null.").getWidth(),
+                    size.getHeight()
+            );
         }
 
         public Builder(Context context, String id, RectF bounds) {
@@ -1025,7 +1095,8 @@ public final class TextField {
             return this;
         }
 
-        TextField build(View hostView) {
+        @Override
+        public TextField build(View hostView) {
             return new TextField(this, hostView);
         }
 

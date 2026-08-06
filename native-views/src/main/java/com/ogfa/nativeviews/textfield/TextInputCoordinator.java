@@ -26,7 +26,7 @@ import java.util.Objects;
  * {@code onCheckIsTextEditor()}, touch, draw, and optional hardware key events to this
  * group.</p>
  */
-public final class TextFieldGroup implements AutoCloseable {
+public final class TextInputCoordinator implements TextFieldHost, AutoCloseable {
 
     private final View hostView;
     private final InputMethodManager inputMethodManager;
@@ -38,7 +38,7 @@ public final class TextFieldGroup implements AutoCloseable {
     private FieldInputConnection inputConnection;
     private boolean hideKeyboardWhenTouchOutside = true;
 
-    public TextFieldGroup(View hostView) {
+    public TextInputCoordinator(View hostView) {
         this.hostView = Objects.requireNonNull(
                 hostView,
                 "Host view cannot be null."
@@ -49,19 +49,16 @@ public final class TextFieldGroup implements AutoCloseable {
         hostView.setFocusableInTouchMode(true);
     }
 
-    public TextField add(TextField.Builder builder) {
-        Objects.requireNonNull(builder, "TextField.Builder cannot be null.");
-        TextField field = builder.build(hostView);
+    public void register(TextField field) {
+        Objects.requireNonNull(field, "TextField cannot be null.");
         if (fieldsById.containsKey(field.getId())) {
             throw new IllegalArgumentException(
-                    "TextFieldGroup already contains ID: " + field.getId()
+                    "TextInputCoordinator already contains ID: " + field.getId()
             );
         }
-        field.attach(this);
         drawingOrder.add(field);
         fieldsById.put(field.getId(), field);
-        invalidateHost();
-        return field;
+        invalidateComponent();
     }
 
     public TextField find(String id) {
@@ -72,7 +69,7 @@ public final class TextFieldGroup implements AutoCloseable {
         return fieldsById.containsKey(id);
     }
 
-    public boolean remove(String id) {
+    public boolean unregister(String id) {
         TextField field = fieldsById.remove(id);
         if (field == null) {
             return false;
@@ -82,7 +79,7 @@ public final class TextFieldGroup implements AutoCloseable {
         }
         drawingOrder.remove(field);
         field.detach();
-        invalidateHost();
+        invalidateComponent();
         return true;
     }
 
@@ -102,7 +99,7 @@ public final class TextFieldGroup implements AutoCloseable {
         return focusedField != null;
     }
 
-    public TextFieldGroup setHideKeyboardWhenTouchOutside(boolean enabled) {
+    public TextInputCoordinator setHideKeyboardWhenTouchOutside(boolean enabled) {
         hideKeyboardWhenTouchOutside = enabled;
         return this;
     }
@@ -130,7 +127,7 @@ public final class TextFieldGroup implements AutoCloseable {
                     }
                     return false;
                 }
-                requestFocus(touchTarget.getId());
+                requestFocus(touchTarget);
                 touchTarget.placeCursorFromTouch(event.getX());
                 return true;
 
@@ -156,8 +153,8 @@ public final class TextFieldGroup implements AutoCloseable {
         }
     }
 
-    public boolean requestFocus(String id) {
-        TextField field = fieldsById.get(id);
+    @Override
+    public boolean requestFocus(TextField field) {
         if (field == null || !field.isEnabled()) {
             return false;
         }
@@ -180,7 +177,7 @@ public final class TextFieldGroup implements AutoCloseable {
                 );
             }
         });
-        invalidateHost();
+        invalidateComponent();
         return true;
     }
 
@@ -200,7 +197,12 @@ public final class TextFieldGroup implements AutoCloseable {
             );
             inputMethodManager.restartInput(hostView);
         }
-        invalidateHost();
+        invalidateComponent();
+    }
+
+    @Override
+    public void clearFocus(TextField field) {
+        if (focusedField == field) clearFocus();
     }
 
     /**
@@ -270,7 +272,7 @@ public final class TextFieldGroup implements AutoCloseable {
         }
         drawingOrder.clear();
         fieldsById.clear();
-        invalidateHost();
+        invalidateComponent();
     }
 
     public void release() {
@@ -282,11 +284,23 @@ public final class TextFieldGroup implements AutoCloseable {
         release();
     }
 
-    void invalidateHost() {
+    @Override
+    public View getHostView() {
+        return hostView;
+    }
+
+    @Override
+    public void invalidateComponent() {
         hostView.invalidate();
     }
 
-    void updateSelection(TextField field) {
+    @Override
+    public void postInvalidateComponentOnAnimation() {
+        hostView.postInvalidateOnAnimation();
+    }
+
+    @Override
+    public void updateSelection(TextField field) {
         if (field != focusedField || inputMethodManager == null) {
             return;
         }
@@ -356,7 +370,7 @@ public final class TextFieldGroup implements AutoCloseable {
                     (current + offset) % drawingOrder.size()
             );
             if (candidate.isEnabled()) {
-                return requestFocus(candidate.getId());
+                return requestFocus(candidate);
             }
         }
         return false;
@@ -491,7 +505,7 @@ public final class TextFieldGroup implements AutoCloseable {
 
         @Override
         public boolean performContextMenuAction(int id) {
-            return TextFieldGroup.this.performContextMenuAction(id);
+            return TextInputCoordinator.this.performContextMenuAction(id);
         }
 
         @Override

@@ -15,7 +15,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.text.Text;
-import com.ogfa.nativeviews.text.TextGroup;
+import com.ogfa.nativeviews.zlayer.ZLayer;
+import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 import com.ogfa.nativeviews.text.TextStyle;
 
 /**
@@ -48,7 +49,8 @@ public final class TextTestActivity extends AppCompatActivity {
 
         private static final String RUNTIME_TEXT_ID = "runtime_text";
 
-        private final TextGroup texts = new TextGroup(this);
+        private final ZLayerGroup ui = new ZLayerGroup(this);
+        private final ZLayer textLayer = ui.addLayer("text");
         private final Paint regionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         private int updateCount;
@@ -81,7 +83,7 @@ public final class TextTestActivity extends AppCompatActivity {
         }
 
         private void createTexts() {
-            texts.clear();
+            textLayer.clear();
 
             TextStyle titleStyle = new TextStyle.Builder()
                     .setFont(R.font.lilitaone_regular)
@@ -99,7 +101,7 @@ public final class TextTestActivity extends AppCompatActivity {
                     54f,
                     90f
             );
-            texts.add(new Text.Builder(
+            textLayer.add(new Text.Builder(
                     getContext(),
                     "title",
                     "NATIVE TEXT",
@@ -114,7 +116,7 @@ public final class TextTestActivity extends AppCompatActivity {
                     90f,
                     330f
             );
-            texts.add(new Text.Builder(
+            textLayer.add(new Text.Builder(
                     getContext(),
                     "body",
                     "This paragraph is rendered directly with Android "
@@ -141,7 +143,7 @@ public final class TextTestActivity extends AppCompatActivity {
                     getWidth() - margin,
                     bottom
             );
-            texts.add(new Text.Builder(
+            textLayer.add(new Text.Builder(
                     getContext(),
                     RUNTIME_TEXT_ID,
                     "RECTF REGION • TAP TO UPDATE",
@@ -165,11 +167,11 @@ public final class TextTestActivity extends AppCompatActivity {
             drawRegion(canvas, "title");
             drawRegion(canvas, "body");
             drawRegion(canvas, RUNTIME_TEXT_ID);
-            texts.draw(canvas);
+            ui.draw(canvas);
         }
 
         private void drawRegion(Canvas canvas, String id) {
-            Text text = texts.find(id);
+            Text text = (Text) textLayer.find(id);
             if (text != null) {
                 canvas.drawRect(text.getBounds(), regionPaint);
             }
@@ -177,7 +179,7 @@ public final class TextTestActivity extends AppCompatActivity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            boolean handled = texts.onTouchEvent(event);
+            boolean handled = ui.onTouchEvent(event);
             if (handled && event.getActionMasked() == MotionEvent.ACTION_UP) {
                 performClick();
             }
@@ -192,7 +194,7 @@ public final class TextTestActivity extends AppCompatActivity {
 
         private void updateRuntimeText() {
             updateCount++;
-            Text runtimeText = texts.find(RUNTIME_TEXT_ID);
+            Text runtimeText = (Text) textLayer.find(RUNTIME_TEXT_ID);
             if (runtimeText != null) {
                 runtimeText
                         .setText("RUNTIME UPDATE " + updateCount)
@@ -205,7 +207,7 @@ public final class TextTestActivity extends AppCompatActivity {
         }
 
         public void release() {
-            texts.release();
+            ui.release();
         }
 
         private float dp(float value) {
