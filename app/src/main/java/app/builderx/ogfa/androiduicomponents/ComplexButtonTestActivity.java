@@ -15,7 +15,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.animation.LottieViewAnimator;
-import com.ogfa.nativeviews.animation.TextViewAnimator;
 import com.ogfa.nativeviews.animation.gif.GIFViewAnimator;
 import com.ogfa.nativeviews.button.AnimatedButton;
 import com.ogfa.nativeviews.button.AnimatedButtonGroup;
@@ -23,7 +22,7 @@ import com.ogfa.nativeviews.button.BitmapView;
 import com.ogfa.nativeviews.button.GIFView;
 import com.ogfa.nativeviews.button.LottieView;
 import com.ogfa.nativeviews.button.ViewLayer;
-import com.ogfa.nativeviews.text.TextWriter;
+import com.ogfa.nativeviews.text.TextMakerEngine;
 import com.ogfa.nativeviews.text.TextWriterNative;
 
 import java.util.ArrayList;
@@ -60,8 +59,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
     /** Custom Canvas view that owns, draws, and dispatches touches to the buttons. */
     public static final class ComplexButtonTestView extends View
             implements AnimatedButton.OnClickListener,
-            AnimatedButton.OnLongClickListener,
-            TextViewAnimator.OnClickListener {
+            AnimatedButton.OnLongClickListener {
 
         private static final String COMPLEX_BUTTON = "complex_button";
         private static final String BADGE_BUTTON = "badge_button";
@@ -73,7 +71,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         private static final String NATIVE_FONT_TEXT = "native_font_text";
 
         private final AnimatedButtonGroup buttons;
-        private final ArrayList<TextViewAnimator> textAnimators = new ArrayList<>();
         private final Paint screenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         private BitmapView complexBackgroundLayer;
@@ -105,7 +102,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
 
         private void rebuildButtons(int viewWidth) {
             buttons.clear();
-            releaseTextAnimators();
 
             float margin = dp(28);
             float mainTop = dp(150);
@@ -229,24 +225,27 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     .setShrink(0.96f)
                     .setProxySoundPlay(this::performTestFeedback));
 
-            TextViewAnimator.addTextView(
-                    textAnimators,
-                    getContext(),
-                    this,
-                    TEXT_BUTTON,
-                    viewWidth / 2f,
-                    lottieRect.bottom + dp(28),
-                    true,
-                    1f,
-                    TextWriter.LineType.MIDDLE,
-                    dp(38),
-                    "NATIVE TEXT",
+            Bitmap bitmapFontText = TextMakerEngine.generateTextBitmapWithSpacing(
                     createGlyphMap("NATIVE TEXT"),
+                    "NATIVE TEXT",
+                    Math.round(dp(38)),
                     Math.round(dp(2))
             );
-            textAnimators.get(0)
-                    .setPressedScale(0.90f)
-                    .setInvalidateCallback(this::postInvalidateOnAnimation);
+            RectF bitmapTextRect = new RectF(
+                    (viewWidth - bitmapFontText.getWidth()) / 2f,
+                    lottieRect.bottom + dp(28),
+                    (viewWidth + bitmapFontText.getWidth()) / 2f,
+                    lottieRect.bottom + dp(28) + bitmapFontText.getHeight()
+            );
+            buttons.add(new AnimatedButton.Builder(
+                    getContext(),
+                    TEXT_BUTTON,
+                    bitmapFontText,
+                    bitmapTextRect
+            )
+                    .setClickListener(this)
+                    .setShrink(0.90f)
+                    .setProxySoundPlay(this::performTestFeedback));
 
             int nativeLabelWidth = Math.round(viewWidth - margin * 2f);
             int nativeLabelHeight = Math.round(dp(32));
@@ -272,20 +271,21 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     nativeLabelBackground,
                     nativeWriters
             );
-            TextViewAnimator nativeFontAnimator = new TextViewAnimator(
-                    getContext(),
-                    this,
-                    NATIVE_FONT_TEXT,
-                    nativeLabel.getWidth(),
-                    nativeLabel.getHeight(),
-                    nativeLabel,
-                    Math.round(margin),
-                    Math.round(lottieRect.bottom + dp(67))
+            RectF nativeTextRect = new RectF(
+                    margin,
+                    lottieRect.bottom + dp(67),
+                    margin + nativeLabel.getWidth(),
+                    lottieRect.bottom + dp(67) + nativeLabel.getHeight()
             );
-            nativeFontAnimator
-                    .setPressedScale(0.90f)
-                    .setInvalidateCallback(this::postInvalidateOnAnimation);
-            textAnimators.add(nativeFontAnimator);
+            buttons.add(new AnimatedButton.Builder(
+                    getContext(),
+                    NATIVE_FONT_TEXT,
+                    nativeLabel,
+                    nativeTextRect
+            )
+                    .setClickListener(this)
+                    .setShrink(0.90f)
+                    .setProxySoundPlay(this::performTestFeedback));
         }
 
         @Override
@@ -293,7 +293,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
             super.onDraw(canvas);
             drawScreenText(canvas);
             buttons.draw(canvas);
-            TextViewAnimator.Draw(canvas, textAnimators);
         }
 
         private void drawScreenText(Canvas canvas) {
@@ -318,8 +317,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            return TextViewAnimator.HandleTouch(event, textAnimators)
-                    || buttons.onTouchEvent(event)
+            return buttons.onTouchEvent(event)
                     || super.onTouchEvent(event);
         }
 
@@ -360,11 +358,11 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     break;
 
                 case TEXT_BUTTON:
-                    eventMessage = "Bitmap-font TextViewAnimator received the click";
+                    eventMessage = "Bitmap-font image works through AnimatedButton";
                     break;
 
                 case NATIVE_FONT_TEXT:
-                    eventMessage = "TextWriterNative rendered R.font successfully";
+                    eventMessage = "R.font image works through AnimatedButton";
                     break;
             }
             invalidate();
@@ -399,15 +397,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         }
 
         public void release() {
-            releaseTextAnimators();
             buttons.release();
-        }
-
-        private void releaseTextAnimators() {
-            for (TextViewAnimator animator : textAnimators) {
-                animator.release();
-            }
-            textAnimators.clear();
         }
 
         private float dp(float value) {

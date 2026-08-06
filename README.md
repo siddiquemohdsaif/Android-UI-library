@@ -849,77 +849,13 @@ AnimatedButton.OnLongClickListener longClickListener =
 
 ---
 
-## Independent Canvas elements
+## Text bitmap generation and composition
 
-The APIs below are separate from `AnimatedButton`. They do not implement `ViewLayer`,
-are not added through `AnimatedButton.Builder`, and maintain their own drawing, touch,
-and lifecycle collections.
+These APIs only generate or compose `Bitmap` objects. They do not maintain a separate
+drawing, touch, or animation system. Use the resulting bitmap directly on a `Canvas`,
+inside a `BitmapView`, or as the bitmap of an `AnimatedButton`.
 
-### TextViewAnimator
-
-`TextViewAnimator` draws clickable bitmap text directly on a host `Canvas`. It is not
-an Android XML `TextView` and is not an animated-button layer.
-
-Create a bitmap-font map and add a centered label:
-
-```java
-private final ArrayList<TextViewAnimator> textAnimators = new ArrayList<>();
-private Map<String, Bitmap> glyphs;
-
-TextViewAnimator.addTextView(
-        textAnimators,
-        getContext(),
-        id -> openProfile(),
-        "profile_name",
-        getWidth() / 2f,
-        500f,
-        true,
-        1f,
-        TextWriter.LineType.MIDDLE,
-        72f,
-        "PLAYER 1",
-        glyphs,
-        4
-);
-
-textAnimators.get(0)
-        .setPressedScale(0.92f)
-        .setInvalidateCallback(this::postInvalidateOnAnimation);
-```
-
-Forward drawing and touch separately from any `AnimatedButtonGroup`:
-
-```java
-@Override
-protected void onDraw(Canvas canvas) {
-    super.onDraw(canvas);
-
-    buttons.draw(canvas); // AnimatedButton system, if used.
-    TextViewAnimator.Draw(canvas, textAnimators);
-}
-
-@Override
-public boolean onTouchEvent(MotionEvent event) {
-    return TextViewAnimator.HandleTouch(event, textAnimators)
-            || buttons.onTouchEvent(event)
-            || super.onTouchEvent(event);
-}
-```
-
-Release its press animators with the host:
-
-```java
-for (TextViewAnimator animator : textAnimators) {
-    animator.release();
-}
-textAnimators.clear();
-```
-
-Creation overloads include absolute `left`/`top`, optional character spacing, and
-`PointF + referenceWidth + runtimeWidth` coordinate conversion. Alignment uses
-`TextWriter.LineType.START`, `MIDDLE`, or `END`.
-
-### Bitmap-font generation and composition
+### Bitmap-font characters
 
 These utilities use a `Map<String, Bitmap>` containing one bitmap per character:
 
@@ -949,6 +885,29 @@ Bitmap withImages = ImageWriter.writeImage(
 );
 ```
 
+Make the generated image clickable by passing it to `AnimatedButton`:
+
+```java
+Bitmap textImage = TextMakerEngine.generateTextBitmapWithSpacing(
+        glyphs,
+        "PLAYER 1",
+        72,
+        4
+);
+
+buttons.add(new AnimatedButton.Builder(
+        getContext(),
+        "profile_name",
+        textImage,
+        position
+)
+        .setClickListener(id -> openProfile())
+        .setShrink(0.92f));
+```
+
+The button group now owns drawing, press animation, touch handling, sound, movement,
+and cleanup. No second text-animator collection is required.
+
 `TextWriter.writeTextToBitmapWithSpacing()` and
 `writeTextToBitmapWithSpacingWidthReduction()` are also available. Alpha arguments use
 the `0f..1f` range and are clamped. Invalid dimensions, recycled bitmaps, or text with
@@ -957,7 +916,8 @@ no characters in the supplied glyph map produce clear runtime exceptions.
 ### Android font-resource generation and composition
 
 `TextWriterNative` renders ordinary Android `R.font` resources. Despite its historical
-name, it does not use JNI and is also independent of `AnimatedButton`.
+name, it does not use JNI. It returns a normal bitmap that can be drawn directly or
+passed to `AnimatedButton`.
 
 Place the font in the consuming application:
 
@@ -985,6 +945,14 @@ Bitmap result = TextWriterNative.writeTextToBitmap(
         background,
         writers
 );
+
+buttons.add(new AnimatedButton.Builder(
+        context,
+        "play",
+        result,
+        position
+)
+        .setClickListener(id -> startGame()));
 ```
 
 Available operations:
