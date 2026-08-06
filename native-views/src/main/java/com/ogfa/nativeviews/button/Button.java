@@ -3,6 +3,7 @@ package com.ogfa.nativeviews.button;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
@@ -11,6 +12,7 @@ import android.view.View;
 import com.ogfa.nativeviews.component.Component;
 import com.ogfa.nativeviews.component.ComponentFactory;
 import com.ogfa.nativeviews.component.ComponentHost;
+import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.image.Image;
@@ -32,6 +34,7 @@ public final class Button implements Component {
     private final View hostView;
     private final String id;
     private final RectF bounds = new RectF();
+    private final Path clipPath = new Path();
     private final ComponentHost childHost = new ComponentHost() {
         @Override
         public View getHostView() {
@@ -54,6 +57,9 @@ public final class Button implements Component {
     private Text text;
     private TextInsets textInsets;
     private float dimensionScale;
+    private float cornerRadius;
+    private float resolvedCornerRadius;
+    private boolean cornerRadiusInPixels;
     private float alpha;
     private boolean visible;
     private boolean enabled;
@@ -70,6 +76,8 @@ public final class Button implements Component {
         );
         id = requireId(builder.id);
         textInsets = builder.textInsets;
+        cornerRadius = builder.cornerRadius;
+        cornerRadiusInPixels = builder.cornerRadiusInPixels;
         alpha = builder.alpha;
         visible = builder.visible;
         enabled = builder.enabled;
@@ -124,6 +132,7 @@ public final class Button implements Component {
         // a transferred child from also belonging to a ZLayer.
         image.attach(childHost);
         if (text != null) text.attach(childHost);
+        rebuildClipPath();
     }
 
     @Override
@@ -156,6 +165,18 @@ public final class Button implements Component {
 
     public float getAlpha() {
         return alpha;
+    }
+
+    public float getCornerRadius() {
+        return cornerRadius;
+    }
+
+    public float getResolvedCornerRadius() {
+        return resolvedCornerRadius;
+    }
+
+    public boolean isCornerRadiusInPixels() {
+        return cornerRadiusInPixels;
     }
 
     @Override
@@ -216,8 +237,7 @@ public final class Button implements Component {
         Objects.requireNonNull(position, "Position cannot be null.");
         Objects.requireNonNull(size, "Size cannot be null.");
         RectF resolved = position.toRectF(hostView, size);
-        float newDimensionScale = hostView.getWidth()
-                / position.getFigmaReferenceWidth();
+        float newDimensionScale = position.getScale(hostView);
         applyRegion(resolved, newDimensionScale);
         return this;
     }
@@ -259,6 +279,30 @@ public final class Button implements Component {
     public Button setFilterBitmap(boolean filterBitmap) {
         ensureActive();
         image.setFilterBitmap(filterBitmap);
+        return this;
+    }
+
+    /**
+     * Uses Figma units for Position + Size and runtime pixels for RectF.
+     */
+    public Button setCornerRadius(float cornerRadius) {
+        ensureActive();
+        this.cornerRadius = requireCornerRadius(cornerRadius);
+        cornerRadiusInPixels = false;
+        rebuildClipPath();
+        invalidate();
+        return this;
+    }
+
+    /**
+     * Uses an exact runtime-pixel radius regardless of the region source.
+     */
+    public Button setCornerRadiusPx(float cornerRadius) {
+        ensureActive();
+        this.cornerRadius = requireCornerRadius(cornerRadius);
+        cornerRadiusInPixels = true;
+        rebuildClipPath();
+        invalidate();
         return this;
     }
 
@@ -364,7 +408,11 @@ public final class Button implements Component {
         int saveCount = alpha < 1f
                 ? canvas.saveLayerAlpha(bounds, Math.round(alpha * 255f))
                 : canvas.save();
-        canvas.clipRect(bounds);
+        if (resolvedCornerRadius > 0f) {
+            canvas.clipPath(clipPath);
+        } else {
+            canvas.clipRect(bounds);
+        }
         image.draw(canvas);
         if (text != null) text.draw(canvas);
         canvas.restoreToCount(saveCount);
@@ -445,8 +493,7 @@ public final class Button implements Component {
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
         bounds.set(resolved);
-        dimensionScale = hostView.getWidth()
-                / position.getFigmaReferenceWidth();
+        dimensionScale = position.getScale(hostView);
     }
 
     private void applyRegion(RectF newBounds, float newDimensionScale) {
@@ -458,6 +505,7 @@ public final class Button implements Component {
         );
         bounds.set(newBounds);
         dimensionScale = newDimensionScale;
+        rebuildClipPath();
         image.setRegion(bounds);
         if (text != null) {
             applyTextRegion(text, textBounds, newDimensionScale);
@@ -506,11 +554,11 @@ public final class Button implements Component {
     private Position designPosition(RectF runtimeBounds, float scale) {
         return new Position(
                 hostView,
+                new FigmaConfig(hostView.getWidth() / scale),
                 Position.HorizontalMarginFrom.LEFT,
                 Position.VerticalMarginFrom.TOP,
                 runtimeBounds.left / scale,
-                runtimeBounds.top / scale,
-                hostView.getWidth() / scale
+                runtimeBounds.top / scale
         );
     }
 
@@ -544,6 +592,26 @@ public final class Button implements Component {
             );
         }
         return result;
+    }
+
+    private void rebuildClipPath() {
+        float scaledRadius = cornerRadiusInPixels
+                ? cornerRadius
+                : cornerRadius * dimensionScale;
+        resolvedCornerRadius = Math.min(
+                scaledRadius,
+                Math.min(bounds.width(), bounds.height()) / 2f
+        );
+        clipPath.reset();
+        if (resolvedCornerRadius > 0f) {
+            clipPath.addRoundRect(
+                    bounds,
+                    resolvedCornerRadius,
+                    resolvedCornerRadius,
+                    Path.Direction.CW
+            );
+            clipPath.close();
+        }
     }
 
     private Text requireText() {
@@ -630,6 +698,15 @@ public final class Button implements Component {
         return alpha;
     }
 
+    private static float requireCornerRadius(float cornerRadius) {
+        if (!Float.isFinite(cornerRadius) || cornerRadius < 0f) {
+            throw new IllegalArgumentException(
+                    "Button corner radius must be non-negative and finite."
+            );
+        }
+        return cornerRadius;
+    }
+
     public interface OnClickListener {
         void onClick(String id);
     }
@@ -656,6 +733,8 @@ public final class Button implements Component {
         private TextInsets textInsets = TextInsets.none();
         private Image.ScaleType imageScaleType = Image.ScaleType.FIT_XY;
         private boolean filterBitmap = true;
+        private float cornerRadius;
+        private boolean cornerRadiusInPixels;
         private float alpha = 1f;
         private boolean visible = true;
         private boolean enabled = true;
@@ -782,6 +861,18 @@ public final class Button implements Component {
         public Builder setFilterBitmap(boolean filterBitmap) {
             requireInternalCreation();
             this.filterBitmap = filterBitmap;
+            return this;
+        }
+
+        public Builder setCornerRadius(float cornerRadius) {
+            this.cornerRadius = requireCornerRadius(cornerRadius);
+            cornerRadiusInPixels = false;
+            return this;
+        }
+
+        public Builder setCornerRadiusPx(float cornerRadius) {
+            this.cornerRadius = requireCornerRadius(cornerRadius);
+            cornerRadiusInPixels = true;
             return this;
         }
 

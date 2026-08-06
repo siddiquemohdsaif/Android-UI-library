@@ -373,8 +373,7 @@ public final class Text implements Component {
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
         bounds.set(resolved);
-        dimensionScale = hostView.getWidth()
-                / position.getFigmaReferenceWidth();
+        dimensionScale = position.getScale(hostView);
     }
 
     private void rebuildLayout() {

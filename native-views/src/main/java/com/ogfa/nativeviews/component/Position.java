@@ -25,15 +25,11 @@ public final class Position {
         BOTTOM
     }
 
-    public static final float INITIAL_FIGMA_REFERENCE_WIDTH = 1080f;
-
-    private static volatile float defaultFigmaReferenceWidth = INITIAL_FIGMA_REFERENCE_WIDTH;
-
     private final HorizontalMarginFrom horizontalMarginFrom;
     private final VerticalMarginFrom verticalMarginFrom;
     private final float horizontalMargin;
     private final float verticalMargin;
-    private final float figmaReferenceWidth;
+    private final FigmaConfig figmaConfig;
     private final View hostView;
 
     /**
@@ -50,27 +46,27 @@ public final class Position {
                 verticalMarginFrom,
                 horizontalMargin,
                 verticalMargin,
-                defaultFigmaReferenceWidth,
+                FigmaConfig.getDefault(),
                 null
         );
     }
 
     /**
-     * Creates a position using a custom Figma reference width.
+     * Creates a position using an explicit Figma configuration.
      */
     public Position(
+            FigmaConfig figmaConfig,
             HorizontalMarginFrom horizontalMarginFrom,
             VerticalMarginFrom verticalMarginFrom,
             float horizontalMargin,
-            float verticalMargin,
-            float figmaReferenceWidth
+            float verticalMargin
     ) {
         this(
                 horizontalMarginFrom,
                 verticalMarginFrom,
                 horizontalMargin,
                 verticalMargin,
-                figmaReferenceWidth,
+                figmaConfig,
                 null
         );
     }
@@ -90,28 +86,28 @@ public final class Position {
                 verticalMarginFrom,
                 horizontalMargin,
                 verticalMargin,
-                defaultFigmaReferenceWidth,
+                FigmaConfig.getDefault(),
                 hostView
         );
     }
 
     /**
-     * Creates a host-bound position with a custom Figma reference width.
+     * Creates a host-bound position with an explicit Figma configuration.
      */
     public Position(
             View hostView,
+            FigmaConfig figmaConfig,
             HorizontalMarginFrom horizontalMarginFrom,
             VerticalMarginFrom verticalMarginFrom,
             float horizontalMargin,
-            float verticalMargin,
-            float figmaReferenceWidth
+            float verticalMargin
     ) {
         this(
                 horizontalMarginFrom,
                 verticalMarginFrom,
                 horizontalMargin,
                 verticalMargin,
-                figmaReferenceWidth,
+                figmaConfig,
                 hostView
         );
     }
@@ -121,12 +117,11 @@ public final class Position {
             VerticalMarginFrom verticalMarginFrom,
             float horizontalMargin,
             float verticalMargin,
-            float figmaReferenceWidth,
+            FigmaConfig figmaConfig,
             View hostView
     ) {
         requireNonNegativeFinite(horizontalMargin, "Horizontal margin");
         requireNonNegativeFinite(verticalMargin, "Vertical margin");
-        requirePositiveFinite(figmaReferenceWidth, "Figma reference width");
 
         this.horizontalMarginFrom = Objects.requireNonNull(
                 horizontalMarginFrom, "Horizontal anchor cannot be null.");
@@ -134,24 +129,24 @@ public final class Position {
                 verticalMarginFrom, "Vertical anchor cannot be null.");
         this.horizontalMargin = horizontalMargin;
         this.verticalMargin = verticalMargin;
-        this.figmaReferenceWidth = figmaReferenceWidth;
+        this.figmaConfig = Objects.requireNonNull(
+                figmaConfig,
+                "Figma config cannot be null."
+        );
         this.hostView = hostView;
     }
 
-    /**
-     * Changes the reference width used by constructors that omit {@code figmaReferenceWidth}.
-     */
-    public static void setDefaultFigmaReferenceWidth(float figmaReferenceWidth) {
-        requirePositiveFinite(figmaReferenceWidth, "Figma reference width");
-        defaultFigmaReferenceWidth = figmaReferenceWidth;
+    public FigmaConfig getFigmaConfig() {
+        return figmaConfig;
     }
 
-    public static float getDefaultFigmaReferenceWidth() {
-        return defaultFigmaReferenceWidth;
+    public float getScale(View hostView) {
+        Objects.requireNonNull(hostView, "Host view cannot be null.");
+        return figmaConfig.getScale(hostView.getWidth());
     }
 
-    public float getFigmaReferenceWidth() {
-        return figmaReferenceWidth;
+    public float getScale() {
+        return getScale(requireHostView());
     }
 
     /**
@@ -160,8 +155,7 @@ public final class Position {
     public float toRuntimePixels(View hostView, float figmaValue) {
         Objects.requireNonNull(hostView, "Host view cannot be null.");
         requireNonNegativeFinite(figmaValue, "Figma value");
-        requirePositiveFinite(hostView.getWidth(), "Runtime width");
-        return figmaValue * hostView.getWidth() / figmaReferenceWidth;
+        return figmaConfig.toRuntime(figmaValue, hostView.getWidth());
     }
 
     /**
@@ -242,7 +236,7 @@ public final class Position {
         requirePositiveFinite(figmaElementWidth, "Element width");
         requirePositiveFinite(figmaElementHeight, "Element height");
 
-        float scale = runtimeWidth / figmaReferenceWidth;
+        float scale = figmaConfig.getScale(runtimeWidth);
         float scaledHorizontalMargin = horizontalMargin * scale;
         float scaledVerticalMargin = verticalMargin * scale;
         float width = figmaElementWidth * scale;

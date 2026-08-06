@@ -27,6 +27,7 @@ Button play = content.add(new Button.Builder(
         new Size(900f, 240f)
 )
         .setTextInsets(TextInsets.of(40f, 20f, 40f, 20f))
+        .setCornerRadius(36f)
         .setTextSize(72f)
         .setTextColor(Color.WHITE)
         .setFont(NativeFonts.INTER)
@@ -35,7 +36,7 @@ Button play = content.add(new Button.Builder(
 ```
 
 `Position + Size` values and `TextInsets` are Figma-space measurements. They
-all scale from the `Position` reference width.
+all scale from the `FigmaConfig` captured by `Position`.
 
 Use runtime-pixel bounds instead:
 
@@ -193,6 +194,8 @@ Internal visual configuration:
 Button configuration:
 
 ```java
+.setCornerRadius(36f)
+.setCornerRadiusPx(24f)
 .setAlpha(0.8f)
 .setVisible(true)
 .setEnabled(true)
@@ -201,6 +204,28 @@ Button configuration:
 
 Component alpha multiplies the already configured Image and Text alpha without
 overwriting either child value.
+
+## Corner radius
+
+The radius clips the complete Button composite, including both Image and Text:
+
+```java
+.setCornerRadius(36f)
+```
+
+With `Position + Size`, `36f` is a Figma-space value converted using the
+`FigmaConfig` captured by Position. With `RectF`, it is already a runtime-pixel
+value.
+
+```java
+.setCornerRadiusPx(36f)
+```
+
+The `Px` form always remains exactly 36 runtime pixels. The resolved radius is
+limited to half the shortest button side, so oversized values safely form a
+pill or circle. `setRegion()` automatically recalculates the radius. The
+rounded clipping `Path` is cached and rebuilt only after a region or radius
+change.
 
 ## Runtime API
 
@@ -212,6 +237,9 @@ button.getText();       // null for image-only
 button.hasText();
 button.getTextInsets();
 button.getAlpha();
+button.getCornerRadius();
+button.getResolvedCornerRadius();
+button.isCornerRadiusInPixels();
 button.isVisible();
 button.isEnabled();
 button.isClickable();
@@ -226,6 +254,8 @@ button.setTextInsets(TextInsets.all(12f));
 
 button.setImageScaleType(Image.ScaleType.CENTER_CROP);
 button.setFilterBitmap(true);
+button.setCornerRadius(36f);
+button.setCornerRadiusPx(24f);
 
 button.setTextSize(60f);
 button.setTextSizePx(44f);

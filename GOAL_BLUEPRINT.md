@@ -105,6 +105,9 @@ management, animation scheduling, or topmost-first touch dispatch.
   and margins, while `Size` defines the element width and height. Together they
   convert reference-layout coordinates into runtime bounds using the measured host
   view.
+- `FigmaConfig` is the immutable, app-configurable source of the reference width.
+  Every `Position` captures one config, and all measurements belonging to that
+  region use its width-derived scale.
 - `RectF` is the direct runtime-space API for callers that already know the final
   pixel bounds.
 - Both construction paths must resolve to the same internal `RectF` bounds and must
@@ -339,6 +342,8 @@ com.ogfa.nativeviews.progress
 - Implemented scaled `TextInsets`, containment validation, and automatic child
   region updates.
 - Implemented component alpha, visibility, enabled state, and cancellation-safe click.
+- Implemented cached composite corner clipping with Figma-scaled and fixed-pixel
+  radius APIs.
 - Implemented runtime bitmap, label, region, inset, image, text, font, and listener APIs.
 - Child components are privately hosted and never registered or dispatched separately.
 - Future interaction expansion: long-click, pressed/selected visuals, optional

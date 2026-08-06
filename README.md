@@ -93,6 +93,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | Bundled fonts | Inter, Montserrat, Roboto, and Lilita One resources | [FONTS.md](docs/utilities/FONTS.md) |
 | Bitmap text utilities | Bitmap-font and Android-font bitmap generation/composition | [TEXT_BITMAP_UTILITIES.md](docs/utilities/TEXT_BITMAP_UTILITIES.md) |
 | `Position` and `Size` | Figma-to-runtime region conversion | Covered by each component guide |
+| `FigmaConfig` | App-wide Figma reference width and conversion scale | [FIGMA_CONFIG.md](docs/utilities/FIGMA_CONFIG.md) |
 | `NativeViewsSoundPlayer` | Bundled component-click sound | Covered by `CustomAnimatorComponent` |
 
 ### Existing APIs awaiting final hardening
@@ -195,11 +196,16 @@ RectF bounds = position.toRectF(size);
 RectF bounds = position.toRectF(hostView, size);
 ```
 
-Change the default reference width when the design file uses another frame width:
+Configure the application reference width when the design file uses another
+frame width:
 
 ```java
-Position.setDefaultFigmaReferenceWidth(1440f);
+FigmaConfig.setDefault(new FigmaConfig(1440f));
 ```
+
+`Position` captures the current immutable configuration, and all associated
+Figma measurements use the same width-derived scale. See
+[FIGMA_CONFIG.md](docs/utilities/FIGMA_CONFIG.md).
 
 ## Shared Canvas lifecycle
 

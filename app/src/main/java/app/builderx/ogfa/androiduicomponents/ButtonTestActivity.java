@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.button.Button;
 import com.ogfa.nativeviews.button.TextInsets;
+import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.font.NativeFonts;
@@ -86,6 +87,7 @@ public final class ButtonTestActivity extends AppCompatActivity {
         private void createButtons() {
             buttons.clear();
             recycleBitmaps();
+            verifyFigmaConfiguration();
 
             blueBackground = createBackground(900, 240, 0xff0057b8, 36f);
             orangeBackground = createBackground(900, 240, 0xffef7b24, 36f);
@@ -100,6 +102,7 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     new Size(900f, 240f)
             )
                     .setTextInsets(TextInsets.of(40f, 20f, 40f, 20f))
+                    .setCornerRadius(60f)
                     .setTextSize(72f)
                     .setTextColor(Color.WHITE)
                     .setFont(NativeFonts.INTER)
@@ -116,6 +119,7 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     new Size(240f, 240f)
             )
                     .setImageScaleType(Image.ScaleType.FIT_XY)
+                    .setCornerRadius(120f)
                     .setOnClickListener(this::onButtonClick));
             icon.setLabel("+")
                     .setTextSize(110f)
@@ -151,6 +155,7 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     suppliedImage,
                     suppliedText
             )
+                    .setCornerRadiusPx(dp(28))
                     .setOnClickListener(this::onButtonClick));
 
             RectF runtimeBounds = position(90f, 1400f)
@@ -163,11 +168,103 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     runtimeBounds
             )
                     .setTextInsets(TextInsets.horizontal(dp(24)))
+                    .setCornerRadiusPx(dp(24))
                     .setTextSizePx(dp(22))
                     .setAlpha(0.55f)
                     .setOnClickListener(this::onButtonClick));
 
             runRuntimeAssertions(play);
+            verifyCornerRadiusScaling();
+        }
+
+        private void verifyFigmaConfiguration() {
+            if (FigmaConfig.getDefault().getReferenceWidth() != 1080f) {
+                throw new AssertionError(
+                        "Application FigmaConfig was not installed."
+                );
+            }
+
+            FigmaConfig custom = new FigmaConfig(540f);
+            Position customPosition = new Position(
+                    this,
+                    custom,
+                    Position.HorizontalMarginFrom.LEFT,
+                    Position.VerticalMarginFrom.TOP,
+                    10f,
+                    20f
+            );
+            float expectedScale = getWidth() / 540f;
+            RectF resolved = customPosition.toRectF(
+                    this,
+                    new Size(100f, 50f)
+            );
+            if (customPosition.getFigmaConfig() != custom
+                    || Math.abs(customPosition.getScale() - expectedScale)
+                    > 0.0001f
+                    || Math.abs(resolved.width() - 100f * expectedScale)
+                    > 0.01f
+                    || Math.abs(resolved.height() - 50f * expectedScale)
+                    > 0.01f) {
+                throw new AssertionError(
+                        "Explicit FigmaConfig did not control Position scale."
+                );
+            }
+        }
+
+        private void verifyCornerRadiusScaling() {
+            FigmaConfig custom = new FigmaConfig(540f);
+            Position scaledPosition = new Position(
+                    this,
+                    custom,
+                    Position.HorizontalMarginFrom.LEFT,
+                    Position.VerticalMarginFrom.TOP,
+                    0f,
+                    0f
+            );
+            Button scaled = new Button.Builder(
+                    getContext(),
+                    "radius_scaling_assertion",
+                    blueBackground,
+                    scaledPosition,
+                    new Size(200f, 200f)
+            )
+                    .setCornerRadius(36f)
+                    .build(this);
+
+            float expected = 36f * getWidth() / 540f;
+            if (Math.abs(scaled.getCornerRadius() - 36f) > 0.0001f
+                    || Math.abs(scaled.getResolvedCornerRadius() - expected)
+                    > 0.01f
+                    || scaled.isCornerRadiusInPixels()) {
+                throw new AssertionError(
+                        "Figma corner radius was not scaled correctly."
+                );
+            }
+
+            scaled.setRegion(new RectF(0f, 0f, 200f, 200f));
+            if (Math.abs(scaled.getResolvedCornerRadius() - 36f) > 0.01f) {
+                throw new AssertionError(
+                        "RectF region did not resolve radius in runtime pixels."
+                );
+            }
+            scaled.setRegion(
+                    scaledPosition,
+                    new Size(200f, 200f)
+            );
+            if (Math.abs(scaled.getResolvedCornerRadius() - expected) > 0.01f) {
+                throw new AssertionError(
+                        "Position region did not recalculate scaled radius."
+                );
+            }
+
+            scaled.setCornerRadiusPx(36f);
+            if (Math.abs(scaled.getResolvedCornerRadius() - 36f) > 0.01f
+                    || !scaled.isCornerRadiusInPixels()) {
+                throw new AssertionError(
+                        "Runtime-pixel corner radius was unexpectedly scaled."
+                );
+            }
+            scaled.release();
         }
 
         private void runRuntimeAssertions(Button button) {
@@ -186,12 +283,20 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     .setTextInsets(TextInsets.of(40f, 20f, 40f, 20f))
                     .setImageScaleType(Image.ScaleType.FIT_XY)
                     .setFilterBitmap(true)
+                    .setCornerRadius(60f)
                     .setAlpha(0.8f)
                     .setAlpha(1f)
                     .setVisible(false)
                     .setVisible(true)
                     .setEnabled(false)
                     .setEnabled(true);
+            if (button.getCornerRadius() != 60f
+                    || button.getResolvedCornerRadius() <= 0f
+                    || button.isCornerRadiusInPixels()) {
+                throw new AssertionError(
+                        "Button corner-radius getters returned invalid state."
+                );
+            }
 
             int[] syntheticClicks = {0};
             button.setOnClickListener(id -> syntheticClicks[0]++);
