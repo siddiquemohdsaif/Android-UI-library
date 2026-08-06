@@ -40,7 +40,7 @@ com.ogfa.nativeviews
 
 | Component | Status | Current implementation |
 |---|---|---|
-| Text | Partial | Bitmap text writers exist, but there is no standalone Canvas `Text` component |
+| Text | Implemented | `Text`, `TextStyle`, and `TextGroup` render native text directly on Canvas |
 | TextField | Implemented | `TextField` and `TextFieldGroup` |
 | Button | Partial | Button behavior is currently mixed into `CustomAnimatorComponent` |
 | Image | Partial | `BitmapLayer` exists only as an `CustomAnimatorComponent` layer |
@@ -93,8 +93,16 @@ management, animation scheduling, or topmost-first touch dispatch.
 
 - Public methods use Java lower-camel naming: `draw`, not `Draw`.
 - Every component has a stable string ID.
-- Bounds use `RectF`.
-- Figma coordinates use `Position`.
+- Every visual UI component must support both `Position + Size` and `RectF` for
+  defining its region.
+- `Position + Size` is the Figma/design-space API. `Position` defines the anchors
+  and margins, while `Size` defines the element width and height. Together they
+  convert reference-layout coordinates into runtime bounds using the measured host
+  view.
+- `RectF` is the direct runtime-space API for callers that already know the final
+  pixel bounds.
+- Both construction paths must resolve to the same internal `RectF` bounds and must
+  provide identical drawing, interaction, animation, and lifecycle behavior.
 - Drawing order and touch order must be deterministic.
 - The topmost overlapping interactive component receives touch first.
 - Touch bounds must follow every visual translation or animation.
@@ -102,6 +110,30 @@ management, animation scheduling, or topmost-first touch dispatch.
 - No component may contain hardcoded assets from a consuming project.
 - Missing or invalid assets must produce clear runtime exceptions.
 - Components must work in a custom Canvas host without XML.
+
+### Shared region types
+
+`Size` is an immutable pair of positive finite `float` dimensions in Figma/design
+space:
+
+```java
+Size size = new Size(figmaWidth, figmaHeight);
+```
+
+`Position` must accept `Size` directly and resolve it using the same width-derived
+uniform scale already used for margins and element dimensions:
+
+```java
+RectF bounds = position.toRectF(size);
+```
+
+The shared component construction rule is:
+
+```java
+new Component.Builder(..., position, size);
+// or
+new Component.Builder(..., rectF);
+```
 
 ## `CustomAnimatorComponent` Restructure
 
@@ -264,10 +296,18 @@ com.ogfa.nativeviews.progress
 
 ### Text
 
-- Android default and `R.font` typefaces.
+- Builder overloads for both `Position + Size` and explicit `RectF` regions.
+- Android default, `R.font`, asset, and direct `Typeface` fonts.
 - Start, center, and end alignment.
-- Color, alpha, size, letter spacing, and maximum width.
+- Top, center, and bottom vertical alignment.
+- Color, alpha, size, padding, letter spacing, and line spacing.
 - Optional line wrapping and ellipsizing.
+- Reusable immutable `TextStyle`.
+- Runtime text, style, visibility, and region updates.
+- Optional lightweight click callback and enabled state.
+- Topmost-first `TextGroup` touch dispatch with move-out and cancel handling.
+- Clickable text has no implicit sound, haptic, press animation, or long-click behavior.
+- `TextGroup` drawing order, ID lookup, invalidation, and cleanup.
 - Direct Canvas rendering; bitmap composition remains a separate utility.
 
 ### TextField
@@ -469,3 +509,5 @@ A component is complete only when:
 9. Touch handling remains correct after movement, scaling, scrolling, or Canvas
    translation.
 10. No hardcoded assets or package references from another project remain.
+11. Every visual UI component exposes both `Position + Size` and `RectF` region
+    APIs, with equivalent behavior after bounds resolution.

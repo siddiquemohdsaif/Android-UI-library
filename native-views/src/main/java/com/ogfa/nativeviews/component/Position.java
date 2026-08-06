@@ -150,6 +150,27 @@ public final class Position {
         return defaultFigmaReferenceWidth;
     }
 
+    public float getFigmaReferenceWidth() {
+        return figmaReferenceWidth;
+    }
+
+    /**
+     * Converts a Figma/design-space value with this position's reference width.
+     */
+    public float toRuntimePixels(View hostView, float figmaValue) {
+        Objects.requireNonNull(hostView, "Host view cannot be null.");
+        requireNonNegativeFinite(figmaValue, "Figma value");
+        requirePositiveFinite(hostView.getWidth(), "Runtime width");
+        return figmaValue * hostView.getWidth() / figmaReferenceWidth;
+    }
+
+    /**
+     * Converts a Figma/design-space value using the bound host view.
+     */
+    public float toRuntimePixels(float figmaValue) {
+        return toRuntimePixels(requireHostView(), figmaValue);
+    }
+
     /**
      * Uses the bitmap dimensions as the element dimensions in Figma space.
      */
@@ -193,6 +214,21 @@ public final class Position {
     }
 
     /**
+     * Converts a Figma/design-space size using a measured host view.
+     */
+    public RectF toRectF(View hostView, Size size) {
+        Objects.requireNonNull(size, "Size cannot be null.");
+        return toRectF(hostView, size.getWidth(), size.getHeight());
+    }
+
+    /**
+     * Converts a Figma/design-space size using the bound host view.
+     */
+    public RectF toRectF(Size size) {
+        return toRectF(requireHostView(), size);
+    }
+
+    /**
      * Converts Figma-space margins and element dimensions into runtime pixels.
      */
     public RectF toRectF(
@@ -220,6 +256,23 @@ public final class Position {
                 : runtimeHeight - scaledVerticalMargin - height;
 
         return new RectF(left, top, left + width, top + height);
+    }
+
+    /**
+     * Converts a Figma/design-space size using explicit runtime dimensions.
+     */
+    public RectF toRectF(
+            float runtimeWidth,
+            float runtimeHeight,
+            Size size
+    ) {
+        Objects.requireNonNull(size, "Size cannot be null.");
+        return toRectF(
+                runtimeWidth,
+                runtimeHeight,
+                size.getWidth(),
+                size.getHeight()
+        );
     }
 
     private static void requirePositiveFinite(float value, String name) {

@@ -851,6 +851,310 @@ CustomAnimatorComponent.OnLongClickListener longClickListener =
 
 ---
 
+## Text
+
+`Text` is a non-editable native Android text component rendered directly with
+`Canvas` and `StaticLayout`. It does not allocate a bitmap for normal drawing.
+`TextGroup` owns drawing order, stable-ID lookup, host invalidation, and cleanup.
+
+Every text region uses one of the SDK's two shared region forms:
+
+```java
+// Figma/design space
+Position + Size
+
+// Direct runtime pixels
+RectF
+```
+
+Both forms resolve to one internal `RectF`.
+
+### Position and Size
+
+`Position` defines the Figma anchors and margins. `Size` defines the Figma width and
+height:
+
+```java
+Position position = new Position(
+        this,
+        Position.HorizontalMarginFrom.LEFT,
+        Position.VerticalMarginFrom.TOP,
+        90f,
+        160f
+);
+
+Size size = new Size(900f, 120f);
+```
+
+With the default Figma reference width of `1080`, all four values are scaled uniformly
+from the measured host width. Device height does not determine the scale; it is only
+used to resolve a bottom anchor.
+
+### Create and draw text
+
+Create one group for the custom Canvas host:
+
+```java
+private final TextGroup texts = new TextGroup(this);
+```
+
+Create text after the host has a measured size:
+
+```java
+Text title = texts.add(
+        new Text.Builder(
+                getContext(),
+                "screen_title",
+                "CHOOSE PLAYER",
+                position,
+                new Size(900f, 120f)
+        )
+                .setTextSize(72f)
+                .setTextColor(Color.WHITE)
+                .setAlignment(Text.Alignment.CENTER)
+                .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+                .setFont(R.font.game_font)
+);
+```
+
+Draw the group:
+
+```java
+@Override
+protected void onDraw(Canvas canvas) {
+    super.onDraw(canvas);
+    texts.draw(canvas);
+}
+```
+
+Touch forwarding is optional. It is only required when at least one text component has
+an `OnClickListener`.
+
+### Direct RectF region
+
+Use `RectF` when the final runtime-pixel bounds are already known:
+
+```java
+Text message = texts.add(
+        new Text.Builder(
+                getContext(),
+                "message",
+                "READY",
+                new RectF(60f, 240f, 1020f, 360f)
+        )
+                .setTextSizePx(54f)
+                .setAlignment(Text.Alignment.CENTER)
+                .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+);
+```
+
+For `Position + Size`, dimensional style values passed to `setTextSize`,
+`setPadding`, `setLetterSpacing`, `setLineSpacing`, and `setShadow` use Figma units.
+For a `RectF` region, those values use runtime pixels. `setTextSizePx` always forces an
+exact runtime-pixel text size.
+
+### Fonts
+
+If no font is configured, Android's default `Typeface` is used:
+
+```java
+.useDefaultFont()
+```
+
+Android font resource:
+
+```java
+.setFont(R.font.game_font)
+```
+
+Font stored in the consuming application's assets:
+
+```java
+.setFontAsset("fonts/game_font.ttf")
+```
+
+Existing `Typeface`:
+
+```java
+.setFont(Typeface.create(
+        "sans-serif-medium",
+        Typeface.NORMAL
+))
+```
+
+Resource and asset typefaces are cached by the SDK.
+
+### Multiline, wrapping, and overflow
+
+```java
+Text description = texts.add(
+        new Text.Builder(
+                getContext(),
+                "description",
+                message,
+                position,
+                new Size(760f, 260f)
+        )
+                .setTextSize(46f)
+                .setTextColor(0xffb9d8ef)
+                .setAlignment(Text.Alignment.CENTER)
+                .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+                .setLineSpacing(10f)
+                .setMaxLines(3)
+                .setWrapEnabled(true)
+                .setOverflow(Text.Overflow.ELLIPSIZE_END)
+);
+```
+
+Alignment values:
+
+```java
+Text.Alignment.START
+Text.Alignment.CENTER
+Text.Alignment.END
+
+Text.VerticalAlignment.TOP
+Text.VerticalAlignment.CENTER
+Text.VerticalAlignment.BOTTOM
+```
+
+Overflow values:
+
+```java
+Text.Overflow.CLIP
+Text.Overflow.ELLIPSIZE_START
+Text.Overflow.ELLIPSIZE_MIDDLE
+Text.Overflow.ELLIPSIZE_END
+```
+
+Start and middle ellipsizing are supported for single-line text. Invalid multiline
+combinations throw a clear runtime exception.
+
+### Reusable TextStyle
+
+```java
+TextStyle titleStyle = new TextStyle.Builder()
+        .setFont(R.font.game_font)
+        .setTextSize(72f)
+        .setTextColor(Color.WHITE)
+        .setAlignment(Text.Alignment.CENTER)
+        .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+        .setShadow(4f, 0f, 3f, 0xaa000000)
+        .build();
+```
+
+```java
+texts.add(
+        new Text.Builder(
+                getContext(),
+                "game_over",
+                "GAME OVER",
+                position,
+                new Size(900f, 120f)
+        ).setStyle(titleStyle)
+);
+```
+
+### Runtime updates
+
+```java
+Text score = texts.find("score");
+
+score.setText("12,500");
+score.setTextColor(Color.GREEN);
+score.setAlpha(0.8f);
+score.setVisible(true);
+```
+
+Change the region using either supported form:
+
+```java
+score.setRegion(position, new Size(500f, 100f));
+score.setRegion(new RectF(left, top, right, bottom));
+```
+
+Text, font, style, and region changes rebuild the native layout and invalidate the host
+automatically.
+
+### Optional click callback
+
+Use a click listener for a simple link or clickable label:
+
+```java
+Text privacyPolicy = texts.add(
+        new Text.Builder(
+                getContext(),
+                "privacy_policy",
+                "Privacy Policy",
+                position,
+                new Size(420f, 80f)
+        )
+                .setTextSize(42f)
+                .setAlignment(Text.Alignment.CENTER)
+                .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+                .setOnClickListener(id -> openPrivacyPolicy())
+);
+```
+
+Forward touch from the Canvas host:
+
+```java
+@Override
+public boolean onTouchEvent(MotionEvent event) {
+    return texts.onTouchEvent(event)
+            || super.onTouchEvent(event);
+}
+```
+
+`TextGroup` checks clickable text in reverse drawing order, so the topmost overlapping
+text receives the gesture. A click fires only when down and up occur inside the same
+resolved region. Moving outside or receiving `ACTION_CANCEL` permanently cancels that
+gesture. Hidden, disabled, and listener-free text are ignored.
+
+Runtime interaction controls:
+
+```java
+text.setEnabled(false);
+text.setVisible(false);
+text.setOnClickListener(listener);
+
+text.isEnabled();
+text.isVisible();
+text.isClickable();
+```
+
+Text click handling intentionally has no sound, haptic, press scale, long-click, or
+animation. Use `Button` when those behaviors are required.
+
+### Group API and cleanup
+
+```java
+texts.add(builder);
+texts.find("id");
+texts.contains("id");
+texts.remove("id");
+texts.size();
+texts.isEmpty();
+texts.onTouchEvent(event);
+texts.clear();
+```
+
+Release the group with the host:
+
+```java
+@Override
+protected void onDetachedFromWindow() {
+    texts.release();
+    super.onDetachedFromWindow();
+}
+```
+
+The test app includes `TextTestActivity`, which exercises both region forms, resource
+and default fonts, wrapping, ellipsizing, alignment, reusable styles, and runtime
+updates.
+
+---
+
 ## Text bitmap generation and composition
 
 These APIs only generate or compose `Bitmap` objects. They do not maintain a separate

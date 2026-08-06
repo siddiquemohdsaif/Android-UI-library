@@ -12,6 +12,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AndroidUIComponents">
         <activity
+            android:name=".TextTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".TextFieldTestActivity"
             android:exported="true"
             android:screenOrientation="portrait"
