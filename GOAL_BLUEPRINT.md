@@ -303,7 +303,10 @@ com.ogfa.nativeviews.progress
 ### Text
 
 - Builder overloads for both `Position + Size` and explicit `RectF` regions.
-- Android default, `R.font`, asset, and direct `Typeface` fonts.
+- Android default, application `R.font`, asset, direct `Typeface`, and
+  library-owned `NativeFonts` (Inter, Montserrat, Roboto, and Lilita One).
+- Named variable-font weight presets from thin through black, with safe
+  non-variable-font and pre-API-26 fallback.
 - Start, center, and end alignment.
 - Top, center, and bottom vertical alignment.
 - Color, alpha, size, padding, letter spacing, and line spacing.
@@ -319,7 +322,9 @@ com.ogfa.nativeviews.progress
 ### TextField
 
 - Android default font when no font is configured.
-- Optional `Typeface` and `R.font`.
+- Optional `Typeface`, application `R.font`, and bundled `NativeFonts`.
+- Named variable-font weights on both entered text and hint, with builder and
+  runtime APIs matching `Text`.
 - Native Android IME connection.
 - Cursor placement by tap and continuous cursor movement by drag.
 - Selection, composition, clipboard, maximum length, password mode, and editor actions.
@@ -485,6 +490,7 @@ SwitchTestActivity
 CheckBoxTestActivity
 RadioButtonTestActivity
 ProgressTestActivity
+ZLayerTestActivity
 ```
 
 Every activity must test:

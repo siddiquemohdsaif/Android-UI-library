@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -23,6 +24,7 @@ import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.component.Component;
 import com.ogfa.nativeviews.component.ComponentFactory;
 import com.ogfa.nativeviews.component.ComponentHost;
+import com.ogfa.nativeviews.text.FontVariation;
 
 import java.util.Objects;
 
@@ -36,6 +38,7 @@ public final class TextField implements Component {
 
     public static final long CURSOR_BLINK_INTERVAL_MS = 500L;
 
+    private final Context context;
     private final String id;
     private final RectF bounds;
     private final SpannableStringBuilder editable = new SpannableStringBuilder();
@@ -71,6 +74,7 @@ public final class TextField implements Component {
     private float strokeWidthPx;
     private float cursorWidthPx;
     private float horizontalScrollPx;
+    private FontVariation fontVariation;
     private boolean enabled;
     private boolean visible = true;
     private boolean touchCaptured;
@@ -82,6 +86,7 @@ public final class TextField implements Component {
     private OnFocusChangedListener focusChangedListener;
 
     private TextField(Builder builder, View hostView) {
+        context = builder.context.getApplicationContext();
         id = requireId(builder.id);
         bounds = builder.resolveBounds(hostView);
         requireBounds(bounds);
@@ -117,12 +122,14 @@ public final class TextField implements Component {
         textChangedListener = builder.textChangedListener;
         editorActionListener = builder.editorActionListener;
         focusChangedListener = builder.focusChangedListener;
+        fontVariation = builder.fontVariation;
 
         Typeface typeface = builder.typeface != null
                 ? builder.typeface
                 : resolveTypeface(builder.context, builder.fontId);
         textPaint.setTypeface(typeface);
         hintPaint.setTypeface(typeface);
+        applyFontVariation();
         textPaint.setTextSize(textSizePx);
         hintPaint.setTextSize(textSizePx);
         textPaint.setColor(textColor);
@@ -179,6 +186,59 @@ public final class TextField implements Component {
 
     public String getHint() {
         return hint;
+    }
+
+    public Typeface getTypeface() {
+        return textPaint.getTypeface();
+    }
+
+    public TextField setFont(int fontResourceId) {
+        if (fontResourceId == 0) {
+            throw new IllegalArgumentException(
+                    "Font resource ID cannot be zero."
+            );
+        }
+        return setFont(resolveTypeface(context, fontResourceId));
+    }
+
+    public TextField setFont(Typeface typeface) {
+        Typeface resolved = Objects.requireNonNull(
+                typeface,
+                "Typeface cannot be null."
+        );
+        textPaint.setTypeface(resolved);
+        hintPaint.setTypeface(resolved);
+        applyFontVariation();
+        ensureCursorVisible();
+        invalidate();
+        return this;
+    }
+
+    public TextField useDefaultFont() {
+        return setFont(Typeface.DEFAULT);
+    }
+
+    public FontVariation getFontVariation() {
+        return fontVariation;
+    }
+
+    public TextField setFontVariations(FontVariation variation) {
+        fontVariation = Objects.requireNonNull(
+                variation,
+                "Font variation cannot be null."
+        );
+        applyFontVariation();
+        ensureCursorVisible();
+        invalidate();
+        return this;
+    }
+
+    public TextField clearFontVariations() {
+        fontVariation = null;
+        applyFontVariation();
+        ensureCursorVisible();
+        invalidate();
+        return this;
     }
 
     public TextField setMaxLength(int maxLength) {
@@ -802,6 +862,17 @@ public final class TextField implements Component {
         }
     }
 
+    private void applyFontVariation() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        String settings = fontVariation == null
+                ? null
+                : fontVariation.toSettings();
+        textPaint.setFontVariationSettings(settings);
+        hintPaint.setFontVariationSettings(settings);
+    }
+
     private static String requireId(String id) {
         if (id == null || id.trim().isEmpty()) {
             throw new IllegalArgumentException("TextField ID cannot be empty.");
@@ -854,6 +925,7 @@ public final class TextField implements Component {
         private CharSequence initialText = "";
         private int fontId;
         private Typeface typeface = Typeface.DEFAULT;
+        private FontVariation fontVariation;
         private int inputType = android.text.InputType.TYPE_CLASS_TEXT;
         private int imeOptions = EditorInfo.IME_ACTION_DONE;
         private int maxLength = Integer.MAX_VALUE;
@@ -957,6 +1029,19 @@ public final class TextField implements Component {
         public Builder useDefaultFont() {
             typeface = Typeface.DEFAULT;
             fontId = 0;
+            return this;
+        }
+
+        public Builder setFontVariations(FontVariation variation) {
+            fontVariation = Objects.requireNonNull(
+                    variation,
+                    "Font variation cannot be null."
+            );
+            return this;
+        }
+
+        public Builder clearFontVariations() {
+            fontVariation = null;
             return this;
         }
 

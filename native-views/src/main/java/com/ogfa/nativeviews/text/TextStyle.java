@@ -26,6 +26,7 @@ public final class TextStyle {
     final int fontResourceId;
     final String fontAssetPath;
     final Typeface typeface;
+    final FontVariation fontVariation;
     final float textSize;
     final DimensionUnit textSizeUnit;
     final int textColor;
@@ -50,6 +51,7 @@ public final class TextStyle {
         fontResourceId = builder.fontResourceId;
         fontAssetPath = builder.fontAssetPath;
         typeface = builder.typeface;
+        fontVariation = builder.fontVariation;
         textSize = builder.textSize;
         textSizeUnit = builder.textSizeUnit;
         textColor = builder.textColor;
@@ -76,6 +78,7 @@ public final class TextStyle {
         private int fontResourceId;
         private String fontAssetPath;
         private Typeface typeface = Typeface.DEFAULT;
+        private FontVariation fontVariation;
         private float textSize = -1f;
         private DimensionUnit textSizeUnit = DimensionUnit.REGION;
         private int textColor = Color.WHITE;
@@ -105,6 +108,7 @@ public final class TextStyle {
             fontResourceId = style.fontResourceId;
             fontAssetPath = style.fontAssetPath;
             typeface = style.typeface;
+            fontVariation = style.fontVariation;
             textSize = style.textSize;
             textSizeUnit = style.textSizeUnit;
             textColor = style.textColor;
@@ -163,6 +167,22 @@ public final class TextStyle {
                     typeface,
                     "Typeface cannot be null."
             );
+            return this;
+        }
+
+        /**
+         * Selects a named variable-font weight preset.
+         */
+        public Builder setFontVariations(FontVariation variation) {
+            fontVariation = Objects.requireNonNull(
+                    variation,
+                    "Font variation cannot be null."
+            );
+            return this;
+        }
+
+        public Builder clearFontVariations() {
+            fontVariation = null;
             return this;
         }
 

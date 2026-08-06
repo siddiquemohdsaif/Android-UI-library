@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.text.Layout;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -198,6 +199,22 @@ public final class Text implements Component {
 
     public Text useDefaultFont() {
         return updateStyle(new TextStyle.Builder(style).useDefaultFont());
+    }
+
+    public FontVariation getFontVariation() {
+        return style.fontVariation;
+    }
+
+    public Text setFontVariations(FontVariation variation) {
+        return updateStyle(
+                new TextStyle.Builder(style).setFontVariations(variation)
+        );
+    }
+
+    public Text clearFontVariations() {
+        return updateStyle(
+                new TextStyle.Builder(style).clearFontVariations()
+        );
     }
 
     public Text setAlignment(Alignment alignment) {
@@ -427,6 +444,13 @@ public final class Text implements Component {
 
     private void applyPaint() {
         paint.setTypeface(resolveTypeface());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            paint.setFontVariationSettings(
+                    style.fontVariation == null
+                            ? null
+                            : style.fontVariation.toSettings()
+            );
+        }
         float textSize = style.textSize > 0f
                 ? scaleTextSize(style)
                 : bounds.height() * 0.5f;
@@ -620,6 +644,16 @@ public final class Text implements Component {
 
         public Builder setFont(Typeface typeface) {
             styleBuilder.setFont(typeface);
+            return this;
+        }
+
+        public Builder setFontVariations(FontVariation variation) {
+            styleBuilder.setFontVariations(variation);
+            return this;
+        }
+
+        public Builder clearFontVariations() {
+            styleBuilder.clearFontVariations();
             return this;
         }
 

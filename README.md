@@ -88,6 +88,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 
 | Utility | Purpose | Detailed guide |
 |---|---|---|
+| Bundled fonts | Inter, Montserrat, Roboto, and Lilita One resources | [FONTS.md](docs/utilities/FONTS.md) |
 | Bitmap text utilities | Bitmap-font and Android-font bitmap generation/composition | [TEXT_BITMAP_UTILITIES.md](docs/utilities/TEXT_BITMAP_UTILITIES.md) |
 | `Position` and `Size` | Figma-to-runtime region conversion | Covered by each component guide |
 | `NativeViewsSoundPlayer` | Bundled component-click sound | Covered by `CustomAnimatorComponent` |
@@ -327,9 +328,10 @@ artifacts/
 
 | Activity | Coverage |
 |---|---|
-| `TextTestActivity` | Both region paths, fonts, alignment, wrapping, ellipsis, style, runtime update, click cancellation |
+| `TextTestActivity` | Both region paths, all bundled font resources, alignment, wrapping, ellipsis, style, runtime update, click cancellation |
 | `TextFieldTestActivity` | IME, focus, cursor taps/dragging, selection, three screen positions, keyboard avoidance |
 | `CustomAnimatorComponentTestActivity` | Bitmap, Lottie, GIF, dynamic and After Effects layers, touch, movement, cleanup |
+| `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 
 Example launch:
 

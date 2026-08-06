@@ -174,8 +174,22 @@ No font call uses `Typeface.DEFAULT`.
 .setFont(R.font.game_font)
 ```
 
-The current `TextField` API supports default, direct `Typeface`, and Android font
-resources.
+Fonts transported by the Native Views AAR are available without adding font
+files to the consuming application:
+
+```java
+import com.ogfa.nativeviews.font.NativeFonts;
+import com.ogfa.nativeviews.text.FontVariation;
+
+.setFont(NativeFonts.INTER_ITALIC)
+.setFontVariations(FontVariation.BOLD)
+```
+
+See [FONTS.md](../utilities/FONTS.md) for Inter, Montserrat, Roboto, Lilita One,
+italic variants, loading a `Typeface`, and license locations.
+
+The variation is applied to both entered text and hint text. Non-variable fonts
+render normally, and API 24–25 safely retain the font's normal weight.
 
 ## Builder API
 
@@ -184,6 +198,8 @@ resources.
 | `useDefaultFont()` | Select `Typeface.DEFAULT` |
 | `setFont(Typeface)` | Use an existing typeface |
 | `setFont(int)` | Load an Android font resource |
+| `setFontVariations(FontVariation)` | Select a named variable-font weight |
+| `clearFontVariations()` | Return to the font's default variation |
 | `setHint(text)` | Set text shown when empty |
 | `setText(text)` | Set initial text |
 | `setMaxLength(length)` | Enforce maximum UTF-16 length |
@@ -224,6 +240,19 @@ field.setHint("Name");
 
 field.getMaxLength();
 field.setMaxLength(30);
+```
+
+Font:
+
+```java
+field.getTypeface();
+field.setFont(NativeFonts.INTER_ITALIC);
+field.setFont(typeface);
+field.useDefaultFont();
+
+field.getFontVariation();
+field.setFontVariations(FontVariation.SEMI_BOLD);
+field.clearFontVariations();
 ```
 
 Input:

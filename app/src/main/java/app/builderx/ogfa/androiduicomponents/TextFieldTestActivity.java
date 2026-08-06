@@ -23,6 +23,8 @@ import android.view.inputmethod.InputConnection;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.ogfa.nativeviews.font.NativeFonts;
+import com.ogfa.nativeviews.text.FontVariation;
 import com.ogfa.nativeviews.textfield.TextField;
 import com.ogfa.nativeviews.zlayer.ZLayer;
 import com.ogfa.nativeviews.zlayer.ZLayerGroup;
@@ -164,7 +166,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
             addTestField(
                     BOTTOM_FIELD,
                     "Bottom field",
-                    "Bottom",
+                    "",
                     new RectF(
                             margin,
                             bottom - fieldHeight,
@@ -182,11 +184,13 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                 RectF bounds,
                 int imeAction
         ) {
-            fieldLayer.add(new TextField.Builder(
+            TextField field = fieldLayer.add(new TextField.Builder(
                     getContext(),
                     id,
                     bounds
             )
+                    .setFont(NativeFonts.INTER_ITALIC)
+                    .setFontVariations(FontVariation.BOLD)
                     .setHint(hint)
                     .setText(initialText)
                     .setMaxLength(40)
@@ -217,12 +221,31 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                         invalidate();
                     })
                     .setOnEditorActionListener((fieldId, action) -> {
-                        TextField field = (TextField) fieldLayer.find(fieldId);
+                        TextField submittedField =
+                                (TextField) fieldLayer.find(fieldId);
                         eventMessage = "Submitted: "
-                                + (field == null ? "" : field.getText());
+                                + (submittedField == null
+                                ? ""
+                                : submittedField.getText());
                         invalidate();
                         return false;
                     }));
+
+            // Exercise runtime font changes, then restore the displayed state.
+            if (field.getTypeface() == null
+                    || field.getFontVariation() != FontVariation.BOLD) {
+                throw new AssertionError(
+                        "TextField font configuration was not applied."
+                );
+            }
+            field.clearFontVariations();
+            if (field.getFontVariation() != null) {
+                throw new AssertionError(
+                        "TextField font variation was not cleared."
+                );
+            }
+            field.setFont(NativeFonts.INTER_ITALIC)
+                    .setFontVariations(FontVariation.BOLD);
         }
 
         @Override

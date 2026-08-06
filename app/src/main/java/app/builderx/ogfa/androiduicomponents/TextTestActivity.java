@@ -14,6 +14,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
+import com.ogfa.nativeviews.font.NativeFonts;
+import com.ogfa.nativeviews.text.FontVariation;
 import com.ogfa.nativeviews.text.Text;
 import com.ogfa.nativeviews.zlayer.ZLayer;
 import com.ogfa.nativeviews.zlayer.ZLayerGroup;
@@ -58,11 +60,31 @@ public final class TextTestActivity extends AppCompatActivity {
 
         public TextTestView(Context context) {
             super(context);
+            verifyBundledFonts(context);
             setBackgroundColor(0xff0d121f);
             setClickable(true);
             regionPaint.setStyle(Paint.Style.STROKE);
             regionPaint.setStrokeWidth(dp(1));
             regionPaint.setColor(0x5568d8ff);
+        }
+
+        private static void verifyBundledFonts(Context context) {
+            int[] fonts = {
+                    NativeFonts.INTER,
+                    NativeFonts.INTER_ITALIC,
+                    NativeFonts.MONTSERRAT,
+                    NativeFonts.MONTSERRAT_ITALIC,
+                    NativeFonts.ROBOTO,
+                    NativeFonts.ROBOTO_ITALIC,
+                    NativeFonts.LILITA_ONE
+            };
+            for (int font : fonts) {
+                if (NativeFonts.load(context, font) == null) {
+                    throw new AssertionError(
+                            "Bundled font could not be loaded: " + font
+                    );
+                }
+            }
         }
 
         @Override
@@ -86,7 +108,8 @@ public final class TextTestActivity extends AppCompatActivity {
             textLayer.clear();
 
             TextStyle titleStyle = new TextStyle.Builder()
-                    .setFont(R.font.lilitaone_regular)
+                    .setFont(NativeFonts.INTER)
+                    .setFontVariations(FontVariation.BOLD)
                     .setTextSize(72f)
                     .setTextColor(Color.WHITE)
                     .setAlignment(Text.Alignment.CENTER)
@@ -125,7 +148,8 @@ public final class TextTestActivity extends AppCompatActivity {
                     bodyPosition,
                     new Size(900f, 420f)
             )
-                    .useDefaultFont()
+                    .setFont(NativeFonts.INTER_ITALIC)
+                    .setFontVariations(FontVariation.BOLD)
                     .setTextSize(44f)
                     .setTextColor(0xffb9d8ef)
                     .setAlignment(Text.Alignment.CENTER)
@@ -149,7 +173,9 @@ public final class TextTestActivity extends AppCompatActivity {
                     "RECTF REGION • TAP TO UPDATE",
                     runtimeBounds
             )
-                    .setFont(R.font.lilitaone_regular)
+                    .setFont(NativeFonts.LILITA_ONE)
+                    // Lilita One is not variable; this must safely render normally.
+                    .setFontVariations(FontVariation.BOLD)
                     .setTextSizePx(dp(25))
                     .setTextColor(0xffffd166)
                     .setAlignment(Text.Alignment.CENTER)

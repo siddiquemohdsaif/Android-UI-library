@@ -139,3 +139,13 @@ ui.close();
 
 There are no compatibility wrappers. `TextGroup`, `TextFieldGroup`, and
 `CustomAnimatorComponentGroup` were deleted.
+
+## Test activity
+
+```text
+app.builderx.ogfa.androiduicomponents.ZLayerTestActivity
+```
+
+It combines `Text`, `TextField`, and `CustomAnimatorComponent` in one scene and
+verifies unique IDs, typed lookup, layer/component ordering, cross-layer movement,
+pass-through effects, modal blocking, callbacks, shared IME, and cleanup.

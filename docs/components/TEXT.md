@@ -200,6 +200,30 @@ Android default:
 .useDefaultFont()
 ```
 
+Font bundled inside Native Views:
+
+```java
+import com.ogfa.nativeviews.font.NativeFonts;
+
+.setFont(NativeFonts.LILITA_ONE)
+```
+
+Bundled choices include Inter, Montserrat, Roboto, their italic variants, and
+Lilita One. The consuming application does not need to copy these files into
+`res/font`. See [FONTS.md](../utilities/FONTS.md).
+
+Named variable-font weight:
+
+```java
+.setFont(NativeFonts.INTER)
+.setFontVariations(FontVariation.SEMI_BOLD)
+```
+
+Available presets are `THIN`, `EXTRA_LIGHT`, `LIGHT`, `REGULAR`, `MEDIUM`,
+`SEMI_BOLD`, `BOLD`, `EXTRA_BOLD`, and `BLACK`. Unsupported variation axes are
+ignored, so ordinary fonts render normally. API 24 and 25 also retain normal
+font rendering.
+
 Android font resource:
 
 ```java
@@ -286,6 +310,8 @@ All builder styling methods:
 | `setFont(int)` | Load an Android `R.font` resource |
 | `setFontAsset(path)` | Load a font from application assets |
 | `setFont(Typeface)` | Use an existing typeface |
+| `setFontVariations(FontVariation)` | Select a named variable-font weight |
+| `clearFontVariations()` | Return to the font's default variation |
 | `setTextSize(value)` | Region-space text size |
 | `setTextSizePx(px)` | Exact runtime-pixel text size |
 | `setTextColor(color)` | Set ARGB text color |
@@ -366,6 +392,8 @@ text.setTextSizePx(48f);
 text.setFont(R.font.game_font);
 text.setFontAsset("fonts/game_font.ttf");
 text.setFont(typeface);
+text.setFontVariations(FontVariation.BOLD);
+text.clearFontVariations();
 text.useDefaultFont();
 text.setAlignment(Text.Alignment.END);
 text.setVerticalAlignment(Text.VerticalAlignment.BOTTOM);

@@ -1,0 +1,21 @@
+Native Views bundled font notices
+=================================
+
+Inter
+Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+
+Lilita One
+Copyright (c) 2011 Juan Montoreano (juan@remolacha.biz)
+Reserved Font Name: "Lilita One"
+
+Montserrat
+Copyright 2011 The Montserrat Project Authors
+(https://github.com/JulietaUla/Montserrat)
+
+Roboto
+Copyright 2011 The Roboto Project Authors
+(https://github.com/googlefonts/roboto-classic)
+
+All font files listed above are distributed under the SIL Open Font License,
+Version 1.1. The complete license is included beside this notice as
+OFL-1.1.txt.
