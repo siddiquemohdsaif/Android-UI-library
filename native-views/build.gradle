@@ -35,5 +35,5 @@ dependencies {
     api libs.gif.drawable
     // Required only to compile font-resource loading. AndroidX remains owned by
     // the parent application and is intentionally not embedded in the fat AAR.
-    compileOnly 'androidx.core:core:1.5.0'
+    compileOnly libs.core
 }

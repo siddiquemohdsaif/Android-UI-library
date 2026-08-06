@@ -984,3 +984,233 @@ TextWriterNative.writeTextToBitmapWithSpacingWidthReductionWithLimit(
 font rendering and line wrapping. The SDK embeds the middle-removal logic and does not
 depend on Carrom's `BitmapUtil` or `BoardProperty`. AndroidX Core is compile-only and
 remains supplied by the parent application through AppCompat.
+
+---
+
+## NativeTextField
+
+`NativeTextField` is a single-line, Canvas-rendered editor. It uses Android native font
+resources and communicates with the Android keyboard through `InputConnection`.
+`NativeTextFieldGroup` owns field order, focus, touch dispatch, keyboard visibility,
+cursor blinking, IME composition, and cleanup.
+
+The field renders text directly with `TextPaint`; it does not regenerate a bitmap after
+each keystroke. Tapping positions the cursor at the nearest character, and dragging
+horizontally continuously moves the cursor while keeping it visible in long text.
+
+### Font selection
+
+Font configuration is optional. If no font method is called, the field uses Android's
+`Typeface.DEFAULT`:
+
+```java
+textFields.add(
+        new NativeTextField.Builder(context, "player_name", bounds)
+                .setHint("Player name")
+);
+```
+
+The default can also be selected explicitly:
+
+```java
+.useDefaultFont()
+// or
+.setFont(Typeface.DEFAULT)
+```
+
+For a custom font, store it in the consuming application:
+
+Store the font in the consuming application:
+
+```text
+app/src/main/res/font/game_font.ttf
+```
+
+Pass it using the generated resource ID:
+
+```java
+.setFont(R.font.game_font)
+```
+
+### Create a field
+
+Create the group once for the host custom view:
+
+```java
+private final NativeTextFieldGroup textFields;
+
+public GameCanvasView(Context context, AttributeSet attrs) {
+    super(context, attrs);
+    textFields = new NativeTextFieldGroup(this);
+}
+```
+
+Create fields after the host has a measured size:
+
+```java
+@Override
+protected void onSizeChanged(
+        int width,
+        int height,
+        int oldWidth,
+        int oldHeight
+) {
+    super.onSizeChanged(width, height, oldWidth, oldHeight);
+    textFields.clear();
+
+    Position position = new Position(
+            this,
+            Position.HorizontalMarginFrom.LEFT,
+            Position.VerticalMarginFrom.TOP,
+            180f,
+            500f
+    );
+
+    NativeTextField playerName = textFields.add(
+            new NativeTextField.Builder(
+                    getContext(),
+                    "player_name",
+                    position,
+                    720f,
+                    120f
+            )
+                    .setFont(R.font.game_font)
+                    .setHint("Enter player name")
+                    .setText("Player")
+                    .setMaxLength(20)
+                    .setInputType(
+                            InputType.TYPE_CLASS_TEXT
+                                    | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                    )
+                    .setImeOptions(EditorInfo.IME_ACTION_DONE)
+                    .setTextColor(Color.WHITE)
+                    .setHintColor(0x88ffffff)
+                    .setCursorColor(0xffffd166)
+                    .setSelectionColor(0x6690e0ef)
+                    .setBackgroundColor(0xff182840, 0xff203a5c)
+                    .setStrokeColor(0xff54708f, 0xff90e0ef)
+                    .setOnTextChangedListener((id, text) ->
+                            savePlayerName(text))
+                    .setOnEditorActionListener((id, action) -> {
+                        startGame();
+                        return true;
+                    })
+    );
+}
+```
+
+The `Position` constructor uses Figma-space width and height. Explicit runtime bounds
+are also supported:
+
+```java
+new NativeTextField.Builder(context, "search", new RectF(left, top, right, bottom))
+```
+
+### Connect the host view
+
+Drawing and touch:
+
+```java
+@Override
+protected void onDraw(Canvas canvas) {
+    super.onDraw(canvas);
+    buttons.draw(canvas);
+    textFields.draw(canvas);
+}
+
+@Override
+public boolean onTouchEvent(MotionEvent event) {
+    return textFields.onTouchEvent(event)
+            || buttons.onTouchEvent(event)
+            || super.onTouchEvent(event);
+}
+```
+
+Android keyboard connection:
+
+```java
+@Override
+public boolean onCheckIsTextEditor() {
+    return textFields.hasFocusedField();
+}
+
+@Override
+public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+    InputConnection connection =
+            textFields.onCreateInputConnection(outAttrs);
+    return connection != null
+            ? connection
+            : super.onCreateInputConnection(outAttrs);
+}
+
+@Override
+public boolean onKeyDown(int keyCode, KeyEvent event) {
+    return textFields.onKeyDown(keyCode, event)
+            || super.onKeyDown(keyCode, event);
+}
+```
+
+Lifecycle cleanup:
+
+```java
+@Override
+protected void onDetachedFromWindow() {
+    textFields.release();
+    buttons.release();
+    super.onDetachedFromWindow();
+}
+```
+
+### Field API
+
+Builder configuration:
+
+| API | Purpose |
+|---|---|
+| No font call | Use Android's `Typeface.DEFAULT` |
+| `useDefaultFont()` | Explicitly select Android's default typeface |
+| `setFont(Typeface)` | Use an Android `Typeface` instance |
+| `setFont(R.font.name)` | Load an Android font resource |
+| `setHint(text)` | Set empty-field hint |
+| `setText(text)` | Set initial text |
+| `setMaxLength(length)` | Enforce maximum UTF-16 length |
+| `setInputType(flags)` | Configure keyboard type |
+| `setImeOptions(flags)` | Configure Done, Next, Search, Send, or Go |
+| `setPassword(value)` | Mask rendered text |
+| `setTextColor(color)` | Set entered-text color |
+| `setHintColor(color)` | Set hint color |
+| `setCursorColor(color)` | Set cursor color |
+| `setSelectionColor(color)` | Set selection highlight |
+| `setBackgroundColor(normal, focused)` | Configure background states |
+| `setStrokeColor(normal, focused)` | Configure border states |
+| `setTextSize(px)` | Set runtime text size |
+| `setPadding(horizontalPx, verticalPx)` | Set internal padding |
+| `setCornerRadius(px)` | Set background radius |
+| `setStrokeWidth(px)` | Set border width |
+| `setCursorWidth(px)` | Set cursor width |
+| `setEnabled(value)` | Enable or disable editing |
+| `setOnTextChangedListener(listener)` | Observe committed/composing changes |
+| `setOnEditorActionListener(listener)` | Handle keyboard actions |
+| `setOnFocusChangedListener(listener)` | Observe focus changes |
+
+Runtime operations:
+
+```java
+playerName.getText();
+playerName.setText("Player 2");
+playerName.clear();
+playerName.setSelection(0, playerName.getText().length());
+playerName.requestFocus();
+playerName.clearFocus();
+playerName.setPassword(true);
+playerName.setEnabled(false);
+
+textFields.find("player_name");
+textFields.remove("player_name");
+textFields.clearFocus();
+textFields.clear();
+```
+
+The input connection supports committed text, composing text, cursor selection,
+surrounding-text deletion, clipboard copy/cut/paste, hardware keys, IME actions, and
+focus-next behavior.

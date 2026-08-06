@@ -1,0 +1,506 @@
+package com.ogfa.nativeviews.textfield;
+
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.text.Editable;
+import android.text.Selection;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.inputmethod.BaseInputConnection;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Owns Canvas text fields and bridges the focused field to Android's input method.
+ *
+ * <p>The host view delegates {@code onCreateInputConnection()},
+ * {@code onCheckIsTextEditor()}, touch, draw, and optional hardware key events to this
+ * group.</p>
+ */
+public final class NativeTextFieldGroup implements AutoCloseable {
+
+    private final View hostView;
+    private final InputMethodManager inputMethodManager;
+    private final ArrayList<NativeTextField> drawingOrder = new ArrayList<>();
+    private final Map<String, NativeTextField> fieldsById = new LinkedHashMap<>();
+
+    private NativeTextField focusedField;
+    private NativeTextField touchTarget;
+    private FieldInputConnection inputConnection;
+    private boolean hideKeyboardWhenTouchOutside = true;
+
+    public NativeTextFieldGroup(View hostView) {
+        this.hostView = Objects.requireNonNull(
+                hostView,
+                "Host view cannot be null."
+        );
+        inputMethodManager = (InputMethodManager) hostView.getContext()
+                .getSystemService(Context.INPUT_METHOD_SERVICE);
+        hostView.setFocusable(true);
+        hostView.setFocusableInTouchMode(true);
+    }
+
+    public NativeTextField add(NativeTextField.Builder builder) {
+        Objects.requireNonNull(builder, "NativeTextField.Builder cannot be null.");
+        NativeTextField field = builder.build(hostView);
+        if (fieldsById.containsKey(field.getId())) {
+            throw new IllegalArgumentException(
+                    "NativeTextFieldGroup already contains ID: " + field.getId()
+            );
+        }
+        field.attach(this);
+        drawingOrder.add(field);
+        fieldsById.put(field.getId(), field);
+        invalidateHost();
+        return field;
+    }
+
+    public NativeTextField find(String id) {
+        return fieldsById.get(id);
+    }
+
+    public boolean contains(String id) {
+        return fieldsById.containsKey(id);
+    }
+
+    public boolean remove(String id) {
+        NativeTextField field = fieldsById.remove(id);
+        if (field == null) {
+            return false;
+        }
+        if (field == focusedField) {
+            clearFocus();
+        }
+        drawingOrder.remove(field);
+        field.detach();
+        invalidateHost();
+        return true;
+    }
+
+    public int size() {
+        return drawingOrder.size();
+    }
+
+    public boolean isEmpty() {
+        return drawingOrder.isEmpty();
+    }
+
+    public NativeTextField getFocusedField() {
+        return focusedField;
+    }
+
+    public boolean hasFocusedField() {
+        return focusedField != null;
+    }
+
+    public NativeTextFieldGroup setHideKeyboardWhenTouchOutside(boolean enabled) {
+        hideKeyboardWhenTouchOutside = enabled;
+        return this;
+    }
+
+    public void draw(Canvas canvas) {
+        Objects.requireNonNull(canvas, "Canvas cannot be null.");
+        for (NativeTextField field : drawingOrder) {
+            field.draw(canvas);
+        }
+        if (focusedField != null) {
+            hostView.postInvalidateDelayed(
+                    NativeTextField.CURSOR_BLINK_INTERVAL_MS
+            );
+        }
+    }
+
+    public boolean onTouchEvent(MotionEvent event) {
+        Objects.requireNonNull(event, "MotionEvent cannot be null.");
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                touchTarget = findTopmostField(event.getX(), event.getY());
+                if (touchTarget == null) {
+                    if (hideKeyboardWhenTouchOutside) {
+                        clearFocus();
+                    }
+                    return false;
+                }
+                requestFocus(touchTarget.getId());
+                touchTarget.placeCursorFromTouch(event.getX());
+                return true;
+
+            case MotionEvent.ACTION_MOVE:
+                if (touchTarget == null) {
+                    return false;
+                }
+                touchTarget.placeCursorFromTouch(event.getX());
+                return true;
+
+            case MotionEvent.ACTION_UP:
+                boolean handled = touchTarget != null;
+                touchTarget = null;
+                return handled;
+
+            case MotionEvent.ACTION_CANCEL:
+                boolean cancelled = touchTarget != null;
+                touchTarget = null;
+                return cancelled;
+
+            default:
+                return false;
+        }
+    }
+
+    public boolean requestFocus(String id) {
+        NativeTextField field = fieldsById.get(id);
+        if (field == null || !field.isEnabled()) {
+            return false;
+        }
+        if (focusedField != field) {
+            if (focusedField != null) {
+                focusedField.setFocusedInternal(false);
+            }
+            focusedField = field;
+            focusedField.setFocusedInternal(true);
+            inputConnection = null;
+        }
+
+        hostView.requestFocus();
+        restartInput();
+        hostView.post(() -> {
+            if (focusedField == field && inputMethodManager != null) {
+                inputMethodManager.showSoftInput(
+                        hostView,
+                        InputMethodManager.SHOW_IMPLICIT
+                );
+            }
+        });
+        invalidateHost();
+        return true;
+    }
+
+    public void clearFocus() {
+        if (focusedField == null) {
+            return;
+        }
+        focusedField.finishComposingText();
+        focusedField.setFocusedInternal(false);
+        focusedField = null;
+        touchTarget = null;
+        inputConnection = null;
+        if (inputMethodManager != null) {
+            inputMethodManager.hideSoftInputFromWindow(
+                    hostView.getWindowToken(),
+                    0
+            );
+            inputMethodManager.restartInput(hostView);
+        }
+        invalidateHost();
+    }
+
+    /**
+     * Called by the host view's {@code onCreateInputConnection()} override.
+     */
+    public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+        Objects.requireNonNull(outAttrs, "EditorInfo cannot be null.");
+        if (focusedField == null) {
+            return null;
+        }
+        focusedField.configureEditorInfo(outAttrs);
+        inputConnection = new FieldInputConnection(hostView);
+        return inputConnection;
+    }
+
+    /**
+     * Handles hardware delete, arrows, Enter, and printable key events.
+     */
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        Objects.requireNonNull(event, "KeyEvent cannot be null.");
+        if (focusedField == null) {
+            return false;
+        }
+
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DEL:
+                focusedField.deleteBeforeCursor();
+                return true;
+            case KeyEvent.KEYCODE_FORWARD_DEL:
+                focusedField.deleteAfterCursor();
+                return true;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                moveCursor(-1);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                moveCursor(1);
+                return true;
+            case KeyEvent.KEYCODE_ENTER:
+                return handleEditorAction(
+                        focusedField.getImeOptions()
+                                & EditorInfo.IME_MASK_ACTION
+                );
+            default:
+                int unicode = event.getUnicodeChar();
+                if (unicode != 0 && !Character.isISOControl(unicode)) {
+                    focusedField.replaceSelection(
+                            new String(Character.toChars(unicode)),
+                            1,
+                            false
+                    );
+                    return true;
+                }
+                return false;
+        }
+    }
+
+    public void restartInput() {
+        if (focusedField != null && inputMethodManager != null) {
+            inputMethodManager.restartInput(hostView);
+        }
+    }
+
+    public void clear() {
+        clearFocus();
+        for (NativeTextField field : drawingOrder) {
+            field.detach();
+        }
+        drawingOrder.clear();
+        fieldsById.clear();
+        invalidateHost();
+    }
+
+    public void release() {
+        clear();
+    }
+
+    @Override
+    public void close() {
+        release();
+    }
+
+    void invalidateHost() {
+        hostView.invalidate();
+    }
+
+    void updateSelection(NativeTextField field) {
+        if (field != focusedField || inputMethodManager == null) {
+            return;
+        }
+        Editable editable = field.getEditable();
+        inputMethodManager.updateSelection(
+                hostView,
+                field.getSelectionStart(),
+                field.getSelectionEnd(),
+                BaseInputConnection.getComposingSpanStart(editable),
+                BaseInputConnection.getComposingSpanEnd(editable)
+        );
+    }
+
+    private NativeTextField findTopmostField(float x, float y) {
+        for (int index = drawingOrder.size() - 1; index >= 0; index--) {
+            NativeTextField field = drawingOrder.get(index);
+            if (field.contains(x, y)) {
+                return field;
+            }
+        }
+        return null;
+    }
+
+    private void moveCursor(int codePointDelta) {
+        Editable editable = focusedField.getEditable();
+        int current = focusedField.getSelectionEnd();
+        int target;
+        try {
+            target = Character.offsetByCodePoints(
+                    editable,
+                    current,
+                    codePointDelta
+            );
+        } catch (IndexOutOfBoundsException exception) {
+            target = codePointDelta < 0 ? 0 : editable.length();
+        }
+        focusedField.setSelection(target);
+    }
+
+    private boolean handleEditorAction(int actionId) {
+        if (focusedField == null) {
+            return false;
+        }
+        if (focusedField.performEditorAction(actionId)) {
+            return true;
+        }
+        if (actionId == EditorInfo.IME_ACTION_NEXT) {
+            return focusNext();
+        }
+        if (actionId == EditorInfo.IME_ACTION_DONE
+                || actionId == EditorInfo.IME_ACTION_GO
+                || actionId == EditorInfo.IME_ACTION_SEND
+                || actionId == EditorInfo.IME_ACTION_SEARCH) {
+            clearFocus();
+            return true;
+        }
+        return false;
+    }
+
+    private boolean focusNext() {
+        if (focusedField == null || drawingOrder.isEmpty()) {
+            return false;
+        }
+        int current = drawingOrder.indexOf(focusedField);
+        for (int offset = 1; offset <= drawingOrder.size(); offset++) {
+            NativeTextField candidate = drawingOrder.get(
+                    (current + offset) % drawingOrder.size()
+            );
+            if (candidate.isEnabled()) {
+                return requestFocus(candidate.getId());
+            }
+        }
+        return false;
+    }
+
+    private boolean performContextMenuAction(int id) {
+        if (focusedField == null) {
+            return false;
+        }
+        Editable editable = focusedField.getEditable();
+        int start = focusedField.getSelectionStart();
+        int end = focusedField.getSelectionEnd();
+        ClipboardManager clipboard = (ClipboardManager) hostView.getContext()
+                .getSystemService(Context.CLIPBOARD_SERVICE);
+
+        if (id == android.R.id.selectAll) {
+            focusedField.setSelection(0, editable.length());
+            return true;
+        }
+        if (id == android.R.id.copy) {
+            if (clipboard != null && start != end) {
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                        focusedField.getId(),
+                        editable.subSequence(start, end)
+                ));
+            }
+            return true;
+        }
+        if (id == android.R.id.cut) {
+            if (clipboard != null && start != end) {
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                        focusedField.getId(),
+                        editable.subSequence(start, end)
+                ));
+                focusedField.replaceSelection("", 1, false);
+            }
+            return true;
+        }
+        if (id == android.R.id.paste) {
+            if (clipboard != null && clipboard.hasPrimaryClip()) {
+                ClipData clip = clipboard.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    CharSequence value = clip.getItemAt(0)
+                            .coerceToText(hostView.getContext());
+                    focusedField.replaceSelection(value, 1, false);
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private final class FieldInputConnection extends BaseInputConnection {
+
+        private FieldInputConnection(View targetView) {
+            super(targetView, true);
+        }
+
+        @Override
+        public Editable getEditable() {
+            return focusedField == null ? null : focusedField.getEditable();
+        }
+
+        @Override
+        public boolean commitText(CharSequence text, int newCursorPosition) {
+            if (focusedField == null) {
+                return false;
+            }
+            focusedField.replaceSelection(text, newCursorPosition, false);
+            return true;
+        }
+
+        @Override
+        public boolean setComposingText(
+                CharSequence text,
+                int newCursorPosition
+        ) {
+            if (focusedField == null) {
+                return false;
+            }
+            focusedField.replaceSelection(text, newCursorPosition, true);
+            return true;
+        }
+
+        @Override
+        public boolean finishComposingText() {
+            if (focusedField == null) {
+                return false;
+            }
+            focusedField.finishComposingText();
+            return true;
+        }
+
+        @Override
+        public boolean setComposingRegion(int start, int end) {
+            if (focusedField == null) {
+                return false;
+            }
+            focusedField.setComposingRegion(start, end);
+            return true;
+        }
+
+        @Override
+        public boolean deleteSurroundingText(
+                int beforeLength,
+                int afterLength
+        ) {
+            if (focusedField == null) {
+                return false;
+            }
+            focusedField.deleteSurroundingText(beforeLength, afterLength);
+            return true;
+        }
+
+        @Override
+        public boolean setSelection(int start, int end) {
+            if (focusedField == null) {
+                return false;
+            }
+            try {
+                focusedField.setSelection(start, end);
+                return true;
+            } catch (IndexOutOfBoundsException exception) {
+                return false;
+            }
+        }
+
+        @Override
+        public boolean performEditorAction(int actionCode) {
+            return handleEditorAction(actionCode);
+        }
+
+        @Override
+        public boolean performContextMenuAction(int id) {
+            return NativeTextFieldGroup.this.performContextMenuAction(id);
+        }
+
+        @Override
+        public boolean sendKeyEvent(KeyEvent event) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN
+                    && onKeyDown(event.getKeyCode(), event)) {
+                return true;
+            }
+            return super.sendKeyEvent(event);
+        }
+    }
+}

@@ -14,20 +14,14 @@ import android.view.View;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.ogfa.nativeviews.animation.LottieViewAnimator;
 import com.ogfa.nativeviews.animation.gif.GIFViewAnimator;
 import com.ogfa.nativeviews.button.AnimatedButton;
 import com.ogfa.nativeviews.button.AnimatedButtonGroup;
 import com.ogfa.nativeviews.button.BitmapView;
 import com.ogfa.nativeviews.button.GIFView;
-import com.ogfa.nativeviews.button.LottieView;
 import com.ogfa.nativeviews.button.ViewLayer;
-import com.ogfa.nativeviews.text.TextMakerEngine;
-import com.ogfa.nativeviews.text.TextWriterNative;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Standalone playground for AnimatedButton.
@@ -43,7 +37,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         GIFViewAnimator.preloadAnimations(this, "carrom_pass_buy");
-        LottieViewAnimator.preloadAnimations(this, "win_animation.json");
         testView = new ComplexButtonTestView(this);
         setContentView(testView);
     }
@@ -66,9 +59,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         private static final String MOVE_BUTTON = "move_button";
         private static final String RESET_BUTTON = "reset_button";
         private static final String GIF_BUTTON = "gif_button";
-        private static final String LOTTIE_BUTTON = "lottie_button";
-        private static final String TEXT_BUTTON = "text_button";
-        private static final String NATIVE_FONT_TEXT = "native_font_text";
 
         private final AnimatedButtonGroup buttons;
         private final Paint screenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -201,91 +191,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     .setClickListener(this)
                     .setShrink(0.96f)
                     .setProxySoundPlay(this::performTestFeedback));
-
-            float lottieWidth = viewWidth - margin * 2f;
-            float lottieHeight = lottieWidth * (212f / 1080f);
-            RectF lottieRect = new RectF(
-                    margin,
-                    gifRect.bottom + dp(24),
-                    viewWidth - margin,
-                    gifRect.bottom + dp(24) + lottieHeight
-            );
-            ArrayList<ViewLayer> lottieLayers = new ArrayList<>();
-            // Uses the same in-flight task started above, or falls back to one
-            // synchronous asset load if layout wins the race.
-            lottieLayers.add(LottieView.get(
-                    getContext(),
-                    "win_animation",
-                    lottieRect,
-                    true
-            ));
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(), LOTTIE_BUTTON, lottieLayers, lottieRect)
-                    .setClickListener(this)
-                    .setShrink(0.96f)
-                    .setProxySoundPlay(this::performTestFeedback));
-
-            Bitmap bitmapFontText = TextMakerEngine.generateTextBitmapWithSpacing(
-                    createGlyphMap("NATIVE TEXT"),
-                    "NATIVE TEXT",
-                    Math.round(dp(38)),
-                    Math.round(dp(2))
-            );
-            RectF bitmapTextRect = new RectF(
-                    (viewWidth - bitmapFontText.getWidth()) / 2f,
-                    lottieRect.bottom + dp(28),
-                    (viewWidth + bitmapFontText.getWidth()) / 2f,
-                    lottieRect.bottom + dp(28) + bitmapFontText.getHeight()
-            );
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(),
-                    TEXT_BUTTON,
-                    bitmapFontText,
-                    bitmapTextRect
-            )
-                    .setClickListener(this)
-                    .setShrink(0.90f)
-                    .setProxySoundPlay(this::performTestFeedback));
-
-            int nativeLabelWidth = Math.round(viewWidth - margin * 2f);
-            int nativeLabelHeight = Math.round(dp(32));
-            Bitmap nativeLabelBackground = Bitmap.createBitmap(
-                    nativeLabelWidth,
-                    nativeLabelHeight,
-                    Bitmap.Config.ARGB_8888
-            );
-            ArrayList<TextWriterNative.ElementWriter> nativeWriters =
-                    new ArrayList<>();
-            nativeWriters.add(new TextWriterNative.ElementWriter(
-                    R.font.lilitaone_regular,
-                    "ANDROID FONT",
-                    nativeLabelWidth / 2f,
-                    0f,
-                    dp(28),
-                    TextWriterNative.LineType.MIDDLE,
-                    1f,
-                    "#FFD166"
-            ));
-            Bitmap nativeLabel = TextWriterNative.writeTextToBitmap(
-                    getContext(),
-                    nativeLabelBackground,
-                    nativeWriters
-            );
-            RectF nativeTextRect = new RectF(
-                    margin,
-                    lottieRect.bottom + dp(67),
-                    margin + nativeLabel.getWidth(),
-                    lottieRect.bottom + dp(67) + nativeLabel.getHeight()
-            );
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(),
-                    NATIVE_FONT_TEXT,
-                    nativeLabel,
-                    nativeTextRect
-            )
-                    .setClickListener(this)
-                    .setShrink(0.90f)
-                    .setProxySoundPlay(this::performTestFeedback));
         }
 
         @Override
@@ -353,17 +258,6 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     eventMessage = "GIF layer is loaded, animating, and touchable";
                     break;
 
-                case LOTTIE_BUTTON:
-                    eventMessage = "Lottie layer is loaded, animating, and touchable";
-                    break;
-
-                case TEXT_BUTTON:
-                    eventMessage = "Bitmap-font image works through AnimatedButton";
-                    break;
-
-                case NATIVE_FONT_TEXT:
-                    eventMessage = "R.font image works through AnimatedButton";
-                    break;
             }
             invalidate();
         }
@@ -479,43 +373,5 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
             return bitmap;
         }
 
-        private Map<String, Bitmap> createGlyphMap(String text) {
-            Map<String, Bitmap> glyphs = new HashMap<>();
-            for (int index = 0; index < text.length(); index++) {
-                String character = String.valueOf(text.charAt(index));
-                if (!glyphs.containsKey(character)) {
-                    glyphs.put(character, glyphBitmap(character));
-                }
-            }
-            return glyphs;
-        }
-
-        private Bitmap glyphBitmap(String character) {
-            int width = " ".equals(character) ? 34 : 72;
-            int height = 96;
-            Bitmap bitmap = Bitmap.createBitmap(
-                    width,
-                    height,
-                    Bitmap.Config.ARGB_8888
-            );
-            if (" ".equals(character)) {
-                return bitmap;
-            }
-
-            Canvas canvas = new Canvas(bitmap);
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            paint.setColor(0xff80ed99);
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setFakeBoldText(true);
-            paint.setTextSize(72f);
-            Paint.FontMetrics metrics = paint.getFontMetrics();
-            canvas.drawText(
-                    character,
-                    width / 2f,
-                    height / 2f - (metrics.ascent + metrics.descent) / 2f,
-                    paint
-            );
-            return bitmap;
-        }
     }
 }
