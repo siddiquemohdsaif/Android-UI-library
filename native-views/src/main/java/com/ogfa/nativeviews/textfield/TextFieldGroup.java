@@ -26,19 +26,19 @@ import java.util.Objects;
  * {@code onCheckIsTextEditor()}, touch, draw, and optional hardware key events to this
  * group.</p>
  */
-public final class NativeTextFieldGroup implements AutoCloseable {
+public final class TextFieldGroup implements AutoCloseable {
 
     private final View hostView;
     private final InputMethodManager inputMethodManager;
-    private final ArrayList<NativeTextField> drawingOrder = new ArrayList<>();
-    private final Map<String, NativeTextField> fieldsById = new LinkedHashMap<>();
+    private final ArrayList<TextField> drawingOrder = new ArrayList<>();
+    private final Map<String, TextField> fieldsById = new LinkedHashMap<>();
 
-    private NativeTextField focusedField;
-    private NativeTextField touchTarget;
+    private TextField focusedField;
+    private TextField touchTarget;
     private FieldInputConnection inputConnection;
     private boolean hideKeyboardWhenTouchOutside = true;
 
-    public NativeTextFieldGroup(View hostView) {
+    public TextFieldGroup(View hostView) {
         this.hostView = Objects.requireNonNull(
                 hostView,
                 "Host view cannot be null."
@@ -49,12 +49,12 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         hostView.setFocusableInTouchMode(true);
     }
 
-    public NativeTextField add(NativeTextField.Builder builder) {
-        Objects.requireNonNull(builder, "NativeTextField.Builder cannot be null.");
-        NativeTextField field = builder.build(hostView);
+    public TextField add(TextField.Builder builder) {
+        Objects.requireNonNull(builder, "TextField.Builder cannot be null.");
+        TextField field = builder.build(hostView);
         if (fieldsById.containsKey(field.getId())) {
             throw new IllegalArgumentException(
-                    "NativeTextFieldGroup already contains ID: " + field.getId()
+                    "TextFieldGroup already contains ID: " + field.getId()
             );
         }
         field.attach(this);
@@ -64,7 +64,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         return field;
     }
 
-    public NativeTextField find(String id) {
+    public TextField find(String id) {
         return fieldsById.get(id);
     }
 
@@ -73,7 +73,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
     }
 
     public boolean remove(String id) {
-        NativeTextField field = fieldsById.remove(id);
+        TextField field = fieldsById.remove(id);
         if (field == null) {
             return false;
         }
@@ -94,7 +94,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         return drawingOrder.isEmpty();
     }
 
-    public NativeTextField getFocusedField() {
+    public TextField getFocusedField() {
         return focusedField;
     }
 
@@ -102,19 +102,19 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         return focusedField != null;
     }
 
-    public NativeTextFieldGroup setHideKeyboardWhenTouchOutside(boolean enabled) {
+    public TextFieldGroup setHideKeyboardWhenTouchOutside(boolean enabled) {
         hideKeyboardWhenTouchOutside = enabled;
         return this;
     }
 
     public void draw(Canvas canvas) {
         Objects.requireNonNull(canvas, "Canvas cannot be null.");
-        for (NativeTextField field : drawingOrder) {
+        for (TextField field : drawingOrder) {
             field.draw(canvas);
         }
         if (focusedField != null) {
             hostView.postInvalidateDelayed(
-                    NativeTextField.CURSOR_BLINK_INTERVAL_MS
+                    TextField.CURSOR_BLINK_INTERVAL_MS
             );
         }
     }
@@ -157,7 +157,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
     }
 
     public boolean requestFocus(String id) {
-        NativeTextField field = fieldsById.get(id);
+        TextField field = fieldsById.get(id);
         if (field == null || !field.isEnabled()) {
             return false;
         }
@@ -265,7 +265,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
 
     public void clear() {
         clearFocus();
-        for (NativeTextField field : drawingOrder) {
+        for (TextField field : drawingOrder) {
             field.detach();
         }
         drawingOrder.clear();
@@ -286,7 +286,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         hostView.invalidate();
     }
 
-    void updateSelection(NativeTextField field) {
+    void updateSelection(TextField field) {
         if (field != focusedField || inputMethodManager == null) {
             return;
         }
@@ -300,9 +300,9 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         );
     }
 
-    private NativeTextField findTopmostField(float x, float y) {
+    private TextField findTopmostField(float x, float y) {
         for (int index = drawingOrder.size() - 1; index >= 0; index--) {
-            NativeTextField field = drawingOrder.get(index);
+            TextField field = drawingOrder.get(index);
             if (field.contains(x, y)) {
                 return field;
             }
@@ -352,7 +352,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
         }
         int current = drawingOrder.indexOf(focusedField);
         for (int offset = 1; offset <= drawingOrder.size(); offset++) {
-            NativeTextField candidate = drawingOrder.get(
+            TextField candidate = drawingOrder.get(
                     (current + offset) % drawingOrder.size()
             );
             if (candidate.isEnabled()) {
@@ -491,7 +491,7 @@ public final class NativeTextFieldGroup implements AutoCloseable {
 
         @Override
         public boolean performContextMenuAction(int id) {
-            return NativeTextFieldGroup.this.performContextMenuAction(id);
+            return TextFieldGroup.this.performContextMenuAction(id);
         }
 
         @Override

@@ -1,4 +1,4 @@
-package com.ogfa.nativeviews.button;
+package com.ogfa.nativeviews.animator.component.layer;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -7,11 +7,12 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 
 import com.ogfa.nativeviews.animation.LottieViewAnimator;
+import com.ogfa.nativeviews.component.Position;
 
-public class LottieView implements ViewLayer {
+public class LottieLayer implements ComponentLayer {
     private LottieViewAnimator lottieViewAnimator = new LottieViewAnimator();
 
-    private LottieView(Context context, String lottieName, RectF lottieViewParam, boolean repeat) {
+    private LottieLayer(Context context, String lottieName, RectF lottieViewParam, boolean repeat) {
         if (repeat){
             lottieViewAnimator.addAnimation(context, lottieName, (int) (lottieViewParam.right - lottieViewParam.left), (int) (lottieViewParam.bottom - lottieViewParam.top), (int) lottieViewParam.left, (int) lottieViewParam.top, -1);
         } else {
@@ -19,25 +20,25 @@ public class LottieView implements ViewLayer {
         }
     }
 
-    public static LottieView get(Context context, String lottieName, RectF rectF,boolean repeat){
-            return new LottieView(context, lottieName, rectF,repeat);
+    public static LottieLayer create(Context context, String lottieName, RectF rectF,boolean repeat){
+            return new LottieLayer(context, lottieName, rectF,repeat);
     }
 
-    public static LottieView get(Context context, String lottieName, RectF rectF){
-        return new LottieView(context, lottieName, rectF,true);
-    }
-
-    /**
-     * Uses the Lottie composition's intrinsic dimensions in Figma space.
-     */
-    public static LottieView get(Context context, String lottieName, Position position) {
-        return get(context, lottieName, position, true);
+    public static LottieLayer create(Context context, String lottieName, RectF rectF){
+        return new LottieLayer(context, lottieName, rectF,true);
     }
 
     /**
      * Uses the Lottie composition's intrinsic dimensions in Figma space.
      */
-    public static LottieView get(
+    public static LottieLayer create(Context context, String lottieName, Position position) {
+        return create(context, lottieName, position, true);
+    }
+
+    /**
+     * Uses the Lottie composition's intrinsic dimensions in Figma space.
+     */
+    public static LottieLayer create(
             Context context,
             String lottieName,
             Position position,
@@ -49,7 +50,7 @@ public class LottieView implements ViewLayer {
                     "Unable to read intrinsic bounds for Lottie animation: " + lottieName
             );
         }
-        return new LottieView(
+        return new LottieLayer(
                 context,
                 lottieName,
                 position.toRectF(bounds.width(), bounds.height()),
@@ -60,26 +61,26 @@ public class LottieView implements ViewLayer {
     /**
      * Uses another bitmap's dimensions so the Lottie layer can match that bitmap.
      */
-    public static LottieView get(
+    public static LottieLayer create(
             Context context,
             String lottieName,
             Position position,
             Bitmap sizeSource
     ) {
-        return new LottieView(context, lottieName, position.toRectF(sizeSource), true);
+        return new LottieLayer(context, lottieName, position.toRectF(sizeSource), true);
     }
 
     /**
      * Uses explicit Figma-space dimensions for the Lottie layer.
      */
-    public static LottieView get(
+    public static LottieLayer create(
             Context context,
             String lottieName,
             Position position,
             float figmaWidth,
             float figmaHeight
     ) {
-        return new LottieView(
+        return new LottieLayer(
                 context,
                 lottieName,
                 position.toRectF(figmaWidth, figmaHeight),
@@ -88,17 +89,17 @@ public class LottieView implements ViewLayer {
     }
 
     @Override
-    public void onDraw(Canvas canvas) {
+    public void draw(Canvas canvas) {
         LottieViewAnimator.Draw(canvas, lottieViewAnimator);
     }
 
     @Override
-    public void clear() {
+    public void release() {
         LottieViewAnimator.releaseLottieResources(lottieViewAnimator);
     }
 
     @Override
-    public void setRect(RectF rectF) {
+    public void setBounds(RectF rectF) {
         //
     }
 }

@@ -37,10 +37,10 @@ Output:
 native-views-fat/build/outputs/aar/native-views-release.aar
 ```
 
-## AnimatedButton overview
+## CustomAnimatorComponent overview
 
-`AnimatedButton` is not an Android XML `Button`. It is a controller that draws one or
-more ordered `ViewLayer` objects on the `Canvas` of a host custom `View`.
+`CustomAnimatorComponent` is a generic layered Canvas element, not an Android XML
+`Button`. It draws one or more ordered `ComponentLayer` objects on a host custom `View`.
 
 It provides:
 
@@ -48,15 +48,15 @@ It provides:
 - click and long-click hit testing;
 - press/release scale animation;
 - Figma-to-runtime position conversion;
-- multiple overlapping buttons with topmost-first touch dispatch;
+- multiple overlapping components with topmost-first touch dispatch;
 - visibility filtering for scrollable or clipped views;
 - animated movement with synchronized touch bounds.
 
-The host `View` owns one `AnimatedButtonGroup`. The group stores buttons, preserves
+The host `View` owns one `CustomAnimatorComponentGroup`. The group stores components, preserves
 drawing order, dispatches touch, schedules animation frames, performs lookup, and
 releases layer resources.
 
-## Minimal bitmap button
+## Minimal bitmap component
 
 Create buttons after the host view has a measured size. `onSizeChanged()` is a
 convenient place:
@@ -64,12 +64,12 @@ convenient place:
 ```java
 public final class GameCanvasView extends View {
 
-    private final AnimatedButtonGroup buttons;
+    private final CustomAnimatorComponentGroup buttons;
     private Bitmap playBitmap;
 
     public GameCanvasView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        buttons = new AnimatedButtonGroup(this);
+        buttons = new CustomAnimatorComponentGroup(this);
         setClickable(true);
     }
 
@@ -87,15 +87,15 @@ public final class GameCanvasView extends View {
                 450f
         );
 
-        buttons.add(new AnimatedButton.Builder(
+        buttons.add(new CustomAnimatorComponent.Builder(
                 getContext(),
                 "play",
                 playBitmap,
                 position
         )
                 .setClickListener(id -> startGame())
-                .setShrink(0.92f)
-                .setProxySoundPlay(() ->
+                .setPressScale(0.92f)
+                .setSoundAction(() ->
                         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)));
     }
 
@@ -119,7 +119,7 @@ public final class GameCanvasView extends View {
 }
 ```
 
-The bitmap convenience constructor creates the `BitmapView` layer internally.
+The bitmap convenience constructor creates the `BitmapLayer` layer internally.
 
 ## Layered button
 
@@ -135,47 +135,47 @@ Position position = new Position(
         500f
 );
 
-ArrayList<ViewLayer> layers = new ArrayList<>();
-layers.add(BitmapView.get(freeCoinBitmap, position));
-layers.add(LottieView.get(
+ArrayList<ComponentLayer> layers = new ArrayList<>();
+layers.add(BitmapLayer.create(freeCoinBitmap, position));
+layers.add(LottieLayer.create(
         getContext(),
         "emoji_lottie_1",
         position,
         freeCoinBitmap
 ));
 
-buttons.add(new AnimatedButton.Builder(
+buttons.add(new CustomAnimatorComponent.Builder(
         getContext(),
         "free_coin",
         layers,
         position
 )
         .setClickListener(id -> openFreeCoinDialog())
-        .setProxySoundPlay(this::playPopupSound));
+        .setSoundAction(this::playPopupSound));
 ```
 
-For `Builder(..., layers, position)`, the largest `BitmapView` by rendered area becomes
-the button's touch bounds. At least one `BitmapView` is required. Use an explicit
+For `Builder(..., layers, position)`, the largest `BitmapLayer` by rendered area becomes
+the button's touch bounds. At least one `BitmapLayer` is required. Use an explicit
 `RectF` builder when the button has no bitmap layer.
 
-## AnimatedButtonGroup API
+## CustomAnimatorComponentGroup API
 
 Create one group for each host custom `View`:
 
 ```java
-private final AnimatedButtonGroup buttons;
+private final CustomAnimatorComponentGroup buttons;
 
 public GameCanvasView(Context context, AttributeSet attrs) {
     super(context, attrs);
-    buttons = new AnimatedButtonGroup(this);
+    buttons = new CustomAnimatorComponentGroup(this);
 }
 ```
 
 Build and add in one call:
 
 ```java
-AnimatedButton button = buttons.add(
-        new AnimatedButton.Builder(context, "play", bitmap, position)
+CustomAnimatorComponent button = buttons.add(
+        new CustomAnimatorComponent.Builder(context, "play", bitmap, position)
                 .setClickListener(id -> startGame())
 );
 ```
@@ -195,7 +195,7 @@ The complete group API:
 buttons.add(builder);                 // Builds, adds, and returns the button
 buttons.add(button);                  // Adds and returns an existing button
 
-AnimatedButton play = buttons.find("play");
+CustomAnimatorComponent play = buttons.find("play");
 boolean exists = buttons.contains("play");
 boolean removed = buttons.remove("play");
 
@@ -240,10 +240,10 @@ Use already-calculated Android pixel coordinates:
 RectF bounds = new RectF(left, top, right, bottom);
 
 // One bitmap layer is created internally.
-new AnimatedButton.Builder(context, "play", playBitmap, bounds);
+new CustomAnimatorComponent.Builder(context, "play", playBitmap, bounds);
 
 // Multiple custom layers.
-new AnimatedButton.Builder(context, "play", layers, bounds);
+new CustomAnimatorComponent.Builder(context, "play", layers, bounds);
 ```
 
 ### Position-derived bounds
@@ -251,17 +251,17 @@ new AnimatedButton.Builder(context, "play", layers, bounds);
 Use Figma-space margins and dimensions:
 
 ```java
-new AnimatedButton.Builder(context, "play", playBitmap, position);
-new AnimatedButton.Builder(context, "play", layers, position);
+new CustomAnimatorComponent.Builder(context, "play", playBitmap, position);
+new CustomAnimatorComponent.Builder(context, "play", layers, position);
 ```
 
 The bitmap overload derives bounds from that bitmap. The layered overload selects the
 largest bitmap layer.
 
-### Separate DynamicView movement bounds
+### Separate DynamicLayer movement bounds
 
 ```java
-new AnimatedButton.Builder(
+new CustomAnimatorComponent.Builder(
         context,
         "moving_button",
         layers,
@@ -272,12 +272,12 @@ new AnimatedButton.Builder(
 
 `buttonBounds` controls drawing and hit testing. During
 `animateToPositionWithValueAnimator()`, `dynamicLayerBounds` is passed only to
-`DynamicView` layers while the regular button bounds are passed to other layers.
+`DynamicLayer` layers while the regular button bounds are passed to other layers.
 
 ### Builder options
 
 ```java
-new AnimatedButton.Builder(context, "shop", bitmap, position)
+new CustomAnimatorComponent.Builder(context, "shop", bitmap, position)
         // Enables normal clicks.
         .setClickListener(id -> openShop())
 
@@ -288,10 +288,10 @@ new AnimatedButton.Builder(context, "shop", bitmap, position)
         .setOnLongClickListener(id -> showShopHelp(), true)
 
         // Pressed scale. Default is 0.96f.
-        .setShrink(0.90f)
+        .setPressScale(0.90f)
 
         // Replaces the library's default button sound.
-        .setProxySoundPlay(() -> soundPool.play(clickSound, 1f, 1f, 1, 0, 1f))
+        .setSoundAction(() -> soundPool.play(clickSound, 1f, 1f, 1, 0, 1f))
         .build();
 ```
 
@@ -303,7 +303,7 @@ Recommended shrink values are between `0f` and `1f`. `1f` produces no visible sh
 
 ### Default button sound
 
-When `setProxySoundPlay()` is not set, `AnimatedButton` uses the bundled:
+When `setSoundAction()` is not set, `CustomAnimatorComponent` uses the bundled:
 
 ```text
 nativeviews/audio/sfx/g_button.mp3
@@ -332,7 +332,7 @@ NativeViewsSoundPlayer.setButtonSoundOverride(null);
 NativeViewsSoundPlayer.release();
 ```
 
-A per-button `setProxySoundPlay()` callback takes priority over the bundled default.
+A per-button `setSoundAction()` callback takes priority over the bundled default.
 
 ## Position API
 
@@ -435,26 +435,26 @@ RectF e = position.toRectF(
 
 Host width and height must be greater than zero, so evaluate positions after measurement.
 
-## ViewLayer API
+## ComponentLayer API
 
 Every layer implements:
 
 ```java
-public interface ViewLayer {
-    void onDraw(Canvas canvas);
-    void clear();
-    void setRect(RectF rectF);
+public interface ComponentLayer {
+    void draw(Canvas canvas);
+    void release();
+    void setBounds(RectF rectF);
 }
 ```
 
-- `onDraw()` renders the layer.
-- `clear()` releases or clears owned resources.
-- `setRect()` receives new bounds when a button moves.
+- `draw()` renders the layer.
+- `release()` releases or clears owned resources.
+- `setBounds()` receives new bounds when a component moves.
 
 You can create a custom layer:
 
 ```java
-public final class BadgeLayer implements ViewLayer {
+public final class BadgeLayer implements ComponentLayer {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private RectF bounds;
 
@@ -464,36 +464,36 @@ public final class BadgeLayer implements ViewLayer {
     }
 
     @Override
-    public void onDraw(Canvas canvas) {
+    public void draw(Canvas canvas) {
         canvas.drawOval(bounds, paint);
     }
 
     @Override
-    public void clear() {
+    public void release() {
         // Release layer-owned resources here.
     }
 
     @Override
-    public void setRect(RectF rectF) {
+    public void setBounds(RectF rectF) {
         bounds = new RectF(rectF);
     }
 }
 ```
 
-## BitmapView
+## BitmapLayer
 
 ```java
-BitmapView layer1 = BitmapView.get(bitmap, bounds);
-BitmapView layer2 = BitmapView.get(bitmap, position);
+BitmapLayer layer1 = BitmapLayer.create(bitmap, bounds);
+BitmapLayer layer2 = BitmapLayer.create(bitmap, position);
 
 // Equivalent public constructor:
-BitmapView layer3 = new BitmapView(bitmap, bounds);
+BitmapLayer layer3 = new BitmapLayer(bitmap, bounds);
 ```
 
 The `Position` overload treats the bitmap's pixel width and height as its Figma-space
-dimensions. `setRect()` updates the bitmap's rendered bounds.
+dimensions. `setBounds()` updates the bitmap's rendered bounds.
 
-## LottieView
+## LottieLayer
 
 Place JSON animations in:
 
@@ -537,20 +537,20 @@ Create a layer:
 
 ```java
 // Explicit bounds; repeats forever by default.
-LottieView.get(context, "loading", bounds);
+LottieLayer.create(context, "loading", bounds);
 
 // Explicit repeat behavior: true = forever, false = play once.
-LottieView.get(context, "loading", bounds, false);
+LottieLayer.create(context, "loading", bounds, false);
 
 // Position + intrinsic composition dimensions.
-LottieView.get(context, "loading", position);
-LottieView.get(context, "loading", position, false);
+LottieLayer.create(context, "loading", position);
+LottieLayer.create(context, "loading", position, false);
 
 // Position + dimensions copied from a bitmap.
-LottieView.get(context, "loading", position, buttonBitmap);
+LottieLayer.create(context, "loading", position, buttonBitmap);
 
 // Position + explicit Figma dimensions.
-LottieView.get(context, "loading", position, 240f, 240f);
+LottieLayer.create(context, "loading", position, 240f, 240f);
 ```
 
 All overloads use the same normalized animation ID and shared load operation. A layer
@@ -562,11 +562,11 @@ the animation or image name and searched asset paths.
 Call `buttons.release()` when the host is detached. This clears each layer's animation
 source list and drawable resources.
 
-Current behavior: `LottieView.setRect()` does not relocate its drawable. If a button will
+Current behavior: `LottieLayer.setBounds()` does not relocate its drawable. If a button will
 use `animateToPositionWithValueAnimator()`, use a custom movable layer or update the
 library implementation before expecting a Lottie layer to follow the button.
 
-## GIFView
+## GifLayer
 
 Place application-owned GIF files under:
 
@@ -598,13 +598,13 @@ Check the cache and create a preloaded layer:
 
 ```java
 boolean ready = GIFViewAnimator.isLoaded("reward");
-ViewLayer gifLayer = GIFView.get("reward", gifBounds);
+ComponentLayer gifLayer = GifLayer.create("reward", gifBounds);
 ```
 
 If the GIF was not explicitly preloaded, use the context overload:
 
 ```java
-ViewLayer gifLayer = GIFView.get(
+ComponentLayer gifLayer = GifLayer.create(
         context,
         "reward",
         gifBounds
@@ -621,23 +621,23 @@ An application-created composition is also supported:
 GIFComposition composition =
         GIFComposition.fromAssetSync(context, "gif/reward.gif");
 
-ViewLayer gifLayer =
-        GIFView.get("reward", composition, gifBounds);
+ComponentLayer gifLayer =
+        GifLayer.create("reward", composition, gifBounds);
 ```
 
-Current behavior: GIF layers loop indefinitely and `GIFView.setRect()` does not relocate
+Current behavior: GIF layers loop indefinitely and `GifLayer.setBounds()` does not relocate
 them during button movement.
 
-## DynamicView
+## DynamicLayer
 
-`DynamicView` renders application-defined Canvas content with progress from `0f` to `1f`:
+`DynamicLayer` renders application-defined Canvas content with progress from `0f` to `1f`:
 
 ```java
 CustomDynamicView pulse = new CustomDynamicView() {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     @Override
-    public void onDraw(Canvas canvas, float progress, RectF rectF) {
+    public void draw(Canvas canvas, float progress, RectF rectF) {
         paint.setAlpha((int) (255f * (1f - progress)));
         canvas.drawCircle(
                 rectF.centerX(),
@@ -653,10 +653,10 @@ CustomDynamicView pulse = new CustomDynamicView() {
     }
 };
 
-ViewLayer pulseLayer = DynamicView.get(pulse, pulseBounds);
+ComponentLayer pulseLayer = DynamicLayer.create(pulse, pulseBounds);
 ```
 
-`DynamicView.get()` repeats indefinitely. Its `setRect()` implementation updates the
+`DynamicLayer.create()` repeats indefinitely. Its `setBounds()` implementation updates the
 animation bounds, so it follows `animateToPositionWithValueAnimator()`.
 
 For direct control:
@@ -665,14 +665,14 @@ For direct control:
 DynamicViewAnimator animator =
         new DynamicViewAnimator(pulse, -1, pulseBounds);
 
-DynamicView layer = new DynamicView(animator);
+DynamicLayer layer = new DynamicLayer(animator);
 boolean running = animator.isAnimating();
-animator.setRect(newBounds);
+animator.setBounds(newBounds);
 ```
 
 `repeatCount == -1` means infinite repetition.
 
-## AfterEffectView
+## AfterEffectLayer
 
 Wrap an existing `AfterEffectAnimator` as a button layer:
 
@@ -684,33 +684,33 @@ AfterEffectAnimator effectAnimator = new AfterEffectAnimator(
         true
 );
 
-ViewLayer effectLayer = AfterEffectView.get(effectAnimator);
+ComponentLayer effectLayer = AfterEffectLayer.create(effectAnimator);
 ```
 
-Calling `clear()` empties the animator's layer list. `setRect()` currently does nothing,
+Calling `release()` empties the animator's layer list. `setBounds()` currently does nothing,
 so an After Effects layer does not automatically follow button movement.
 
 ## Drawing and visibility API
 
-Draw every button:
+draw every button:
 
 ```java
 buttons.draw(canvas);
 ```
 
-Draw only buttons intersecting a view's local visible rectangle:
+draw only buttons intersecting a view's local visible rectangle:
 
 ```java
 buttons.drawVisible(canvas, scrollView);
 ```
 
-Draw one button directly:
+draw one button directly:
 
 ```java
-button.onDraw(canvas);
+button.draw(canvas);
 ```
 
-`AnimatedButtonGroup` requests the next frame automatically unless auto-invalidation is
+`CustomAnimatorComponentGroup` requests the next frame automatically unless auto-invalidation is
 disabled.
 
 ## Touch API
@@ -749,7 +749,7 @@ release also cancels pressed state.
 ```java
 buttons.add(button);
 
-AnimatedButton found = buttons.find("free_coin");
+CustomAnimatorComponent found = buttons.find("free_coin");
 boolean exists = buttons.contains("free_coin");
 
 boolean removed = buttons.remove("free_coin");
@@ -767,12 +767,13 @@ no match exists.
 String id = button.getId();
 int initialLeft = button.getLeft();
 int initialTop = button.getTop();
-RectF currentBounds = new RectF(button.rectF);
-ArrayList<ViewLayer> layers = button.viewLayers;
+RectF currentBounds = component.getBounds();
+ArrayList<ComponentLayer> layers = button.layers;
 ```
 
 `getLeft()` and `getTop()` are the integer coordinates captured at build time.
-`rectF` contains the current bounds and changes during movement.
+`bounds` contains the current bounds and changes during movement. Prefer
+`getBounds()` when the caller should not mutate them.
 
 ## Move a button
 
@@ -782,7 +783,7 @@ boolean started = buttons.animateToPosition(
         targetLeft,
         targetTop,
         350L,
-        () -> Log.d("AnimatedButton", "Movement complete")
+        () -> Log.d("CustomAnimatorComponent", "Movement complete")
 );
 ```
 
@@ -796,54 +797,55 @@ The group supplies its host view to the underlying animation. The method returns
 when the ID is not present. Movement uses linear interpolation and updates drawing
 bounds, pressed bounds, and the touch region on every frame.
 
-Layer movement depends on `ViewLayer.setRect()`:
+Layer movement depends on `ComponentLayer.setBounds()`:
 
-- `BitmapView`: moves;
-- `DynamicView`: moves;
-- `LottieView`: currently does not move;
-- `GIFView`: currently does not move;
-- `AfterEffectView`: currently does not move;
-- custom layers: move when their `setRect()` implementation updates their bounds.
+- `BitmapLayer`: moves;
+- `DynamicLayer`: moves;
+- `LottieLayer`: currently does not move;
+- `GifLayer`: currently does not move;
+- `AfterEffectLayer`: currently does not move;
+- custom layers: move when their `setBounds()` implementation updates their bounds.
 
-## Public AnimatedButton API summary
+## Public CustomAnimatorComponent API summary
 
 | API | Purpose |
 |---|---|
-| `Builder(context, id, layers, RectF)` | Layered button with explicit bounds |
-| `Builder(context, id, bitmap, RectF)` | Simple bitmap button with explicit bounds |
-| `Builder(context, id, layers, Position)` | Layered button bounded by its largest bitmap |
-| `Builder(context, id, bitmap, Position)` | Simple position-based bitmap button |
+| `Builder(context, id, layers, RectF)` | Layered component with explicit bounds |
+| `Builder(context, id, bitmap, RectF)` | Simple bitmap component with explicit bounds |
+| `Builder(context, id, layers, Position)` | Layered component bounded by its largest bitmap |
+| `Builder(context, id, bitmap, Position)` | Simple position-based bitmap component |
 | `Builder(context, id, layers, RectF, dynamicRectF)` | Separate movement bounds for dynamic layers |
 | `setClickListener(listener)` | Set and enable click handling |
 | `setClickListener(listener, enabled)` | Set listener and explicit click state |
 | `setOnLongClickListener(listener, enabled)` | Configure presses longer than 500 ms |
-| `setShrink(scale)` | Configure pressed scale; default `0.96f` |
-| `setProxySoundPlay(runnable)` | Replace default click sound |
-| `build()` | Create the button |
-| `viewLayers` | Public ordered layer list |
-| `rectF` | Public current drawing and touch bounds |
-| `getId()` | Return the button ID |
+| `setPressScale(scale)` | Configure pressed scale; default `0.96f` |
+| `setSoundAction(runnable)` | Replace default click sound |
+| `build()` | Create the component |
+| `layers` | Public ordered layer list |
+| `bounds` | Public current drawing and touch bounds |
+| `getBounds()` | Return a defensive copy of current bounds |
+| `getId()` | Return the component ID |
 | `getLeft()`, `getTop()` | Return initial integer position |
-| `onDraw(canvas)` | Draw one button |
-| `onTouchEvent(event)` | Handle touch for one button |
+| `draw(canvas)` | Draw one component |
+| `onTouchEvent(event)` | Handle touch for one component |
 | `animateToPositionWithValueAnimator(...)` | Animate position and touch bounds |
-| `Draw(canvas, buttons)` | Draw a collection |
-| `visibleDraw(canvas, buttons, view)` | Draw the visible collection subset |
-| `getVisible(source, output, view)` | Collect visible buttons |
-| `HandleTouch(event, buttons)` | Dispatch touch in reverse drawing order |
-| `HandleTouchScrollChanged(buttons)` | Cancel pressed state during scrolling |
-| `addButton(list, button)` | Add a button |
-| `removeButton(id, list)` | Clear and remove a button |
-| `findButtonById(id, list)` | Find a button or return `null` |
-| `releaseLottieResources(list)` | Call `clear()` on all layers |
+| `draw(canvas, components)` | Draw a collection |
+| `drawVisible(canvas, components, view)` | Draw the visible collection subset |
+| `getVisible(source, output, view)` | Collect visible components |
+| `handleTouch(event, components)` | Dispatch touch in reverse drawing order |
+| `handleTouchScrollChanged(components)` | Cancel pressed state during scrolling |
+| `addComponent(list, component)` | Add a component |
+| `removeComponent(id, list)` | Release and remove a component |
+| `findComponentById(id, list)` | Find a component or return `null` |
+| `releaseResources(list)` | Call `release()` on all layers |
 
 Callback contracts:
 
 ```java
-AnimatedButton.OnClickListener clickListener =
+CustomAnimatorComponent.OnClickListener clickListener =
         id -> Log.d("Button", "Clicked: " + id);
 
-AnimatedButton.OnLongClickListener longClickListener =
+CustomAnimatorComponent.OnLongClickListener longClickListener =
         id -> Log.d("Button", "Long clicked: " + id);
 ```
 
@@ -853,7 +855,7 @@ AnimatedButton.OnLongClickListener longClickListener =
 
 These APIs only generate or compose `Bitmap` objects. They do not maintain a separate
 drawing, touch, or animation system. Use the resulting bitmap directly on a `Canvas`,
-inside a `BitmapView`, or as the bitmap of an `AnimatedButton`.
+inside a `BitmapLayer`, or as the bitmap of an `CustomAnimatorComponent`.
 
 ### Bitmap-font characters
 
@@ -885,7 +887,7 @@ Bitmap withImages = ImageWriter.writeImage(
 );
 ```
 
-Make the generated image clickable by passing it to `AnimatedButton`:
+Make the generated image clickable by passing it to `CustomAnimatorComponent`:
 
 ```java
 Bitmap textImage = TextMakerEngine.generateTextBitmapWithSpacing(
@@ -895,14 +897,14 @@ Bitmap textImage = TextMakerEngine.generateTextBitmapWithSpacing(
         4
 );
 
-buttons.add(new AnimatedButton.Builder(
+buttons.add(new CustomAnimatorComponent.Builder(
         getContext(),
         "profile_name",
         textImage,
         position
 )
         .setClickListener(id -> openProfile())
-        .setShrink(0.92f));
+        .setPressScale(0.92f));
 ```
 
 The button group now owns drawing, press animation, touch handling, sound, movement,
@@ -911,13 +913,13 @@ and cleanup. No second text-animator collection is required.
 `TextWriter.writeTextToBitmapWithSpacing()` and
 `writeTextToBitmapWithSpacingWidthReduction()` are also available. Alpha arguments use
 the `0f..1f` range and are clamped. Invalid dimensions, recycled bitmaps, or text with
-no characters in the supplied glyph map produce clear runtime exceptions.
+no characters in the supplied glyph map produce release runtime exceptions.
 
 ### Android font-resource generation and composition
 
 `TextWriterNative` renders ordinary Android `R.font` resources. Despite its historical
 name, it does not use JNI. It returns a normal bitmap that can be drawn directly or
-passed to `AnimatedButton`.
+passed to `CustomAnimatorComponent`.
 
 Place the font in the consuming application:
 
@@ -946,7 +948,7 @@ Bitmap result = TextWriterNative.writeTextToBitmap(
         writers
 );
 
-buttons.add(new AnimatedButton.Builder(
+buttons.add(new CustomAnimatorComponent.Builder(
         context,
         "play",
         result,
@@ -987,11 +989,11 @@ remains supplied by the parent application through AppCompat.
 
 ---
 
-## NativeTextField
+## TextField
 
-`NativeTextField` is a single-line, Canvas-rendered editor. It uses Android native font
+`TextField` is a single-line, Canvas-rendered editor. It uses Android native font
 resources and communicates with the Android keyboard through `InputConnection`.
-`NativeTextFieldGroup` owns field order, focus, touch dispatch, keyboard visibility,
+`TextFieldGroup` owns field order, focus, touch dispatch, keyboard visibility,
 cursor blinking, IME composition, and cleanup.
 
 The field renders text directly with `TextPaint`; it does not regenerate a bitmap after
@@ -1005,7 +1007,7 @@ Font configuration is optional. If no font method is called, the field uses Andr
 
 ```java
 textFields.add(
-        new NativeTextField.Builder(context, "player_name", bounds)
+        new TextField.Builder(context, "player_name", bounds)
                 .setHint("Player name")
 );
 ```
@@ -1037,11 +1039,11 @@ Pass it using the generated resource ID:
 Create the group once for the host custom view:
 
 ```java
-private final NativeTextFieldGroup textFields;
+private final TextFieldGroup textFields;
 
 public GameCanvasView(Context context, AttributeSet attrs) {
     super(context, attrs);
-    textFields = new NativeTextFieldGroup(this);
+    textFields = new TextFieldGroup(this);
 }
 ```
 
@@ -1056,7 +1058,7 @@ protected void onSizeChanged(
         int oldHeight
 ) {
     super.onSizeChanged(width, height, oldWidth, oldHeight);
-    textFields.clear();
+    textFields.release();
 
     Position position = new Position(
             this,
@@ -1066,8 +1068,8 @@ protected void onSizeChanged(
             500f
     );
 
-    NativeTextField playerName = textFields.add(
-            new NativeTextField.Builder(
+    TextField playerName = textFields.add(
+            new TextField.Builder(
                     getContext(),
                     "player_name",
                     position,
@@ -1103,7 +1105,7 @@ The `Position` constructor uses Figma-space width and height. Explicit runtime b
 are also supported:
 
 ```java
-new NativeTextField.Builder(context, "search", new RectF(left, top, right, bottom))
+new TextField.Builder(context, "search", new RectF(left, top, right, bottom))
 ```
 
 ### Connect the host view
@@ -1208,7 +1210,7 @@ playerName.setEnabled(false);
 textFields.find("player_name");
 textFields.remove("player_name");
 textFields.clearFocus();
-textFields.clear();
+textFields.release();
 ```
 
 The input connection supports committed text, composing text, cursor selection,

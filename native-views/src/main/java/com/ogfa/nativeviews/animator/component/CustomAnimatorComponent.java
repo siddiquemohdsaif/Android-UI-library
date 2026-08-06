@@ -1,4 +1,4 @@
-package com.ogfa.nativeviews.button;
+package com.ogfa.nativeviews.animator.component;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
@@ -15,21 +15,25 @@ import android.view.View;
 import android.view.animation.LinearInterpolator;
 
 import com.ogfa.nativeviews.audio.NativeViewsSoundPlayer;
-import com.ogfa.nativeviews.button.internal.PressAnimation;
-import com.ogfa.nativeviews.button.internal.Region;
+import com.ogfa.nativeviews.animator.component.internal.PressAnimation;
+import com.ogfa.nativeviews.animator.component.internal.Region;
+import com.ogfa.nativeviews.animator.component.layer.BitmapLayer;
+import com.ogfa.nativeviews.animator.component.layer.ComponentLayer;
+import com.ogfa.nativeviews.animator.component.layer.DynamicLayer;
+import com.ogfa.nativeviews.component.Position;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 
-public class AnimatedButton {
+public class CustomAnimatorComponent {
     private static final float SHRINK_SCALE_DEFAULT = 0.96f;
-    public final ArrayList<ViewLayer> viewLayers;
+    public final ArrayList<ComponentLayer> layers;
     private final int left;
     private final int top;
     private float SHRINK_SCALE;
 
     Paint paint = new Paint();
-    public RectF rectF ;
+    public RectF bounds ;
     RectF rectF_press ;
     private int mWidth;
     private int mHeight;
@@ -44,7 +48,7 @@ public class AnimatedButton {
     private boolean isClickable;
     private boolean isLongClickable;
 
-    private Region buttonRegion;
+    private Region componentRegion;
     private RectF dynamicRectF;
 
     private long lastDownTime = 0;
@@ -62,8 +66,12 @@ public class AnimatedButton {
         return id;
     }
 
+    public RectF getBounds() {
+        return new RectF(bounds);
+    }
+
     // Primary constructor
-    private AnimatedButton(Context context, OnClickListener clickListener, OnLongClickListener longClickListener, String id, int width, int height, int left, int top, boolean isClickable, boolean isLongClickable, float shrink, ArrayList<ViewLayer> viewLayers, Runnable proxySoundPlay) {
+    private CustomAnimatorComponent(Context context, OnClickListener clickListener, OnLongClickListener longClickListener, String id, int width, int height, int left, int top, boolean isClickable, boolean isLongClickable, float shrink, ArrayList<ComponentLayer> layers, Runnable proxySoundPlay) {
         this.context = context;
         this.id = id;
         this.isClickable = isClickable;
@@ -81,17 +89,17 @@ public class AnimatedButton {
         mHeight = height;
         paint.setAntiAlias(true);
         paint.setDither(true);
-        rectF = new RectF(left, top, mWidth + left, mHeight + top);
+        bounds = new RectF(left, top, mWidth + left, mHeight + top);
         rectF_press = getPressRect(left, top);
-        buttonRegion = new Region(left, left + mWidth, top, top + mHeight, id);
-        this.viewLayers = viewLayers;
+        componentRegion = new Region(left, left + mWidth, top, top + mHeight, id);
+        this.layers = layers;
         this.dynamicRectF = null;
     }
 
-    public static void releaseLottieResources(ArrayList<AnimatedButton> buttonViewAnimatorList) {
+    public static void releaseResources(ArrayList<CustomAnimatorComponent> buttonViewAnimatorList) {
         for (int i=0; i < buttonViewAnimatorList.size(); i++){
-            for (ViewLayer viewLayer:buttonViewAnimatorList.get(i).viewLayers) {
-                viewLayer.clear();
+            for (ComponentLayer viewLayer:buttonViewAnimatorList.get(i).layers) {
+                viewLayer.release();
             }
         }
     }
@@ -114,106 +122,106 @@ public class AnimatedButton {
         private float shrink = SHRINK_SCALE_DEFAULT; // default value
 
         private Runnable proxySoundPlay;
-        private ArrayList<ViewLayer> viewLayers;
+        private ArrayList<ComponentLayer> layers;
 
-        public Builder(Context context, String id, ArrayList<ViewLayer> viewLayers, RectF rectF) {
+        public Builder(Context context, String id, ArrayList<ComponentLayer> layers, RectF bounds) {
             this.context = context;
             this.id = id;
-            this.viewLayers = viewLayers;
-            this.width = (int) (rectF.right - rectF.left);
-            this.height = (int) (rectF.bottom - rectF.top);
-            this.left = rectF.left;
-            this.top = rectF.top;
+            this.layers = layers;
+            this.width = (int) (bounds.right - bounds.left);
+            this.height = (int) (bounds.bottom - bounds.top);
+            this.left = bounds.left;
+            this.top = bounds.top;
         }
 
         /**
-         * Creates a simple single-bitmap button with explicit runtime bounds.
+         * Creates a simple single-bitmap component with explicit runtime bounds.
          */
-        public Builder(Context context, String id, Bitmap bitmap, RectF rectF) {
-            this(context, id, createBitmapLayers(bitmap, rectF), rectF);
+        public Builder(Context context, String id, Bitmap bitmap, RectF bounds) {
+            this(context, id, createBitmapLayers(bitmap, bounds), bounds);
         }
 
         /**
-         * Builds the touch bounds from the largest BitmapView and a host-bound Position.
+         * Builds the touch bounds from the largest BitmapLayer and a host-bound Position.
          *
          * <p>The bitmap dimensions are treated as Figma-space dimensions, matching
-         * {@link BitmapView#get(android.graphics.Bitmap, Position)}.</p>
+         * {@link BitmapLayer#create(android.graphics.Bitmap, Position)}.</p>
          */
         public Builder(
                 Context context,
                 String id,
-                ArrayList<ViewLayer> viewLayers,
+                ArrayList<ComponentLayer> layers,
                 Position position
         ) {
-            this(context, id, viewLayers, resolveBitmapBounds(viewLayers, position));
+            this(context, id, layers, resolveBitmapBounds(layers, position));
         }
 
         /**
-         * Creates a simple single-bitmap button whose bounds are evaluated from Position.
+         * Creates a simple single-bitmap component whose bounds are evaluated from Position.
          */
         public Builder(Context context, String id, Bitmap bitmap, Position position) {
             this(context, id, createBitmapLayers(bitmap, position), position);
         }
 
-        public Builder(Context context, String id, ArrayList<ViewLayer> viewLayers, RectF rectF, RectF dynamicRectF) {
+        public Builder(Context context, String id, ArrayList<ComponentLayer> layers, RectF bounds, RectF dynamicRectF) {
             this.context = context;
             this.id = id;
-            this.viewLayers = viewLayers;
-            this.width = (int) (rectF.right - rectF.left);
-            this.height = (int) (rectF.bottom - rectF.top);
-            this.left = rectF.left;
-            this.top = rectF.top;
+            this.layers = layers;
+            this.width = (int) (bounds.right - bounds.left);
+            this.height = (int) (bounds.bottom - bounds.top);
+            this.left = bounds.left;
+            this.top = bounds.top;
             this.dynamicRectF = dynamicRectF;
         }
 
-        private static ArrayList<ViewLayer> createBitmapLayers(Bitmap bitmap, RectF rectF) {
+        private static ArrayList<ComponentLayer> createBitmapLayers(Bitmap bitmap, RectF bounds) {
             if (bitmap == null) {
-                throw new IllegalArgumentException("Button bitmap cannot be null.");
+                throw new IllegalArgumentException("Component bitmap cannot be null.");
             }
-            if (rectF == null) {
-                throw new IllegalArgumentException("Button bounds cannot be null.");
+            if (bounds == null) {
+                throw new IllegalArgumentException("Component bounds cannot be null.");
             }
 
-            ArrayList<ViewLayer> layers = new ArrayList<>();
-            layers.add(BitmapView.get(bitmap, rectF));
+            ArrayList<ComponentLayer> layers = new ArrayList<>();
+            layers.add(BitmapLayer.create(bitmap, bounds));
             return layers;
         }
 
-        private static ArrayList<ViewLayer> createBitmapLayers(
+        private static ArrayList<ComponentLayer> createBitmapLayers(
                 Bitmap bitmap,
                 Position position
         ) {
             if (bitmap == null) {
-                throw new IllegalArgumentException("Button bitmap cannot be null.");
+                throw new IllegalArgumentException("Component bitmap cannot be null.");
             }
             if (position == null) {
                 throw new IllegalArgumentException("Position cannot be null.");
             }
 
-            ArrayList<ViewLayer> layers = new ArrayList<>();
-            layers.add(BitmapView.get(bitmap, position));
+            ArrayList<ComponentLayer> layers = new ArrayList<>();
+            layers.add(BitmapLayer.create(bitmap, position));
             return layers;
         }
 
         private static RectF resolveBitmapBounds(
-                ArrayList<ViewLayer> viewLayers,
+                ArrayList<ComponentLayer> layers,
                 Position position
         ) {
             if (position == null) {
                 throw new IllegalArgumentException("Position cannot be null.");
             }
-            if (viewLayers == null || viewLayers.isEmpty()) {
+            if (layers == null || layers.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "At least one ViewLayer is required to calculate button bounds."
+                        "At least one ComponentLayer is required to calculate component bounds."
                 );
             }
 
             RectF largestBounds = null;
             float largestArea = -1f;
 
-            for (ViewLayer viewLayer : viewLayers) {
-                if (viewLayer instanceof BitmapView) {
-                    BitmapView bitmapView = (BitmapView) viewLayer;
+            for (ComponentLayer viewLayer : layers) {
+                if (viewLayer instanceof BitmapLayer) {
+                    BitmapLayer bitmapView = (BitmapLayer) viewLayer;
                     if (bitmapView.bitmap != null) {
                         RectF candidateBounds = position.toRectF(bitmapView.bitmap);
                         float candidateArea =
@@ -231,8 +239,8 @@ public class AnimatedButton {
             }
 
             throw new IllegalArgumentException(
-                    "Position-based Builder requires at least one BitmapView. "
-                            + "Use the RectF constructor for buttons without a bitmap layer."
+                    "Position-based Builder requires at least one BitmapLayer. "
+                            + "Use the RectF constructor for components without a bitmap layer."
             );
         }
 
@@ -252,23 +260,23 @@ public class AnimatedButton {
             this.isLongClickable = value;
             return this;
         }
-        public Builder setShrink(float shrink) {
+        public Builder setPressScale(float shrink) {
             this.shrink = shrink;
             return this;
         }
 
 
-        public Builder setProxySoundPlay(Runnable proxySoundPlay) {
+        public Builder setSoundAction(Runnable proxySoundPlay) {
             this.proxySoundPlay = proxySoundPlay;
             return this;
         }
 
 
-        public AnimatedButton build() {
-            AnimatedButton animator = new AnimatedButton(
+        public CustomAnimatorComponent build() {
+            CustomAnimatorComponent animator = new CustomAnimatorComponent(
                     context, clickListener, longClickListener, id,
                     width, height, (int) left, (int) top,
-                    isClickable, isLongClickable, shrink, viewLayers, proxySoundPlay
+                    isClickable, isLongClickable, shrink, layers, proxySoundPlay
             );
 
             if (dynamicRectF!= null){
@@ -289,13 +297,13 @@ public class AnimatedButton {
         return new RectF(left, top, left + (SHRINK_SCALE*mWidth), top + (SHRINK_SCALE*mHeight));
     }
 
-    public void onDraw(Canvas canvas) {
+    public void draw(Canvas canvas) {
 
         if (!isAnimationOn) {
             if (mIsPressed || (System.currentTimeMillis() - lastDownTime) < 250) {
                 canvas.save();
-                float midPointX = rectF.left + mWidth/2f;
-                float midPointY = rectF.top + mHeight/2f;
+                float midPointX = bounds.left + mWidth/2f;
+                float midPointY = bounds.top + mHeight/2f;
                 canvas.scale(SHRINK_SCALE, SHRINK_SCALE, midPointX, midPointY);
                 drawAllView(canvas);
                 canvas.restore();
@@ -322,21 +330,21 @@ public class AnimatedButton {
     }
 
     private void drawAllView(Canvas canvas){
-        for (ViewLayer viewLayer: viewLayers) {
-            viewLayer.onDraw(canvas);
+        for (ComponentLayer viewLayer: layers) {
+            viewLayer.draw(canvas);
         }
     }
 
 
 
 ////////////////////////////////////////////////// Util method //////////////////////////////////////////////////////////////////////////////////////////////
-    public static void Draw(Canvas canvas, ArrayList<AnimatedButton> buttonViewAnimators) {
+    public static void draw(Canvas canvas, ArrayList<CustomAnimatorComponent> buttonViewAnimators) {
         try {
-            Iterator<AnimatedButton> iterator = buttonViewAnimators.iterator();
+            Iterator<CustomAnimatorComponent> iterator = buttonViewAnimators.iterator();
 
             while (iterator.hasNext()) {
-                AnimatedButton buttonViewAnimator = iterator.next();
-                buttonViewAnimator.onDraw(canvas);
+                CustomAnimatorComponent buttonViewAnimator = iterator.next();
+                buttonViewAnimator.draw(canvas);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -344,19 +352,19 @@ public class AnimatedButton {
     }
 
 
-    public static void visibleDraw(Canvas canvas, ArrayList<AnimatedButton> buttonViewAnimators, View scrollView) {
+    public static void drawVisible(Canvas canvas, ArrayList<CustomAnimatorComponent> buttonViewAnimators, View scrollView) {
         try {
 
-            ArrayList<AnimatedButton> buttonViewAnimatorsShow = new ArrayList<>();
+            ArrayList<CustomAnimatorComponent> buttonViewAnimatorsShow = new ArrayList<>();
             getVisible(buttonViewAnimators,buttonViewAnimatorsShow,scrollView);
-            Draw(canvas,buttonViewAnimatorsShow);
+            draw(canvas,buttonViewAnimatorsShow);
 
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public static void getVisible(ArrayList<AnimatedButton> buttonViewAnimators,  ArrayList<AnimatedButton> buttonViewAnimatorsShow, View view) {
+    public static void getVisible(ArrayList<CustomAnimatorComponent> buttonViewAnimators,  ArrayList<CustomAnimatorComponent> buttonViewAnimatorsShow, View view) {
         try {
             buttonViewAnimatorsShow.clear();
             // Get the visible rectangle of the ScrollView
@@ -365,13 +373,13 @@ public class AnimatedButton {
 
             view.getLocalVisibleRect(scrollViewVisibleRect);
 
-            Iterator<AnimatedButton> iterator = buttonViewAnimators.iterator();
+            Iterator<CustomAnimatorComponent> iterator = buttonViewAnimators.iterator();
 
             while (iterator.hasNext()) {
-                AnimatedButton buttonViewAnimator = iterator.next();
+                CustomAnimatorComponent buttonViewAnimator = iterator.next();
 
                 // Check if the buttonViewAnimator's rect intersects with the ScrollView's visible rect
-                buttonViewAnimator.rectF.round(buttonRect);
+                buttonViewAnimator.bounds.round(buttonRect);
                 if (Rect.intersects(scrollViewVisibleRect, buttonRect)) {
                     buttonViewAnimatorsShow.add(buttonViewAnimator);
                 }
@@ -381,16 +389,16 @@ public class AnimatedButton {
         }
     }
 
-    public static void addButton(ArrayList<AnimatedButton> buttonViewAnimators, AnimatedButton buttonViewAnimator) {
+    public static void addComponent(ArrayList<CustomAnimatorComponent> buttonViewAnimators, CustomAnimatorComponent buttonViewAnimator) {
         buttonViewAnimators.add(buttonViewAnimator);
     }
 
 
-    public static void removeButton(String id, ArrayList<AnimatedButton> buttonViewAnimatorArrayList) {
+    public static void removeComponent(String id, ArrayList<CustomAnimatorComponent> buttonViewAnimatorArrayList) {
         for (int i=0; i<buttonViewAnimatorArrayList.size(); i++) {
             if (buttonViewAnimatorArrayList.get(i).id.equals(id)){
-                for (ViewLayer viewLayer:buttonViewAnimatorArrayList.get(i).viewLayers) {
-                    viewLayer.clear();
+                for (ComponentLayer viewLayer:buttonViewAnimatorArrayList.get(i).layers) {
+                    viewLayer.release();
                 }
                 buttonViewAnimatorArrayList.remove(i);
                 return;
@@ -398,13 +406,13 @@ public class AnimatedButton {
         }
     }
 
-    public static AnimatedButton findButtonById(String id, ArrayList<AnimatedButton> buttonViewAnimatorArrayList) {
-        for (AnimatedButton buttonViewAnimator : buttonViewAnimatorArrayList) {
+    public static CustomAnimatorComponent findComponentById(String id, ArrayList<CustomAnimatorComponent> buttonViewAnimatorArrayList) {
+        for (CustomAnimatorComponent buttonViewAnimator : buttonViewAnimatorArrayList) {
             if (buttonViewAnimator.id.equals(id)) {
                 return buttonViewAnimator;
             }
         }
-        return null; // Return null if no button with the specified id is found
+        return null; // Return null if no component with the specified id is found
     }
 ////////////////////////////////////////////////// Util method //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -415,7 +423,7 @@ public class AnimatedButton {
 
 ////////////////////////////////////////////////// Touch methods //////////////////////////////////////////////////////////////////////////////////////////////
 
-    public static boolean HandleTouch(MotionEvent event, ArrayList<AnimatedButton> buttonViewAnimatorList) {
+    public static boolean handleTouch(MotionEvent event, ArrayList<CustomAnimatorComponent> buttonViewAnimatorList) {
 
         try {
 
@@ -434,9 +442,9 @@ public class AnimatedButton {
 
     }
 
-    public static void HandleTouchScrollChanged( ArrayList<AnimatedButton> buttonViewAnimatorList) {
+    public static void handleTouchScrollChanged( ArrayList<CustomAnimatorComponent> buttonViewAnimatorList) {
         try {
-            for (AnimatedButton buttonViewAnimator: buttonViewAnimatorList) {
+            for (CustomAnimatorComponent buttonViewAnimator: buttonViewAnimatorList) {
                 buttonViewAnimator.mIsPressed = false;
             }
         }catch (Exception e){
@@ -467,7 +475,7 @@ public class AnimatedButton {
     private boolean checkIsAnyRegionClicked(float x, float y , boolean isUp,boolean isDown) {
 
         if (isUp){
-            if (buttonRegion.isRegionClicked(x,y)){
+            if (componentRegion.isRegionClicked(x,y)){
                 if (proxySoundPlay != null){
                     proxySoundPlay.run();
                 }else {
@@ -475,9 +483,9 @@ public class AnimatedButton {
                 }
 
                 if (isLongClickable && (System.currentTimeMillis()-lastDownTime) > 500){
-                    mLongClickListener.onLongClick(buttonRegion.id);
+                    mLongClickListener.onLongClick(componentRegion.id);
                 }else {
-                    mClickListener.onClick(buttonRegion.id);
+                    mClickListener.onClick(componentRegion.id);
                 }
 
                 mIsPressed = false;
@@ -489,7 +497,7 @@ public class AnimatedButton {
         }
 
         if (isDown && !mIsPressed && (System.currentTimeMillis()-lastDownTime) > 300){
-            if (buttonRegion.regionClickedDown(x,y)){
+            if (componentRegion.regionClickedDown(x,y)){
                 mIsPressed = true;
                 //do down animation
                 playDownAnim();
@@ -498,13 +506,13 @@ public class AnimatedButton {
             }
 
         }else if (isDown && mIsPressed ){
-            if (buttonRegion.regionClickedDown(x,y)){
+            if (componentRegion.regionClickedDown(x,y)){
                 return true;
             }
         }
 
         if (!isUp && !isDown && mIsPressed){ //move
-            if (buttonRegion.regionClickedMove(x,y)){
+            if (componentRegion.regionClickedMove(x,y)){
                 return true;
             }else {
                 mIsPressed = false;   //click slide away from region
@@ -535,15 +543,15 @@ public class AnimatedButton {
 
         lastDownTime = System.currentTimeMillis();
         isAnimationOn = true;
-        float midPointX = rectF.left + mWidth/2f;
-        float midPointY = rectF.top + mHeight/2f;
+        float midPointX = bounds.left + mWidth/2f;
+        float midPointY = bounds.top + mHeight/2f;
         pressAnimation = new PressAnimation(true, System.currentTimeMillis(), 130, midPointX, midPointY, SHRINK_SCALE);
 
     }
 
     public void animateToPositionWithValueAnimator(float targetLeft, float targetTop, long duration, View parentView, Runnable onComplete) {
-        float startX = rectF.left;
-        float startY = rectF.top;
+        float startX = bounds.left;
+        float startY = bounds.top;
 
         // Also track dynamicRectF start position if it exists
         float dynStartX = (dynamicRectF != null) ? dynamicRectF.left : startX;
@@ -558,18 +566,18 @@ public class AnimatedButton {
             float currentX = startX + (targetLeft - startX) * fraction;
             float currentY = startY + (targetTop - startY) * fraction;
 
-            rectF.offsetTo(currentX, currentY);
+            bounds.offsetTo(currentX, currentY);
             rectF_press = getPressRect(currentX, currentY);
-            buttonRegion.updateRegion((int) currentX, (int)(currentX + mWidth), (int) currentY, (int)(currentY + mHeight));
+            componentRegion.updateRegion((int) currentX, (int)(currentX + mWidth), (int) currentY, (int)(currentY + mHeight));
 
-            // 💡 Animate dynamicRectF alongside rectF
+            // 💡 Animate dynamicRectF alongside bounds
             if (dynamicRectF != null) {
                 float dynX = dynStartX + (targetLeft - startX) * fraction;
                 float dynY = dynStartY + (targetTop - startY) * fraction;
                 dynamicRectF.offsetTo(dynX, dynY);
             }
 
-            updateViewLayerPositions();
+            updateLayerPositions();
 
             if (parentView != null) {
                 parentView.invalidate();
@@ -587,16 +595,16 @@ public class AnimatedButton {
     }
 
 
-    private void updateViewLayerPositions() {
-        RectF currentRect = new RectF(rectF);
+    private void updateLayerPositions() {
+        RectF currentRect = new RectF(bounds);
 
-        for (ViewLayer viewLayer : viewLayers) {
-            if (viewLayer instanceof DynamicView) {
-                // ✅ Pass dynamicRectF if it exists, else fallback to rectF
-                viewLayer.setRect(dynamicRectF != null ? new RectF(dynamicRectF) : currentRect);
+        for (ComponentLayer viewLayer : layers) {
+            if (viewLayer instanceof DynamicLayer) {
+                // ✅ Pass dynamicRectF if it exists, else fallback to bounds
+                viewLayer.setBounds(dynamicRectF != null ? new RectF(dynamicRectF) : currentRect);
             } else {
-                // ✅ Pass current animated rectF to all other views
-                viewLayer.setRect(currentRect);
+                // ✅ Pass current animated bounds to all other views
+                viewLayer.setBounds(currentRect);
             }
         }
     }
@@ -618,8 +626,8 @@ public class AnimatedButton {
         }
 
         isAnimationOn = true;
-        float midPointX = rectF.left + mWidth/2f;
-        float midPointY = rectF.top + mHeight/2f;
+        float midPointX = bounds.left + mWidth/2f;
+        float midPointY = bounds.top + mHeight/2f;
         pressAnimation = new PressAnimation(false, System.currentTimeMillis(), 130, midPointX, midPointY, SHRINK_SCALE);
 
     }
@@ -647,12 +655,12 @@ public class AnimatedButton {
                   48f,
                   450f
           );
-          ArrayList<ViewLayer> viewLayers = new ArrayList<>();
-          viewLayers.add(BitmapView.get(freeCoin, position));
-          viewLayers.add(LottieView.get(this.getContext(), "emoji_lottie_1", position));
-          AnimatedButton.addButton(buttonViewComplexAnimatorArrayList, new AnimatedButton.Builder(this.getContext(), FREE_COIN, viewLayers, position)
+          ArrayList<ComponentLayer> layers = new ArrayList<>();
+          layers.add(BitmapLayer.create(freeCoin, position));
+          layers.add(LottieLayer.create(this.getContext(), "emoji_lottie_1", position));
+          CustomAnimatorComponent.addComponent(buttonViewComplexAnimatorArrayList, new CustomAnimatorComponent.Builder(this.getContext(), FREE_COIN, layers, position)
                   .setClickListener(this)
-                  .setProxySoundPlay(this::playPopupSound)
+                  .setSoundAction(this::playPopupSound)
                   .build());
  */
 

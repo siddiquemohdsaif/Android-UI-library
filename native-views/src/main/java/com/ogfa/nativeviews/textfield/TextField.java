@@ -18,17 +18,17 @@ import android.view.inputmethod.EditorInfo;
 
 import androidx.core.content.res.ResourcesCompat;
 
-import com.ogfa.nativeviews.button.Position;
+import com.ogfa.nativeviews.component.Position;
 
 import java.util.Objects;
 
 /**
  * A single-line, Canvas-rendered text editor backed by Android's native IME APIs.
  *
- * <p>Instances are owned by {@link NativeTextFieldGroup}. The field draws with an
+ * <p>Instances are owned by {@link TextFieldGroup}. The field draws with an
  * Android {@link Typeface}; it does not create a bitmap for each keystroke.</p>
  */
-public final class NativeTextField {
+public final class TextField {
 
     static final long CURSOR_BLINK_INTERVAL_MS = 500L;
 
@@ -47,7 +47,7 @@ public final class NativeTextField {
     private final Paint selectionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF contentBounds = new RectF();
 
-    private NativeTextFieldGroup owner;
+    private TextFieldGroup owner;
     private String hint;
     private int inputType;
     private int imeOptions;
@@ -75,7 +75,7 @@ public final class NativeTextField {
     private OnEditorActionListener editorActionListener;
     private OnFocusChangedListener focusChangedListener;
 
-    private NativeTextField(Builder builder, View hostView) {
+    private TextField(Builder builder, View hostView) {
         id = requireId(builder.id);
         bounds = builder.resolveBounds(hostView);
         requireBounds(bounds);
@@ -132,7 +132,7 @@ public final class NativeTextField {
         if (horizontalPaddingPx * 2f >= bounds.width()
                 || verticalPaddingPx * 2f >= bounds.height()) {
             throw new IllegalArgumentException(
-                    "NativeTextField padding leaves no drawable content area."
+                    "TextField padding leaves no drawable content area."
             );
         }
 
@@ -156,16 +156,16 @@ public final class NativeTextField {
         return editable;
     }
 
-    public NativeTextField setText(CharSequence text) {
+    public TextField setText(CharSequence text) {
         setTextInternal(text, true);
         return this;
     }
 
-    public NativeTextField clear() {
+    public TextField clear() {
         return setText("");
     }
 
-    public NativeTextField setHint(String hint) {
+    public TextField setHint(String hint) {
         this.hint = hint == null ? "" : hint;
         invalidate();
         return this;
@@ -175,7 +175,7 @@ public final class NativeTextField {
         return hint;
     }
 
-    public NativeTextField setMaxLength(int maxLength) {
+    public TextField setMaxLength(int maxLength) {
         if (maxLength <= 0) {
             throw new IllegalArgumentException("Maximum length must be greater than zero.");
         }
@@ -191,7 +191,7 @@ public final class NativeTextField {
         return maxLength;
     }
 
-    public NativeTextField setInputType(int inputType) {
+    public TextField setInputType(int inputType) {
         this.inputType = inputType;
         restartInput();
         return this;
@@ -201,7 +201,7 @@ public final class NativeTextField {
         return inputType;
     }
 
-    public NativeTextField setImeOptions(int imeOptions) {
+    public TextField setImeOptions(int imeOptions) {
         this.imeOptions = imeOptions;
         restartInput();
         return this;
@@ -211,7 +211,7 @@ public final class NativeTextField {
         return imeOptions;
     }
 
-    public NativeTextField setPassword(boolean password) {
+    public TextField setPassword(boolean password) {
         this.password = password;
         ensureCursorVisible();
         invalidate();
@@ -222,7 +222,7 @@ public final class NativeTextField {
         return password;
     }
 
-    public NativeTextField setEnabled(boolean enabled) {
+    public TextField setEnabled(boolean enabled) {
         this.enabled = enabled;
         if (!enabled && focused && owner != null) {
             owner.clearFocus();
@@ -239,28 +239,28 @@ public final class NativeTextField {
         return focused;
     }
 
-    public NativeTextField requestFocus() {
+    public TextField requestFocus() {
         if (owner == null) {
             throw new IllegalStateException(
-                    "Add the field to NativeTextFieldGroup before requesting focus."
+                    "Add the field to TextFieldGroup before requesting focus."
             );
         }
         owner.requestFocus(id);
         return this;
     }
 
-    public NativeTextField clearFocus() {
+    public TextField clearFocus() {
         if (owner != null && focused) {
             owner.clearFocus();
         }
         return this;
     }
 
-    public NativeTextField setSelection(int index) {
+    public TextField setSelection(int index) {
         return setSelection(index, index);
     }
 
-    public NativeTextField setSelection(int start, int end) {
+    public TextField setSelection(int start, int end) {
         requireSelection(start, end);
         BaseInputConnection.removeComposingSpans(editable);
         Selection.setSelection(editable, start, end);
@@ -279,31 +279,31 @@ public final class NativeTextField {
         return normalizedSelectionEnd();
     }
 
-    public NativeTextField setOnTextChangedListener(
+    public TextField setOnTextChangedListener(
             OnTextChangedListener listener
     ) {
         textChangedListener = listener;
         return this;
     }
 
-    public NativeTextField setOnEditorActionListener(
+    public TextField setOnEditorActionListener(
             OnEditorActionListener listener
     ) {
         editorActionListener = listener;
         return this;
     }
 
-    public NativeTextField setOnFocusChangedListener(
+    public TextField setOnFocusChangedListener(
             OnFocusChangedListener listener
     ) {
         focusChangedListener = listener;
         return this;
     }
 
-    void attach(NativeTextFieldGroup owner) {
+    void attach(TextFieldGroup owner) {
         if (this.owner != null && this.owner != owner) {
             throw new IllegalStateException(
-                    "NativeTextField already belongs to another group."
+                    "TextField already belongs to another group."
             );
         }
         this.owner = owner;
@@ -749,7 +749,7 @@ public final class NativeTextField {
 
     private static String requireId(String id) {
         if (id == null || id.trim().isEmpty()) {
-            throw new IllegalArgumentException("NativeTextField ID cannot be empty.");
+            throw new IllegalArgumentException("TextField ID cannot be empty.");
         }
         return id;
     }
@@ -763,7 +763,7 @@ public final class NativeTextField {
                 || bounds.width() <= 0f
                 || bounds.height() <= 0f) {
             throw new IllegalArgumentException(
-                    "NativeTextField bounds must be positive and finite."
+                    "TextField bounds must be positive and finite."
             );
         }
     }
@@ -1025,8 +1025,8 @@ public final class NativeTextField {
             return this;
         }
 
-        NativeTextField build(View hostView) {
-            return new NativeTextField(this, hostView);
+        TextField build(View hostView) {
+            return new TextField(this, hostView);
         }
 
         private RectF resolveBounds(View hostView) {

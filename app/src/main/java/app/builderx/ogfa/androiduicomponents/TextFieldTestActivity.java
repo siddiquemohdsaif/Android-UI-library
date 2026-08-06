@@ -23,26 +23,26 @@ import android.view.inputmethod.InputConnection;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.ogfa.nativeviews.textfield.NativeTextField;
-import com.ogfa.nativeviews.textfield.NativeTextFieldGroup;
+import com.ogfa.nativeviews.textfield.TextField;
+import com.ogfa.nativeviews.textfield.TextFieldGroup;
 
 import java.util.List;
 
 /**
- * Standalone playground for NativeTextField.
+ * Standalone playground for TextField.
  *
  * Launch with:
  * adb shell am start -n
- * app.builderx.ogfa.androiduicomponents/.EditTextViewTestActivity
+ * app.builderx.ogfa.androiduicomponents/.TextFieldTestActivity
  */
-public final class EditTextViewTestActivity extends AppCompatActivity {
+public final class TextFieldTestActivity extends AppCompatActivity {
 
-    private EditTextViewTestView testView;
+    private TextFieldTestView testView;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        testView = new EditTextViewTestView(this);
+        testView = new TextFieldTestView(this);
         setContentView(testView);
     }
 
@@ -55,14 +55,14 @@ public final class EditTextViewTestActivity extends AppCompatActivity {
     }
 
     /** Canvas host responsible for drawing and forwarding input to the text fields. */
-    public static final class EditTextViewTestView extends View {
+    public static final class TextFieldTestView extends View {
 
         private static final String TOP_FIELD = "top_field";
         private static final String MIDDLE_FIELD = "middle_field";
         private static final String BOTTOM_FIELD = "bottom_field";
         private static final long PAN_ANIMATION_DURATION_MS = 220L;
 
-        private final NativeTextFieldGroup textFields;
+        private final TextFieldGroup textFields;
         private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Rect visibleWindow = new Rect();
         private final int[] locationOnScreen = new int[2];
@@ -77,9 +77,9 @@ public final class EditTextViewTestActivity extends AppCompatActivity {
         private String eventMessage =
                 "Tap or drag in any field; NEXT changes focus";
 
-        public EditTextViewTestView(Context context) {
+        public TextFieldTestView(Context context) {
             super(context);
-            textFields = new NativeTextFieldGroup(this);
+            textFields = new TextFieldGroup(this);
             setBackgroundColor(0xff0d121f);
             setClickable(true);
             setFocusable(true);
@@ -179,7 +179,7 @@ public final class EditTextViewTestActivity extends AppCompatActivity {
                 RectF bounds,
                 int imeAction
         ) {
-            textFields.add(new NativeTextField.Builder(
+            textFields.add(new TextField.Builder(
                     getContext(),
                     id,
                     bounds
@@ -214,7 +214,7 @@ public final class EditTextViewTestActivity extends AppCompatActivity {
                         invalidate();
                     })
                     .setOnEditorActionListener((fieldId, action) -> {
-                        NativeTextField field = textFields.find(fieldId);
+                        TextField field = textFields.find(fieldId);
                         eventMessage = "Submitted: "
                                 + (field == null ? "" : field.getText());
                         invalidate();
@@ -238,7 +238,7 @@ public final class EditTextViewTestActivity extends AppCompatActivity {
             labelPaint.setFakeBoldText(true);
             labelPaint.setTextSize(dp(28));
             canvas.drawText(
-                    "NativeTextField Test",
+                    "TextField Test",
                     getWidth() / 2f,
                     dp(72),
                     labelPaint
@@ -324,7 +324,7 @@ public final class EditTextViewTestActivity extends AppCompatActivity {
         }
 
         private void updateCanvasTranslation() {
-            NativeTextField focusedField = textFields.getFocusedField();
+            TextField focusedField = textFields.getFocusedField();
             float target = 0f;
             if (focusedField != null && imeInsetBottom > 0) {
                 RectF fieldBounds = focusedField.getBounds();

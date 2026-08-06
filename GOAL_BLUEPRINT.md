@@ -1,0 +1,471 @@
+# Native Views SDK Goal Blueprint
+
+## Goal
+
+Build a native Android Canvas UI SDK with a small, consistent component API. Each
+component must own its drawing, interaction, animation, resource lifecycle, and
+coordinate behavior without requiring project-specific code.
+
+The SDK package remains:
+
+```text
+com.ogfa.nativeviews
+```
+
+## Component Roadmap
+
+### Primary components
+
+1. Text
+2. TextField
+3. Button
+4. Image
+5. Card
+6. List
+7. Dialog
+8. CustomAnimatorComponent
+9. AfterEffectAnimator
+10. DynamicViewAnimator
+11. LottieViewAnimator
+12. GifAnimator
+
+### Secondary components
+
+1. Switch
+2. CheckBox
+3. RadioButton
+4. Progress
+
+## Current Status
+
+| Component | Status | Current implementation |
+|---|---|---|
+| Text | Partial | Bitmap text writers exist, but there is no standalone Canvas `Text` component |
+| TextField | Implemented | `TextField` and `TextFieldGroup` |
+| Button | Partial | Button behavior is currently mixed into `CustomAnimatorComponent` |
+| Image | Partial | `BitmapLayer` exists only as an `CustomAnimatorComponent` layer |
+| Card | Not started | — |
+| List | Not started | — |
+| Dialog | Not started | — |
+| CustomAnimatorComponent | Implemented foundation | Renamed API and five-layer system are in `animator.component` |
+| AfterEffectAnimator | Existing, needs hardening | `animation.aftereffect` |
+| DynamicViewAnimator | Existing, needs hardening | `animation.dynamic.DynamicViewAnimator` |
+| LottieViewAnimator | Implemented, needs final API review | `animation.LottieViewAnimator` |
+| GifAnimator | Existing, needs rename and hardening | Currently `animation.gif.GIFViewAnimator` |
+| Switch | Not started | — |
+| CheckBox | Not started | — |
+| RadioButton | Not started | — |
+| Progress | Not started | — |
+
+## Shared Component Architecture
+
+All visual elements should follow the same base lifecycle:
+
+```java
+public interface Component {
+    String getId();
+    RectF getBounds();
+    void draw(Canvas canvas);
+    boolean onTouchEvent(MotionEvent event);
+    void release();
+}
+```
+
+Not every component must be interactive. A non-interactive component returns `false`
+from `onTouchEvent()`.
+
+Groups own collections and host-view integration:
+
+```java
+public interface ComponentGroup<T extends Component> extends AutoCloseable {
+    T find(String id);
+    boolean remove(String id);
+    void draw(Canvas canvas);
+    boolean onTouchEvent(MotionEvent event);
+    void release();
+}
+```
+
+Concrete groups may provide additional behavior such as keyboard connections, focus
+management, animation scheduling, or topmost-first touch dispatch.
+
+### Shared rules
+
+- Public methods use Java lower-camel naming: `draw`, not `Draw`.
+- Every component has a stable string ID.
+- Bounds use `RectF`.
+- Figma coordinates use `Position`.
+- Drawing order and touch order must be deterministic.
+- The topmost overlapping interactive component receives touch first.
+- Touch bounds must follow every visual translation or animation.
+- Resource ownership and cleanup must be explicit.
+- No component may contain hardcoded assets from a consuming project.
+- Missing or invalid assets must produce clear runtime exceptions.
+- Components must work in a custom Canvas host without XML.
+
+## `CustomAnimatorComponent` Restructure
+
+### Original problem
+
+The former `AnimatedButton` was not only a button. It was a general layered, interactive,
+animatable Canvas element that can contain five different layer types:
+
+1. `BitmapLayer`
+2. `GifLayer`
+3. `LottieLayer`
+4. `DynamicLayer`
+5. `AfterEffectLayer`
+
+Its former name made the generic layer system look button-specific. It also mixed
+component composition with button interaction, press animation, click handling, sound,
+movement, bounds calculation, drawing, and cleanup.
+
+### Approved and implemented names
+
+```text
+AnimatedButton       -> CustomAnimatorComponent
+AnimatedButtonGroup  -> CustomAnimatorComponentGroup
+ViewLayer            -> ComponentLayer
+
+BitmapView           -> BitmapLayer
+GIFView              -> GifLayer
+LottieView           -> LottieLayer
+DynamicView          -> DynamicLayer
+AfterEffectView      -> AfterEffectLayer
+```
+
+Target package:
+
+```text
+com.ogfa.nativeviews.animator.component
+com.ogfa.nativeviews.animator.component.layer
+```
+
+### Target responsibility
+
+`CustomAnimatorComponent` owns:
+
+- ordered layers;
+- component bounds;
+- drawing;
+- top-level visibility;
+- animation-frame invalidation;
+- position animation;
+- synchronized layer and touch-bound movement;
+- optional interaction configuration;
+- layer resource cleanup.
+
+It must not assume that every instance is visually or semantically a button.
+
+### Interaction configuration
+
+Button-like behavior becomes optional configuration:
+
+```java
+new CustomAnimatorComponent.Builder(context, id, layers, bounds)
+        .setOnClickListener(listener)
+        .setOnLongClickListener(listener)
+        .setPressScale(0.92f)
+        .setSoundAction(soundAction)
+        .build();
+```
+
+If no interaction listener is supplied, the component is display-only.
+
+The future primary `Button` component should use this interaction model internally but
+provide a simpler API for common bitmap, text, icon, background, and click use cases.
+
+### Layer contract
+
+```java
+public interface ComponentLayer {
+    void draw(Canvas canvas);
+    RectF getBounds();
+    void setBounds(RectF bounds);
+    boolean isAnimating();
+    void release();
+}
+```
+
+Animator-specific layers may extend the contract without adding type checks to the
+component:
+
+```java
+public interface AnimatedComponentLayer extends ComponentLayer {
+    void start();
+    void stop();
+}
+```
+
+### Bounds policy
+
+Replace implicit bitmap-only bounds discovery with an explicit policy:
+
+```java
+BoundsPolicy.EXPLICIT
+BoundsPolicy.LARGEST_LAYER
+BoundsPolicy.UNION_OF_LAYERS
+```
+
+Default:
+
+```text
+Explicit RectF or Position dimensions when supplied.
+Otherwise use UNION_OF_LAYERS.
+```
+
+This removes the current requirement that a position-based component must contain a
+`BitmapLayer`.
+
+### Migration mapping
+
+| Current API | Target API |
+|---|---|
+| `AnimatedButton` | `CustomAnimatorComponent` |
+| `AnimatedButtonGroup` | `CustomAnimatorComponentGroup` |
+| `ViewLayer` | `ComponentLayer` |
+| `BitmapView.get(...)` | `BitmapLayer.create(...)` |
+| `GIFView.get(...)` | `GifLayer.create(...)` |
+| `LottieView.get(...)` | `LottieLayer.create(...)` |
+| `DynamicView.get(...)` | `DynamicLayer.create(...)` |
+| `AfterEffectView.get(...)` | `AfterEffectLayer.create(...)` |
+| `setShrink(...)` | `setPressScale(...)` |
+| `setProxySoundPlay(...)` | `setSoundAction(...)` |
+| `Draw(...)` | `draw(...)` |
+| `HandleTouch(...)` | `onTouchEvent(...)` |
+
+## Target Packages
+
+```text
+com.ogfa.nativeviews.component
+com.ogfa.nativeviews.text
+com.ogfa.nativeviews.textfield
+com.ogfa.nativeviews.button
+com.ogfa.nativeviews.image
+com.ogfa.nativeviews.card
+com.ogfa.nativeviews.list
+com.ogfa.nativeviews.dialog
+com.ogfa.nativeviews.animator.component
+com.ogfa.nativeviews.animator.component.layer
+com.ogfa.nativeviews.animation.aftereffect
+com.ogfa.nativeviews.animation.dynamic
+com.ogfa.nativeviews.animation.lottie
+com.ogfa.nativeviews.animation.gif
+com.ogfa.nativeviews.switchcomponent
+com.ogfa.nativeviews.checkbox
+com.ogfa.nativeviews.radiobutton
+com.ogfa.nativeviews.progress
+```
+
+`List` conflicts with `java.util.List`. The public class should therefore be named
+`ComponentList` unless a better non-conflicting name is selected before implementation.
+
+## Component Requirements
+
+### Text
+
+- Android default and `R.font` typefaces.
+- Start, center, and end alignment.
+- Color, alpha, size, letter spacing, and maximum width.
+- Optional line wrapping and ellipsizing.
+- Direct Canvas rendering; bitmap composition remains a separate utility.
+
+### TextField
+
+- Android default font when no font is configured.
+- Optional `Typeface` and `R.font`.
+- Native Android IME connection.
+- Cursor placement by tap and continuous cursor movement by drag.
+- Selection, composition, clipboard, maximum length, password mode, and editor actions.
+- `TextFieldGroup` focus and keyboard ownership.
+- Full-Canvas keyboard avoidance supported by a reusable viewport/pan helper.
+
+### Button
+
+- Text-only, bitmap-only, icon-and-text, and custom-background builders.
+- Click, long-click, disabled, pressed, and selected states.
+- Optional sound and haptic actions.
+- Simple API that does not require manual layer creation.
+
+### Image
+
+- Bitmap and asset sources.
+- Fit, fill, center, center-crop, and stretch scale modes.
+- Alpha, tint, clipping, rounded corners, and optional touch listener.
+
+### Card
+
+- Background color or image.
+- Border, corner radius, elevation-like shadow, padding, and clipping.
+- Child component composition.
+
+### ComponentList
+
+- Vertical and horizontal layouts.
+- Viewport clipping and scrolling.
+- Item recycling or bounded lazy creation.
+- Item click and long-click.
+- Correct touch cancellation while scrolling.
+
+### Dialog
+
+- Modal overlay and background dimming.
+- Show, dismiss, back handling, and outside-touch policy.
+- Enter and exit animation.
+- Child component composition and lifecycle cleanup.
+
+### CustomAnimatorComponent
+
+- Five supported layer families.
+- Pluggable bounds policy.
+- Display-only or interactive behavior.
+- Press, movement, and custom animations.
+- One group for drawing, touch dispatch, invalidation, and release.
+
+### AfterEffectAnimator
+
+- Asset preload and cache.
+- Start, pause, resume, stop, seek, repeat, and release.
+- Clear invalid-asset failures.
+- No project-specific sound or resource assumptions.
+
+### DynamicViewAnimator
+
+- Stable `CustomDynamicView` contract.
+- Frame timing owned by the host/group.
+- Bounds updates and cleanup.
+
+### LottieViewAnimator
+
+- One-name and multiple-name preload.
+- Normalized names with or without `.json`.
+- Shared in-flight loading per animation.
+- Cache-first and asset fallback.
+- External-image resolver.
+- Correct source cleanup and release.
+
+### GifAnimator
+
+- Rename the current `GIFViewAnimator` API to `GifAnimator`.
+- One-name and multiple-name preload.
+- Normalize names with or without `.gif`.
+- Share one in-flight loading task per animation.
+- Use cache-first loading with asset fallback.
+- Fail clearly for missing or invalid GIF assets.
+- Support repeat configuration, drawing, visibility filtering, and release.
+- Keep `GifLayer` focused on component integration while `GifAnimator` owns loading
+  and playback.
+
+### Secondary components
+
+`Switch`, `CheckBox`, and `RadioButton` share selectable-state infrastructure:
+
+```java
+setChecked(boolean checked)
+isChecked()
+setOnCheckedChangeListener(listener)
+```
+
+`Progress` supports:
+
+- determinate and indeterminate modes;
+- linear and circular rendering;
+- progress animation;
+- configurable track and progress colors.
+
+## Delivery Order
+
+### Phase 1 — Core normalization
+
+1. Introduce `Component`, `ComponentGroup`, and shared lifecycle contracts.
+2. Move `Position` to a shared component/geometry package.
+3. Normalize public naming and method casing.
+4. Add reusable Canvas viewport translation for IME avoidance.
+
+### Phase 2 — Animator component restructure
+
+1. Rename the five view types to layers.
+2. Introduce `ComponentLayer`.
+3. Extract generic composition from `CustomAnimatorComponent`.
+4. Create `CustomAnimatorComponent` and its group.
+5. Add explicit bounds policies.
+6. Migrate tests and documentation.
+7. Remove the old `CustomAnimatorComponent` API after migration.
+
+### Phase 3 — Core visual components
+
+1. Text
+2. Image
+3. Button
+4. Card
+
+### Phase 4 — Containers and overlays
+
+1. ComponentList
+2. Dialog
+
+### Phase 5 — Animator hardening
+
+1. AfterEffectAnimator
+2. DynamicViewAnimator
+3. LottieViewAnimator
+4. GifAnimator
+
+### Phase 6 — Secondary components
+
+1. Switch
+2. CheckBox
+3. RadioButton
+4. Progress
+
+## Testing Strategy
+
+Each public element gets a separate activity:
+
+```text
+TextTestActivity
+TextFieldTestActivity
+ButtonTestActivity
+ImageTestActivity
+CardTestActivity
+ComponentListTestActivity
+DialogTestActivity
+CustomAnimatorComponentTestActivity
+AfterEffectAnimatorTestActivity
+DynamicViewAnimatorTestActivity
+LottieViewAnimatorTestActivity
+GifAnimatorTestActivity
+SwitchTestActivity
+CheckBoxTestActivity
+RadioButtonTestActivity
+ProgressTestActivity
+```
+
+Every activity must test:
+
+- default configuration;
+- custom styling;
+- multiple instances;
+- top, middle, and bottom screen positions;
+- touch and overlapping hitboxes where applicable;
+- animation and transformed hitboxes;
+- configuration change or size rebuild;
+- cleanup on detach/destroy;
+- failure behavior for invalid input.
+
+## Definition of Done
+
+A component is complete only when:
+
+1. Its public API is independent of any game or consuming project.
+2. It has a dedicated test activity.
+3. It has README examples for creation, drawing, input, and cleanup.
+4. It has clear runtime validation and errors.
+5. It releases all animation, bitmap, audio, and loader resources it owns.
+6. It works from the Gradle module and from the generated fat AAR.
+7. The fat AAR contains required animation dependencies but no embedded AndroidX
+   classes.
+8. The parent test app compiles and runs against the copied AAR.
+9. Touch handling remains correct after movement, scaling, scrolling, or Canvas
+   translation.
+10. No hardcoded assets or package references from another project remain.

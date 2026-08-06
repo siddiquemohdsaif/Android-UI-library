@@ -9,7 +9,7 @@ import android.util.Log;
 import java.io.IOException;
 
 /**
- * Process-wide player for the default AnimatedButton sound.
+ * Process-wide player for the default CustomAnimatorComponent sound.
  */
 public final class NativeViewsSoundPlayer {
 

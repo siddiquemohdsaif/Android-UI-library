@@ -1,4 +1,4 @@
-package com.ogfa.nativeviews.button.internal;
+package com.ogfa.nativeviews.animator.component.internal;
 
 import android.graphics.Canvas;
 

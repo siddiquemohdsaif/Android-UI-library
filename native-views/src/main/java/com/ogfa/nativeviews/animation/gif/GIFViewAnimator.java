@@ -170,7 +170,7 @@ public class GIFViewAnimator {
             throw new IllegalStateException(
                     "GIF '" + animationName + "' is not preloaded. Call "
                             + "GIFViewAnimator.preloadAnimations(context, \"" + id
-                            + "\") or use GIFView.get(context, name, rectF)."
+                            + "\") or use GifLayer.create(context, name, rectF)."
             );
         }
         return composition;

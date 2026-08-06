@@ -12,12 +12,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AndroidUIComponents">
         <activity
-            android:name=".EditTextViewTestActivity"
+            android:name=".TextFieldTestActivity"
             android:exported="true"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustNothing" />
         <activity
-            android:name=".ComplexButtonTestActivity"
+            android:name=".CustomAnimatorComponentTestActivity"
             android:exported="true"
             android:screenOrientation="portrait" >
             <intent-filter>

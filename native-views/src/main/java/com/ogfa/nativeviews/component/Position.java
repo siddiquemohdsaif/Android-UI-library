@@ -1,4 +1,4 @@
-package com.ogfa.nativeviews.button;
+package com.ogfa.nativeviews.component;
 
 import android.graphics.Bitmap;
 import android.graphics.RectF;

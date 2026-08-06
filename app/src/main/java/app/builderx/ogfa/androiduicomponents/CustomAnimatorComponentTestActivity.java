@@ -15,29 +15,29 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.animation.gif.GIFViewAnimator;
-import com.ogfa.nativeviews.button.AnimatedButton;
-import com.ogfa.nativeviews.button.AnimatedButtonGroup;
-import com.ogfa.nativeviews.button.BitmapView;
-import com.ogfa.nativeviews.button.GIFView;
-import com.ogfa.nativeviews.button.ViewLayer;
+import com.ogfa.nativeviews.animator.component.CustomAnimatorComponent;
+import com.ogfa.nativeviews.animator.component.CustomAnimatorComponentGroup;
+import com.ogfa.nativeviews.animator.component.layer.BitmapLayer;
+import com.ogfa.nativeviews.animator.component.layer.ComponentLayer;
+import com.ogfa.nativeviews.animator.component.layer.GifLayer;
 
 import java.util.ArrayList;
 
 /**
- * Standalone playground for AnimatedButton.
+ * Standalone playground for CustomAnimatorComponent.
  *
  * Launch from Android Studio, or with:
- * adb shell am start -n app.builderx.ogfa.androiduicomponents/.ComplexButtonTestActivity
+ * adb shell am start -n app.builderx.ogfa.androiduicomponents/.CustomAnimatorComponentTestActivity
  */
-public class ComplexButtonTestActivity extends AppCompatActivity {
+public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
 
-    private ComplexButtonTestView testView;
+    private CustomAnimatorComponentTestView testView;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         GIFViewAnimator.preloadAnimations(this, "carrom_pass_buy");
-        testView = new ComplexButtonTestView(this);
+        testView = new CustomAnimatorComponentTestView(this);
         setContentView(testView);
     }
 
@@ -49,22 +49,22 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    /** Custom Canvas view that owns, draws, and dispatches touches to the buttons. */
-    public static final class ComplexButtonTestView extends View
-            implements AnimatedButton.OnClickListener,
-            AnimatedButton.OnLongClickListener {
+    /** Custom Canvas view that owns, draws, and dispatches touches to the components. */
+    public static final class CustomAnimatorComponentTestView extends View
+            implements CustomAnimatorComponent.OnClickListener,
+            CustomAnimatorComponent.OnLongClickListener {
 
-        private static final String COMPLEX_BUTTON = "complex_button";
-        private static final String BADGE_BUTTON = "badge_button";
-        private static final String MOVE_BUTTON = "move_button";
-        private static final String RESET_BUTTON = "reset_button";
-        private static final String GIF_BUTTON = "gif_button";
+        private static final String MAIN_COMPONENT = "complex_button";
+        private static final String BADGE_COMPONENT = "badge_button";
+        private static final String MOVE_COMPONENT = "move_button";
+        private static final String RESET_COMPONENT = "reset_button";
+        private static final String GIF_COMPONENT = "gif_button";
 
-        private final AnimatedButtonGroup buttons;
+        private final CustomAnimatorComponentGroup components;
         private final Paint screenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-        private BitmapView complexBackgroundLayer;
-        private BitmapView complexLabelLayer;
+        private BitmapLayer complexBackgroundLayer;
+        private BitmapLayer complexLabelLayer;
         private RectF movingStartRect;
 
         private int clickCount;
@@ -74,9 +74,9 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         private boolean initialized;
         private String eventMessage = "No event yet";
 
-        public ComplexButtonTestView(Context context) {
+        public CustomAnimatorComponentTestView(Context context) {
             super(context);
-            buttons = new AnimatedButtonGroup(this);
+            components = new CustomAnimatorComponentGroup(this);
             setBackgroundColor(Color.rgb(13, 18, 31));
             setFocusable(true);
         }
@@ -85,21 +85,21 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
             super.onSizeChanged(width, height, oldWidth, oldHeight);
             if (width > 0 && height > 0 && (!initialized || width != oldWidth)) {
-                rebuildButtons(width);
+                rebuildComponents(width);
                 initialized = true;
             }
         }
 
-        private void rebuildButtons(int viewWidth) {
-            buttons.clear();
+        private void rebuildComponents(int viewWidth) {
+            components.clear();
 
             float margin = dp(28);
             float mainTop = dp(150);
             float mainHeight = dp(92);
             RectF mainRect = new RectF(margin, mainTop, viewWidth - margin, mainTop + mainHeight);
 
-            ArrayList<ViewLayer> mainLayers = new ArrayList<>();
-            complexBackgroundLayer = BitmapView.get(
+            ArrayList<ComponentLayer> mainLayers = new ArrayList<>();
+            complexBackgroundLayer = BitmapLayer.create(
                     roundedBitmap(600, 180, alternateColor ? 0xff7b2cbf : 0xff146c94,
                             0xff90e0ef, 32), mainRect);
             mainLayers.add(complexBackgroundLayer);
@@ -110,59 +110,59 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     mainRect.centerY() - iconSize / 2f,
                     mainRect.left + dp(18) + iconSize,
                     mainRect.centerY() + iconSize / 2f);
-            mainLayers.add(BitmapView.get(iconBitmap(128), iconRect));
+            mainLayers.add(BitmapLayer.create(iconBitmap(128), iconRect));
 
             RectF labelRect = new RectF(
                     iconRect.right + dp(12), mainRect.top + dp(21),
                     mainRect.right - dp(52), mainRect.bottom - dp(21));
-            complexLabelLayer = BitmapView.get(
+            complexLabelLayer = BitmapLayer.create(
                     textBitmap("TAP ME  •  " + clickCount, 520, 90, dp(20), Color.WHITE),
                     labelRect);
             mainLayers.add(complexLabelLayer);
 
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(), COMPLEX_BUTTON, mainLayers, mainRect)
+            components.add(new CustomAnimatorComponent.Builder(
+                    getContext(), MAIN_COMPONENT, mainLayers, mainRect)
                     .setClickListener(this)
                     .setOnLongClickListener(this, true)
-                    .setShrink(0.90f)
-                    .setProxySoundPlay(this::performTestFeedback));
+                    .setPressScale(0.90f)
+                    .setSoundAction(this::performTestFeedback));
 
-            // This separate button overlaps the main button and is added later. It demonstrates
-            // that HandleTouch checks the visually topmost (last-added) button first.
+            // This separate component overlaps the main component and is added later. It demonstrates
+            // that handleTouch checks the visually topmost (last-added) component first.
             float badgeSize = dp(48);
             RectF badgeRect = new RectF(
                     mainRect.right - badgeSize - dp(8), mainRect.top + dp(8),
                     mainRect.right - dp(8), mainRect.top + dp(8) + badgeSize);
-            ArrayList<ViewLayer> badgeLayers = new ArrayList<>();
-            badgeLayers.add(BitmapView.get(
+            ArrayList<ComponentLayer> badgeLayers = new ArrayList<>();
+            badgeLayers.add(BitmapLayer.create(
                     circleTextBitmap("!", 120, 0xffffb703, 0xff4a2c00), badgeRect));
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(), BADGE_BUTTON, badgeLayers, badgeRect)
+            components.add(new CustomAnimatorComponent.Builder(
+                    getContext(), BADGE_COMPONENT, badgeLayers, badgeRect)
                     .setClickListener(this)
-                    .setShrink(0.78f)
-                    .setProxySoundPlay(this::performTestFeedback));
+                    .setPressScale(0.78f)
+                    .setSoundAction(this::performTestFeedback));
 
             float actionTop = mainRect.bottom + dp(76);
             float actionWidth = Math.min(dp(178), viewWidth - margin * 2);
             movingStartRect = new RectF(margin, actionTop, margin + actionWidth, actionTop + dp(60));
-            ArrayList<ViewLayer> moveLayers = new ArrayList<>();
-            moveLayers.add(BitmapView.get(
-                    labeledButtonBitmap("MOVE", 420, 140, 0xff2a9d8f), movingStartRect));
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(), MOVE_BUTTON, moveLayers, movingStartRect)
+            ArrayList<ComponentLayer> moveLayers = new ArrayList<>();
+            moveLayers.add(BitmapLayer.create(
+                    labeledComponentBitmap("MOVE", 420, 140, 0xff2a9d8f), movingStartRect));
+            components.add(new CustomAnimatorComponent.Builder(
+                    getContext(), MOVE_COMPONENT, moveLayers, movingStartRect)
                     .setClickListener(this)
-                    .setShrink(0.93f)
-                    .setProxySoundPlay(this::performTestFeedback));
+                    .setPressScale(0.93f)
+                    .setSoundAction(this::performTestFeedback));
 
             RectF resetRect = new RectF(
                     margin, actionTop + dp(92), viewWidth - margin, actionTop + dp(152));
-            ArrayList<ViewLayer> resetLayers = new ArrayList<>();
-            resetLayers.add(BitmapView.get(
-                    labeledButtonBitmap("RESET TEST", 700, 140, 0xffe76f51), resetRect));
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(), RESET_BUTTON, resetLayers, resetRect)
+            ArrayList<ComponentLayer> resetLayers = new ArrayList<>();
+            resetLayers.add(BitmapLayer.create(
+                    labeledComponentBitmap("RESET TEST", 700, 140, 0xffe76f51), resetRect));
+            components.add(new CustomAnimatorComponent.Builder(
+                    getContext(), RESET_COMPONENT, resetLayers, resetRect)
                     .setClickListener(this)
-                    .setShrink(0.96f));
+                    .setPressScale(0.96f));
 
             float gifWidth = viewWidth - margin * 2f;
             float gifHeight = gifWidth * (95f / 340f);
@@ -173,31 +173,31 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
                     resetRect.bottom + dp(28) + gifHeight
             );
 
-            ArrayList<ViewLayer> gifLayers = new ArrayList<>();
+            ArrayList<ComponentLayer> gifLayers = new ArrayList<>();
             if (GIFViewAnimator.isLoaded("carrom_pass_buy")) {
-                gifLayers.add(GIFView.get("carrom_pass_buy", gifRect));
+                gifLayers.add(GifLayer.create("carrom_pass_buy", gifRect));
             } else {
                 // Preload is asynchronous. This checks assets/gif once and fills the
                 // same cache when layout happens before background preload completes.
-                gifLayers.add(GIFView.get(
+                gifLayers.add(GifLayer.create(
                         getContext(),
                         "carrom_pass_buy.gif",
                         gifRect
                 ));
             }
 
-            buttons.add(new AnimatedButton.Builder(
-                    getContext(), GIF_BUTTON, gifLayers, gifRect)
+            components.add(new CustomAnimatorComponent.Builder(
+                    getContext(), GIF_COMPONENT, gifLayers, gifRect)
                     .setClickListener(this)
-                    .setShrink(0.96f)
-                    .setProxySoundPlay(this::performTestFeedback));
+                    .setPressScale(0.96f)
+                    .setSoundAction(this::performTestFeedback));
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             drawScreenText(canvas);
-            buttons.draw(canvas);
+            components.draw(canvas);
         }
 
         private void drawScreenText(Canvas canvas) {
@@ -205,7 +205,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
             screenPaint.setTextAlign(Paint.Align.CENTER);
             screenPaint.setFakeBoldText(true);
             screenPaint.setTextSize(dp(25));
-            canvas.drawText("Complex Button Playground", getWidth() / 2f, dp(52), screenPaint);
+            canvas.drawText("Custom Animator Component", getWidth() / 2f, dp(52), screenPaint);
 
             screenPaint.setFakeBoldText(false);
             screenPaint.setColor(0xffa9bdd6);
@@ -222,39 +222,39 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            return buttons.onTouchEvent(event)
+            return components.onTouchEvent(event)
                     || super.onTouchEvent(event);
         }
 
         @Override
         public void onClick(String id) {
             switch (id) {
-                case COMPLEX_BUTTON:
+                case MAIN_COMPONENT:
                     clickCount++;
                     complexLabelLayer.bitmap = textBitmap(
                             "TAP ME  •  " + clickCount, 520, 90, dp(20), Color.WHITE);
                     eventMessage = "Main click received: " + clickCount;
                     break;
 
-                case BADGE_BUTTON:
+                case BADGE_COMPONENT:
                     badgeClickCount++;
                     eventMessage = "Top badge intercepted touch: " + badgeClickCount;
                     break;
 
-                case MOVE_BUTTON:
-                    animateMovingButton();
+                case MOVE_COMPONENT:
+                    animateMovingComponent();
                     break;
 
-                case RESET_BUTTON:
+                case RESET_COMPONENT:
                     clickCount = 0;
                     badgeClickCount = 0;
                     alternateColor = false;
                     movedRight = false;
-                    eventMessage = "State reset; buttons recreated";
-                    rebuildButtons(getWidth());
+                    eventMessage = "State reset; components recreated";
+                    rebuildComponents(getWidth());
                     break;
 
-                case GIF_BUTTON:
+                case GIF_COMPONENT:
                     eventMessage = "GIF layer is loaded, animating, and touchable";
                     break;
 
@@ -264,7 +264,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
 
         @Override
         public void onLongClick(String id) {
-            if (!COMPLEX_BUTTON.equals(id)) {
+            if (!MAIN_COMPONENT.equals(id)) {
                 return;
             }
             alternateColor = !alternateColor;
@@ -275,14 +275,14 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
             invalidate();
         }
 
-        private void animateMovingButton() {
+        private void animateMovingComponent() {
             float targetLeft = movedRight
                     ? movingStartRect.left
                     : getWidth() - dp(28) - movingStartRect.width();
             movedRight = !movedRight;
             eventMessage = "MOVE animation started; tap it at its new position";
-            buttons.animateToPosition(
-                    MOVE_BUTTON, targetLeft, movingStartRect.top, 650,
+            components.animateToPosition(
+                    MOVE_COMPONENT, targetLeft, movingStartRect.top, 650,
                     () -> eventMessage = "MOVE completed; hitbox moved with it");
         }
 
@@ -291,7 +291,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
         }
 
         public void release() {
-            buttons.release();
+            components.release();
         }
 
         private float dp(float value) {
@@ -359,7 +359,7 @@ public class ComplexButtonTestActivity extends AppCompatActivity {
             return bitmap;
         }
 
-        private Bitmap labeledButtonBitmap(String text, int width, int height, int color) {
+        private Bitmap labeledComponentBitmap(String text, int width, int height, int color) {
             Bitmap bitmap = roundedBitmap(width, height, color, 0xffffffff, 26);
             Canvas canvas = new Canvas(bitmap);
             Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);

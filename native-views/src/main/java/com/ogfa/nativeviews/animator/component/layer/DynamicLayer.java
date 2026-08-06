@@ -1,4 +1,4 @@
-package com.ogfa.nativeviews.button;
+package com.ogfa.nativeviews.animator.component.layer;
 
 import android.graphics.Canvas;
 import android.graphics.RectF;
@@ -6,30 +6,30 @@ import android.graphics.RectF;
 import com.ogfa.nativeviews.animation.dynamic.CustomDynamicView;
 import com.ogfa.nativeviews.animation.dynamic.DynamicViewAnimator;
 
-public class DynamicView implements ViewLayer{
+public class DynamicLayer implements ComponentLayer{
 
     private DynamicViewAnimator dynamicViewAnimator;
 
-    public DynamicView(DynamicViewAnimator dynamicViewAnimator) {
+    public DynamicLayer(DynamicViewAnimator dynamicViewAnimator) {
         this.dynamicViewAnimator = dynamicViewAnimator;
     }
 
-    public static DynamicView get(CustomDynamicView customDynamicView, RectF rectF){
-        return new DynamicView(new DynamicViewAnimator(customDynamicView,-1,rectF));
+    public static DynamicLayer create(CustomDynamicView customDynamicView, RectF rectF){
+        return new DynamicLayer(new DynamicViewAnimator(customDynamicView,-1,rectF));
     }
 
     @Override
-    public void onDraw(Canvas canvas) {
+    public void draw(Canvas canvas) {
         dynamicViewAnimator.draw(canvas);
     }
 
     @Override
-    public void clear() {
+    public void release() {
         //empty
     }
 
     @Override
-    public void setRect(RectF rectF) {
+    public void setBounds(RectF rectF) {
         if (dynamicViewAnimator != null) {
             dynamicViewAnimator.setRect(rectF);  // Pass updated rect
         }
