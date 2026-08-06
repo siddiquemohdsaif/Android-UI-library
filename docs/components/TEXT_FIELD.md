@@ -96,6 +96,7 @@ TextField playerName = textFields.add(
                 .setTextColor(Color.WHITE)
                 .setHintColor(0x88ffffff)
                 .setCursorColor(0xffffd166)
+                .setCursorWidth(6f)
                 .setSelectionColor(0x6690e0ef)
                 .setBackgroundColor(0xff182840, 0xff203a5c)
                 .setStrokeColor(0xff54708f, 0xff90e0ef)
@@ -215,7 +216,8 @@ render normally, and API 24–25 safely retain the font's normal weight.
 | `setPadding(horizontal, vertical)` | Set runtime padding |
 | `setCornerRadius(px)` | Set background corner radius |
 | `setStrokeWidth(px)` | Set border width |
-| `setCursorWidth(px)` | Set cursor width |
+| `setCursorWidth(figmaWidth)` | Set cursor width in Figma units; scaled with the active `FigmaConfig` |
+| `setCursorWidthPx(px)` | Set exact cursor width in runtime pixels |
 | `setPassword(enabled)` | Mask displayed text |
 | `setEnabled(enabled)` | Enable input and focus |
 | `setOnTextChangedListener(listener)` | Receive content changes |

@@ -19,7 +19,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public final class ZLayerGroup implements ComponentHost, TextFieldHost, AutoCloseable {
+public final class ZLayerGroup implements ComponentHost, TextFieldHost,
+        NestedComponentHost,
+        ZLayerOwner, AutoCloseable {
     private final View hostView;
     private final ArrayList<ZLayer> layers = new ArrayList<>();
     private final Map<String, ZLayer> layersById = new LinkedHashMap<>();
@@ -199,7 +201,8 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost, AutoClos
     @Override public void restartInput() { textInput.restartInput(); }
     @Override public void updateSelection(TextField field) { textInput.updateSelection(field); }
 
-    void register(ZLayer layer, Component component) {
+    @Override
+    public void registerLayerComponent(Component component) {
         ensureActive();
         Objects.requireNonNull(component, "Component cannot be null.");
         String id = component.getId();
@@ -212,10 +215,41 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost, AutoClos
         if (component instanceof TextField) textInput.register((TextField) component);
     }
 
-    void unregister(Component component) {
+    @Override
+    public void unregisterLayerComponent(Component component) {
         componentsById.remove(component.getId());
         if (component instanceof TextField) textInput.unregister(component.getId());
         if (touchTarget == component) cancelTouch();
+    }
+
+    /**
+     * Registers a child that is drawn by a composite component.
+     */
+    public void registerNestedComponent(Component component) {
+        ensureActive();
+        Objects.requireNonNull(component, "Component cannot be null.");
+        String id = component.getId();
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Component ID cannot be null or blank."
+            );
+        }
+        if (componentsById.containsKey(id)) {
+            throw new IllegalArgumentException("Duplicate component ID: " + id);
+        }
+        componentsById.put(id, component);
+        if (component instanceof TextField) {
+            textInput.register((TextField) component);
+        }
+    }
+
+    public void unregisterNestedComponent(Component component) {
+        unregisterLayerComponent(component);
+    }
+
+    @Override
+    public void invalidateLayer() {
+        invalidateComponent();
     }
 
     private void cancelTouch() {

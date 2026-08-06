@@ -19,6 +19,7 @@ import android.view.inputmethod.EditorInfo;
 
 import androidx.core.content.res.ResourcesCompat;
 
+import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.component.Component;
@@ -72,7 +73,9 @@ public final class TextField implements Component {
     private float verticalPaddingPx;
     private float cornerRadiusPx;
     private float strokeWidthPx;
+    private float cursorWidth;
     private float cursorWidthPx;
+    private boolean cursorWidthInPixels;
     private float horizontalScrollPx;
     private FontVariation fontVariation;
     private boolean enabled;
@@ -116,7 +119,9 @@ public final class TextField implements Component {
                 ? builder.cornerRadiusPx
                 : bounds.height() * 0.18f;
         strokeWidthPx = builder.strokeWidthPx;
-        cursorWidthPx = builder.cursorWidthPx;
+        cursorWidth = builder.cursorWidth;
+        cursorWidthInPixels = builder.cursorWidthInPixels;
+        cursorWidthPx = builder.resolveCursorWidth(hostView);
         enabled = builder.enabled;
         password = builder.password;
         textChangedListener = builder.textChangedListener;
@@ -167,6 +172,24 @@ public final class TextField implements Component {
 
     public Editable getEditable() {
         return editable;
+    }
+
+    /**
+     * Returns the cursor width supplied to the builder, before Figma scaling.
+     */
+    public float getCursorWidth() {
+        return cursorWidth;
+    }
+
+    /**
+     * Returns the cursor width used for Canvas drawing in runtime pixels.
+     */
+    public float getResolvedCursorWidth() {
+        return cursorWidthPx;
+    }
+
+    public boolean isCursorWidthInPixels() {
+        return cursorWidthInPixels;
     }
 
     public TextField setText(CharSequence text) {
@@ -942,7 +965,8 @@ public final class TextField implements Component {
         private float verticalPaddingPx = -1f;
         private float cornerRadiusPx = -1f;
         private float strokeWidthPx = 2f;
-        private float cursorWidthPx = 3f;
+        private float cursorWidth = 3f;
+        private boolean cursorWidthInPixels;
         private boolean enabled = true;
         private boolean password;
         private OnTextChangedListener textChangedListener;
@@ -1139,13 +1163,22 @@ public final class TextField implements Component {
             return this;
         }
 
-        public Builder setCursorWidth(float pixels) {
-            cursorWidthPx = requireNonNegative(pixels, "Cursor width");
-            if (cursorWidthPx == 0f) {
-                throw new IllegalArgumentException(
-                        "Cursor width must be greater than zero."
-                );
-            }
+        /**
+         * Sets cursor width in Figma/design-space units. The value is scaled
+         * from the active Figma reference width when the field is built.
+         */
+        public Builder setCursorWidth(float figmaWidth) {
+            cursorWidth = requirePositive(figmaWidth, "Cursor width");
+            cursorWidthInPixels = false;
+            return this;
+        }
+
+        /**
+         * Sets an exact cursor width in runtime pixels without Figma scaling.
+         */
+        public Builder setCursorWidthPx(float pixels) {
+            cursorWidth = requirePositive(pixels, "Cursor width");
+            cursorWidthInPixels = true;
             return this;
         }
 
@@ -1190,6 +1223,28 @@ public final class TextField implements Component {
                 return new RectF(explicitBounds);
             }
             return position.toRectF(hostView, figmaWidth, figmaHeight);
+        }
+
+        private float resolveCursorWidth(View hostView) {
+            if (cursorWidthInPixels) {
+                return cursorWidth;
+            }
+            if (position != null) {
+                return position.toRuntimePixels(hostView, cursorWidth);
+            }
+            return FigmaConfig.getDefault().toRuntime(
+                    cursorWidth,
+                    hostView.getWidth()
+            );
+        }
+
+        private static float requirePositive(float value, String label) {
+            if (value <= 0f || !Float.isFinite(value)) {
+                throw new IllegalArgumentException(
+                        label + " must be positive and finite."
+                );
+            }
+            return value;
         }
 
         private static float requireNonNegative(float value, String label) {

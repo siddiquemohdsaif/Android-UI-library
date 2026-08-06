@@ -48,7 +48,7 @@ com.ogfa.nativeviews
 | TextField | Implemented | `TextField`, with IME ownership in `ZLayerGroup` |
 | Button | Implemented | Image-backed composite with optional native Text, insets, runtime updates, and click |
 | Image | Implemented | Standalone `Image` component with bitmap scaling, runtime updates, and optional click |
-| Card | Not started | — |
+| Card | Implemented | Rounded color/image background, outside drop shadow, and one nested mixed-component ZLayer |
 | List | Not started | — |
 | Dialog | Not started | — |
 | CustomAnimatorComponent | Implemented foundation | Renamed API and five-layer system are in `animator.component` |
@@ -361,9 +361,13 @@ com.ogfa.nativeviews.progress
 
 ### Card
 
-- Background color or image.
-- Border, corner radius, elevation-like shadow, padding, and clipping.
-- Child component composition.
+- Implemented default white color and optional bitmap backgrounds.
+- Implemented Figma-scaled and fixed-pixel rounded clipping.
+- Implemented immutable Figma-style `DropShadow` with offset, blur, spread,
+  ARGB color, default values, fixed-pixel mode, and outside visual bounds.
+- Implemented one nested mixed-component `ZLayer` with global ID lookup,
+  reverse-order touch routing, lifecycle ownership, and root IME delegation.
+- Future expansion: border, padding helpers, and child-relative layout.
 
 ### ComponentList
 

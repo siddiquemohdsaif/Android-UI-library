@@ -83,6 +83,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `TextField` | Native Canvas editor and Android IME bridge | [TEXT_FIELD.md](docs/components/TEXT_FIELD.md) |
 | `Button` | Image-backed composite with optional native text | [BUTTON.md](docs/components/BUTTON.md) |
 | `Image` | Standalone Canvas bitmap with scaling and optional click | [IMAGE.md](docs/components/IMAGE.md) |
+| `Card` | Rounded color/image container with nested ZLayer and outside shadow | [CARD.md](docs/components/CARD.md) |
 | `CustomAnimatorComponent` | Generic five-layer animated Canvas element | [CUSTOM_ANIMATOR_COMPONENT.md](docs/components/CUSTOM_ANIMATOR_COMPONENT.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -112,7 +113,6 @@ complete:
 ### Planned primary components
 
 ```text
-Card
 List
 Dialog
 ```

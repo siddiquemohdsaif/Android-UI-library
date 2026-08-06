@@ -15,15 +15,15 @@ import java.util.Objects;
 public final class ZLayer {
     public enum TouchPolicy { PASS_THROUGH, BLOCK_BELOW, MODAL }
 
-    private final ZLayerGroup owner;
+    private final ZLayerOwner owner;
     private final String id;
     private final ArrayList<Component> components = new ArrayList<>();
     private boolean visible = true;
     private boolean enabled = true;
     private TouchPolicy touchPolicy = TouchPolicy.PASS_THROUGH;
 
-    ZLayer(ZLayerGroup owner, String id) {
-        this.owner = owner;
+    public ZLayer(ZLayerOwner owner, String id) {
+        this.owner = Objects.requireNonNull(owner, "Layer owner cannot be null.");
         this.id = requireId(id);
     }
 
@@ -34,7 +34,7 @@ public final class ZLayer {
 
     public ZLayer setVisible(boolean visible) {
         this.visible = visible;
-        owner.invalidateComponent();
+        owner.invalidateLayer();
         return this;
     }
 
@@ -54,9 +54,15 @@ public final class ZLayer {
     }
 
     public <T extends Component> T add(T component) {
-        owner.register(this, component);
+        if (find(component.getId()) != null) {
+            throw new IllegalArgumentException(
+                    "Duplicate component ID in layer " + id + ": "
+                            + component.getId()
+            );
+        }
+        owner.registerLayerComponent(component);
         components.add(component);
-        owner.invalidateComponent();
+        owner.invalidateLayer();
         return component;
     }
 
@@ -78,19 +84,19 @@ public final class ZLayer {
         Component component = find(componentId);
         if (component == null) return false;
         components.remove(component);
-        owner.unregister(component);
+        owner.unregisterLayerComponent(component);
         component.release();
-        owner.invalidateComponent();
+        owner.invalidateLayer();
         return true;
     }
 
     public void clear() {
         for (Component component : new ArrayList<>(components)) {
-            owner.unregister(component);
+            owner.unregisterLayerComponent(component);
             component.release();
         }
         components.clear();
-        owner.invalidateComponent();
+        owner.invalidateLayer();
     }
 
     public void bringToFront(String id) { moveToIndex(id, components.size() - 1); }
@@ -101,7 +107,7 @@ public final class ZLayer {
         Component component = require(id);
         components.remove(component);
         components.add(components.indexOf(reference) + 1, component);
-        owner.invalidateComponent();
+        owner.invalidateLayer();
     }
 
     public void moveBelow(String id, String referenceId) {
@@ -109,7 +115,7 @@ public final class ZLayer {
         Component component = require(id);
         components.remove(component);
         components.add(Math.max(0, components.indexOf(reference)), component);
-        owner.invalidateComponent();
+        owner.invalidateLayer();
     }
 
     public void setComponentIndex(String id, int index) {
@@ -121,14 +127,14 @@ public final class ZLayer {
 
     public int getComponentIndex(String id) { return components.indexOf(require(id)); }
 
-    void draw(Canvas canvas) {
+    public void draw(Canvas canvas) {
         if (!visible) return;
         for (Component component : components) {
             if (component.isVisible()) component.draw(canvas);
         }
     }
 
-    Component dispatchDown(MotionEvent event) {
+    public Component dispatchDown(MotionEvent event) {
         if (!visible || !enabled) return null;
         for (int i = components.size() - 1; i >= 0; i--) {
             Component component = components.get(i);
@@ -138,7 +144,7 @@ public final class ZLayer {
         return null;
     }
 
-    boolean containsPoint(float x, float y) {
+    public boolean containsPoint(float x, float y) {
         for (Component component : components) {
             RectF bounds = component.getBounds();
             if (component.isVisible() && bounds.contains(x, y)) return true;
@@ -158,7 +164,7 @@ public final class ZLayer {
         Component component = require(id);
         components.remove(component);
         components.add(Math.max(0, Math.min(index, components.size())), component);
-        owner.invalidateComponent();
+        owner.invalidateLayer();
     }
 
     private Component require(String id) {
