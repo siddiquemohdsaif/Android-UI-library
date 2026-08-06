@@ -81,6 +81,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 |---|---|---|
 | `Text` | Native non-editable Canvas text with optional click | [TEXT.md](docs/components/TEXT.md) |
 | `TextField` | Native Canvas editor and Android IME bridge | [TEXT_FIELD.md](docs/components/TEXT_FIELD.md) |
+| `Image` | Standalone Canvas bitmap with scaling and optional click | [IMAGE.md](docs/components/IMAGE.md) |
 | `CustomAnimatorComponent` | Generic five-layer animated Canvas element | [CUSTOM_ANIMATOR_COMPONENT.md](docs/components/CUSTOM_ANIMATOR_COMPONENT.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -330,6 +331,7 @@ artifacts/
 |---|---|
 | `TextTestActivity` | Both region paths, all bundled font resources, alignment, wrapping, ellipsis, style, runtime update, click cancellation |
 | `TextFieldTestActivity` | IME, focus, cursor taps/dragging, selection, three screen positions, keyboard avoidance |
+| `ImageTestActivity` | Both region paths, all scale types, bitmap replacement, runtime API, alpha, click, cleanup |
 | `CustomAnimatorComponentTestActivity` | Bitmap, Lottie, GIF, dynamic and After Effects layers, touch, movement, cleanup |
 | `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 

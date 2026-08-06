@@ -47,7 +47,7 @@ com.ogfa.nativeviews
 | Text | Implemented | `Text` and `TextStyle`, hosted by `ZLayerGroup` |
 | TextField | Implemented | `TextField`, with IME ownership in `ZLayerGroup` |
 | Button | Partial | Button behavior is currently mixed into `CustomAnimatorComponent` |
-| Image | Partial | `BitmapLayer` exists only as an `CustomAnimatorComponent` layer |
+| Image | Implemented | Standalone `Image` component with bitmap scaling, runtime updates, and optional click |
 | Card | Not started | — |
 | List | Not started | — |
 | Dialog | Not started | — |
@@ -340,9 +340,13 @@ com.ogfa.nativeviews.progress
 
 ### Image
 
-- Bitmap and asset sources.
-- Fit, fill, center, center-crop, and stretch scale modes.
-- Alpha, tint, clipping, rounded corners, and optional touch listener.
+- Implemented bitmap source with `Position + Size` and `RectF` regions.
+- Implemented `FIT_CENTER`, `CENTER_CROP`, and `FIT_XY` scale modes.
+- Implemented alpha, filtering, visibility, enabled state, and Text-compatible click.
+- Implemented runtime bitmap, region, scale, alpha, state, and listener updates.
+- Component does not own or recycle caller-provided bitmaps.
+- Future expansion: asset/resource decoding, tint, rounded clipping, and additional
+  center/fill scale modes.
 
 ### Card
 
