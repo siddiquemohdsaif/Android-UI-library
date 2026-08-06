@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\Android Project\AndroidUIComponents\native-views-fat\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"><source path="D:\Android Project\AndroidUIComponents\native-views-fat\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\Android Project\AndroidUIComponents\native-views-fat\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release" generated-set="release$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"><source path="D:\Android Project\AndroidUIComponents\native-views-fat\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\generated\res\resValues\release"/><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\lottie-6.0.0\release\res"/><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\relinker-1.4.5\release\res"/><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\android-gif-drawable-1.2.28\release\res"/><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\AndroidUIComponents\native-views\unspecified\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\generated\res\resValues\release"/><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\lottie-6.0.0\release\res"><file path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\lottie-6.0.0\release\res\values\values.xml" qualifiers=""><attr format="reference" name="lottieAnimationViewStyle"/><item name="lottie_layer_name" type="id"/><declare-styleable name="LottieAnimationView">
+        <attr format="string" name="lottie_fileName"/>
+        <attr format="reference" name="lottie_rawRes"/>
+        <attr format="string" name="lottie_url"/>
+        <attr format="reference" name="lottie_fallbackRes"/>
+        <attr format="boolean" name="lottie_autoPlay"/>
+        <attr format="boolean" name="lottie_loop"/>
+        <attr format="enum" name="lottie_repeatMode">
+            <enum name="restart" value="1"/>
+            <enum name="reverse" value="2"/>
+        </attr>
+        <attr format="integer" name="lottie_repeatCount"/>
+        <attr format="string" name="lottie_imageAssetsFolder"/>
+        <attr format="float" name="lottie_progress"/>
+        <attr format="boolean" name="lottie_enableMergePathsForKitKatAndAbove"/>
+        <attr format="color" name="lottie_colorFilter"/>
+        <attr format="float" name="lottie_speed"/>
+        <attr format="boolean" name="lottie_cacheComposition"/>
+        <attr format="boolean" name="lottie_ignoreDisabledSystemAnimations"/>
+        <attr format="boolean" name="lottie_useCompositionFrameRate"/>
+        <attr format="boolean" name="lottie_clipToCompositionBounds"/>
+        
+        <attr format="string" name="lottie_defaultFontFileExtension"/>
+        
+        <attr format="enum" name="lottie_renderMode">
+            <enum name="automatic" value="0"/>
+            <enum name="hardware" value="1"/>
+            <enum name="software" value="2"/>
+        </attr>
+    </declare-styleable></file></source><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\relinker-1.4.5\release\res"/><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\android-gif-drawable-1.2.28\release\res"><file path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\android-gif-drawable-1.2.28\release\res\values\values.xml" qualifiers=""><declare-styleable name="GifTextureView">
+        <attr format="reference|string" name="gifSource"/>
+        <attr format="boolean" name="isOpaque"/>
+    </declare-styleable><declare-styleable name="GifView">
+        <attr format="boolean" name="freezesAnimation"/>
+        <attr format="integer" name="loopCount"/>
+    </declare-styleable></file></source><source path="D:\Android Project\AndroidUIComponents\native-views-fat\build\intermediates\exploded-aar\AndroidUIComponents\native-views\unspecified\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="legacy_api_res$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"/><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="legacy_api_res" generated-set="legacy_api_res$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!&lt;dir>navigation"/><mergedItems><configuration qualifiers=""><declare-styleable name="GifView">
+        <attr format="boolean" name="freezesAnimation"/>
+        <attr format="integer" name="loopCount"/>
+    </declare-styleable><declare-styleable name="LottieAnimationView">
+        <attr format="string" name="lottie_fileName"/>
+        <attr format="reference" name="lottie_rawRes"/>
+        <attr format="string" name="lottie_url"/>
+        <attr format="reference" name="lottie_fallbackRes"/>
+        <attr format="boolean" name="lottie_autoPlay"/>
+        <attr format="boolean" name="lottie_loop"/>
+        <attr format="enum" name="lottie_repeatMode">
+            <enum name="restart" value="1"/>
+            <enum name="reverse" value="2"/>
+        </attr>
+        <attr format="integer" name="lottie_repeatCount"/>
+        <attr format="string" name="lottie_imageAssetsFolder"/>
+        <attr format="float" name="lottie_progress"/>
+        <attr format="boolean" name="lottie_enableMergePathsForKitKatAndAbove"/>
+        <attr format="color" name="lottie_colorFilter"/>
+        <attr format="float" name="lottie_speed"/>
+        <attr format="boolean" name="lottie_cacheComposition"/>
+        <attr format="boolean" name="lottie_ignoreDisabledSystemAnimations"/>
+        <attr format="boolean" name="lottie_useCompositionFrameRate"/>
+        <attr format="boolean" name="lottie_clipToCompositionBounds"/>
+        
+        <attr format="string" name="lottie_defaultFontFileExtension"/>
+        
+        <attr format="enum" name="lottie_renderMode">
+            <enum name="automatic" value="0"/>
+            <enum name="hardware" value="1"/>
+            <enum name="software" value="2"/>
+        </attr>
+    </declare-styleable><declare-styleable name="GifTextureView">
+        <attr format="reference|string" name="gifSource"/>
+        <attr format="boolean" name="isOpaque"/>
+    </declare-styleable></configuration></mergedItems></merger>

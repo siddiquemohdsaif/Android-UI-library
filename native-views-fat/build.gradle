@@ -1,0 +1,82 @@
+plugins {
+    alias(libs.plugins.android.library)
+}
+
+apply plugin: 'com.kezong.fat-aar'
+
+base {
+    archivesName = 'native-views'
+}
+
+android {
+    namespace 'com.ogfa.nativeviews.fat'
+    compileSdk {
+        version = release(36)
+    }
+
+    defaultConfig {
+        minSdk 24
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+fataar {
+    transitive = false
+}
+
+configurations {
+    fatAarDependencyGraph
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    embed(project(path: ':native-views', configuration: 'default')) {
+        transitive = false
+    }
+
+    fatAarDependencyGraph libs.lottie
+    fatAarDependencyGraph libs.gif.drawable
+}
+
+// Resolve the remote runtime closure once, but leave AndroidX to the consuming app.
+// This prevents embedded AppCompat/Core classes and resources from conflicting with
+// the versions already selected by the parent application's Gradle dependency graph.
+def fatAarArtifacts = configurations.fatAarDependencyGraph
+        .resolvedConfiguration
+        .resolvedArtifacts
+        .findAll { artifact ->
+            !artifact.moduleVersion.id.group.startsWith('androidx.')
+        }
+        .sort { left, right ->
+            left.moduleVersion.id.toString() <=> right.moduleVersion.id.toString()
+        }
+
+repositories {
+    flatDir {
+        dirs fatAarArtifacts.collect { it.file.parentFile }.unique()
+    }
+}
+
+fatAarArtifacts.each { artifact ->
+    def artifactFile = artifact.file
+    def extension = artifactFile.name.substring(artifactFile.name.lastIndexOf('.') + 1)
+    def localName = artifactFile.name.substring(
+            0,
+            artifactFile.name.length() - extension.length() - 1
+    )
+    dependencies.add('embed', [name: localName, ext: extension])
+}

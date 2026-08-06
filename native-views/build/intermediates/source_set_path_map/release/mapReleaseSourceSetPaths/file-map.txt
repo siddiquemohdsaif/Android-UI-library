@@ -1,0 +1,17 @@
+com.ogfa.nativeviews.native-views-fragment-1.3.6-0 C:\Users\shabir\.gradle\caches\8.14\transforms\0b322779cc4926109f492e2781bd90b0\transformed\fragment-1.3.6\res
+com.ogfa.nativeviews.native-views-appcompat-1.3.1-1 C:\Users\shabir\.gradle\caches\8.14\transforms\106945fdaf8b203a0807da60f0679fd5\transformed\appcompat-1.3.1\res
+com.ogfa.nativeviews.native-views-android-gif-drawable-1.2.28-2 C:\Users\shabir\.gradle\caches\8.14\transforms\2f008337c6c07067a9917fe825101a65\transformed\android-gif-drawable-1.2.28\res
+com.ogfa.nativeviews.native-views-core-1.5.0-3 C:\Users\shabir\.gradle\caches\8.14\transforms\3e46c9a6546668a8cfb00fa6406f1652\transformed\core-1.5.0\res
+com.ogfa.nativeviews.native-views-lifecycle-viewmodel-2.3.1-4 C:\Users\shabir\.gradle\caches\8.14\transforms\670a818089341b046c9947fdcec7b677\transformed\lifecycle-viewmodel-2.3.1\res
+com.ogfa.nativeviews.native-views-lottie-6.0.0-5 C:\Users\shabir\.gradle\caches\8.14\transforms\835d99e702cd7c0560575a479c17c2e8\transformed\lottie-6.0.0\res
+com.ogfa.nativeviews.native-views-lifecycle-runtime-2.3.1-6 C:\Users\shabir\.gradle\caches\8.14\transforms\95d67f68053b3563a4a252134ee60719\transformed\lifecycle-runtime-2.3.1\res
+com.ogfa.nativeviews.native-views-appcompat-resources-1.3.1-7 C:\Users\shabir\.gradle\caches\8.14\transforms\9937d2fd535a66c21b557ca71316413c\transformed\appcompat-resources-1.3.1\res
+com.ogfa.nativeviews.native-views-savedstate-1.1.0-8 C:\Users\shabir\.gradle\caches\8.14\transforms\db3ba5f09b2187bd48454ffb1fbcb4f2\transformed\savedstate-1.1.0\res
+com.ogfa.nativeviews.native-views-pngs-9 D:\Android Project\AndroidUIComponents\native-views\build\generated\res\pngs\release
+com.ogfa.nativeviews.native-views-resValues-10 D:\Android Project\AndroidUIComponents\native-views\build\generated\res\resValues\release
+com.ogfa.nativeviews.native-views-updated_navigation_xml-11 D:\Android Project\AndroidUIComponents\native-views\build\generated\updated_navigation_xml\release
+com.ogfa.nativeviews.native-views-mergeReleaseResources-12 D:\Android Project\AndroidUIComponents\native-views\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+com.ogfa.nativeviews.native-views-mergeReleaseResources-13 D:\Android Project\AndroidUIComponents\native-views\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+com.ogfa.nativeviews.native-views-release-14 D:\Android Project\AndroidUIComponents\native-views\build\intermediates\merged_res\release\mergeReleaseResources
+com.ogfa.nativeviews.native-views-main-15 D:\Android Project\AndroidUIComponents\native-views\src\main\res
+com.ogfa.nativeviews.native-views-release-16 D:\Android Project\AndroidUIComponents\native-views\src\release\res

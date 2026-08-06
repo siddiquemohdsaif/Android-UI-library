@@ -1,0 +1,35 @@
+R_DEF: Internal format may change without notice
+local
+attr? freezesAnimation
+attr? gifSource
+attr? isOpaque
+attr? loopCount
+attr lottieAnimationViewStyle
+attr? lottie_autoPlay
+attr? lottie_cacheComposition
+attr? lottie_clipToCompositionBounds
+attr? lottie_colorFilter
+attr? lottie_defaultFontFileExtension
+attr? lottie_enableMergePathsForKitKatAndAbove
+attr? lottie_fallbackRes
+attr? lottie_fileName
+attr? lottie_ignoreDisabledSystemAnimations
+attr? lottie_imageAssetsFolder
+attr? lottie_loop
+attr? lottie_progress
+attr? lottie_rawRes
+attr? lottie_renderMode
+attr? lottie_repeatCount
+attr? lottie_repeatMode
+attr? lottie_speed
+attr? lottie_url
+attr? lottie_useCompositionFrameRate
+id automatic
+id hardware
+id lottie_layer_name
+id restart
+id reverse
+id software
+styleable GifTextureView gifSource isOpaque
+styleable GifView freezesAnimation loopCount
+styleable LottieAnimationView lottie_fileName lottie_rawRes lottie_url lottie_fallbackRes lottie_autoPlay lottie_loop lottie_repeatMode lottie_repeatCount lottie_imageAssetsFolder lottie_progress lottie_enableMergePathsForKitKatAndAbove lottie_colorFilter lottie_speed lottie_cacheComposition lottie_ignoreDisabledSystemAnimations lottie_useCompositionFrameRate lottie_clipToCompositionBounds lottie_defaultFontFileExtension lottie_renderMode

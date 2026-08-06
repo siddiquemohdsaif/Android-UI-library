@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AndroidUIComponents</string>
+    <string name="native_views_ready">Native Views SDK is ready</string>
+</resources>

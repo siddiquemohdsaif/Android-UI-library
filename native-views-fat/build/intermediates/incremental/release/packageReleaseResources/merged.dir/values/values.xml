@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr format="reference" name="lottieAnimationViewStyle"/>
+    <item name="lottie_layer_name" type="id"/>
+    <declare-styleable name="GifTextureView">
+        <attr format="reference|string" name="gifSource"/>
+        <attr format="boolean" name="isOpaque"/>
+    </declare-styleable>
+    <declare-styleable name="GifView">
+        <attr format="boolean" name="freezesAnimation"/>
+        <attr format="integer" name="loopCount"/>
+    </declare-styleable>
+    <declare-styleable name="LottieAnimationView">
+        <attr format="string" name="lottie_fileName"/>
+        <attr format="reference" name="lottie_rawRes"/>
+        <attr format="string" name="lottie_url"/>
+        <attr format="reference" name="lottie_fallbackRes"/>
+        <attr format="boolean" name="lottie_autoPlay"/>
+        <attr format="boolean" name="lottie_loop"/>
+        <attr format="enum" name="lottie_repeatMode">
+            <enum name="restart" value="1"/>
+            <enum name="reverse" value="2"/>
+        </attr>
+        <attr format="integer" name="lottie_repeatCount"/>
+        <attr format="string" name="lottie_imageAssetsFolder"/>
+        <attr format="float" name="lottie_progress"/>
+        <attr format="boolean" name="lottie_enableMergePathsForKitKatAndAbove"/>
+        <attr format="color" name="lottie_colorFilter"/>
+        <attr format="float" name="lottie_speed"/>
+        <attr format="boolean" name="lottie_cacheComposition"/>
+        <attr format="boolean" name="lottie_ignoreDisabledSystemAnimations"/>
+        <attr format="boolean" name="lottie_useCompositionFrameRate"/>
+        <attr format="boolean" name="lottie_clipToCompositionBounds"/>
+        
+        <attr format="string" name="lottie_defaultFontFileExtension"/>
+        
+        <attr format="enum" name="lottie_renderMode">
+            <enum name="automatic" value="0"/>
+            <enum name="hardware" value="1"/>
+            <enum name="software" value="2"/>
+        </attr>
+    </declare-styleable>
+</resources>
