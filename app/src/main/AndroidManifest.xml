@@ -12,6 +12,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AndroidUIComponents">
         <activity
+            android:name=".ButtonTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".ImageTestActivity"
             android:exported="true"
             android:screenOrientation="portrait" />

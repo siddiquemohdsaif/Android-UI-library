@@ -46,7 +46,7 @@ com.ogfa.nativeviews
 |---|---|---|
 | Text | Implemented | `Text` and `TextStyle`, hosted by `ZLayerGroup` |
 | TextField | Implemented | `TextField`, with IME ownership in `ZLayerGroup` |
-| Button | Partial | Button behavior is currently mixed into `CustomAnimatorComponent` |
+| Button | Implemented | Image-backed composite with optional native Text, insets, runtime updates, and click |
 | Image | Implemented | Standalone `Image` component with bitmap scaling, runtime updates, and optional click |
 | Card | Not started | — |
 | List | Not started | — |
@@ -333,10 +333,16 @@ com.ogfa.nativeviews.progress
 
 ### Button
 
-- Text-only, bitmap-only, icon-and-text, and custom-background builders.
-- Click, long-click, disabled, pressed, and selected states.
-- Optional sound and haptic actions.
-- Simple API that does not require manual layer creation.
+- Implemented required private `Image` background and optional private `Text`.
+- Implemented supplied-component, bitmap-only, and bitmap-plus-text builders.
+- Implemented `Position + Size` and `RectF` regions.
+- Implemented scaled `TextInsets`, containment validation, and automatic child
+  region updates.
+- Implemented component alpha, visibility, enabled state, and cancellation-safe click.
+- Implemented runtime bitmap, label, region, inset, image, text, font, and listener APIs.
+- Child components are privately hosted and never registered or dispatched separately.
+- Future interaction expansion: long-click, pressed/selected visuals, optional
+  sound, and optional haptic actions.
 
 ### Image
 
