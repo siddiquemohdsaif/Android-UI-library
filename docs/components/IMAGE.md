@@ -43,6 +43,20 @@ Image logo = content.add(
 
 `RectF` values are used directly as runtime pixels.
 
+## Parent-relative centering
+
+Center the complete Image region inside its owning ZLayer:
+
+```java
+new Image.Builder(context, "logo", bitmap, position, size)
+        .horizontalCenter(true)
+        .verticalCenter(true);
+```
+
+Each axis is independent. A root ZLayer uses the full host view; a Card content
+ZLayer uses the Card bounds. Disabling an axis restores the placement from the
+original `Position` or `RectF`.
+
 ## Scale types
 
 | Scale type | Behavior |
@@ -61,6 +75,8 @@ Image logo = content.add(
 .setFilterBitmap(true)
 .setVisible(true)
 .setEnabled(true)
+.horizontalCenter(true)
+.verticalCenter(true)
 .setOnClickListener(listener)
 ```
 
@@ -82,6 +98,8 @@ image.isFilterBitmap();
 image.isVisible();
 image.isEnabled();
 image.isClickable();
+image.isHorizontalCentered();
+image.isVerticalCentered();
 ```
 
 Update the bitmap and region:
@@ -90,6 +108,10 @@ Update the bitmap and region:
 image.setBitmap(newBitmap);
 image.setRegion(position, size);
 image.setRegion(rectF);
+image.setHorizontalCenter(true);
+image.setVerticalCenter(true);
+image.horizontalCenter(false);
+image.verticalCenter(false);
 ```
 
 Update rendering:

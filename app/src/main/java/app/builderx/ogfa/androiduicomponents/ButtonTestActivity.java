@@ -101,6 +101,8 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     position(90f, 320f),
                     new Size(900f, 240f)
             )
+                    .horizontalCenter(false)
+                    .verticalCenter(false)
                     .setTextInsets(TextInsets.of(40f, 20f, 40f, 20f))
                     .setCornerRadius(60f)
                     .setTextSize(72f)
@@ -288,6 +290,24 @@ public final class ButtonTestActivity extends AppCompatActivity {
             }
 
             RectF original = button.getBounds();
+            button.horizontalCenter(true).verticalCenter(true);
+            RectF centered = button.getBounds();
+            if (!button.isHorizontalCentered()
+                    || !button.isVerticalCentered()
+                    || Math.abs(centered.centerX() - getWidth() / 2f) > 0.01f
+                    || Math.abs(centered.centerY() - getHeight() / 2f) > 0.01f
+                    || !button.getImage().getBounds().equals(centered)) {
+                throw new AssertionError(
+                        "Button composite centering was not applied."
+                );
+            }
+            button.horizontalCenter(false).verticalCenter(false);
+            if (!button.getBounds().equals(original)) {
+                throw new AssertionError(
+                        "Button did not restore its original region."
+                );
+            }
+
             button.setRegion(new RectF(original))
                     .setRegion(position(90f, 320f), new Size(900f, 240f))
                     .setTextInsetsPx(TextInsets.of(12f, 6f, 12f, 6f));

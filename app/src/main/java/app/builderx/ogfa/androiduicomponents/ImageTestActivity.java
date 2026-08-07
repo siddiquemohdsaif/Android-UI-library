@@ -105,6 +105,8 @@ public final class ImageTestActivity extends AppCompatActivity {
                     imageSize
             )
                     .setScaleType(Image.ScaleType.FIT_CENTER)
+                    .horizontalCenter(false)
+                    .verticalCenter(false)
                     .setOnClickListener(this::onImageClick));
 
             Position middlePosition = position(90f, 800f);
@@ -146,6 +148,23 @@ public final class ImageTestActivity extends AppCompatActivity {
             }
 
             RectF originalBounds = image.getBounds();
+            image.horizontalCenter(true).verticalCenter(true);
+            RectF centeredBounds = image.getBounds();
+            if (!image.isHorizontalCentered()
+                    || !image.isVerticalCentered()
+                    || Math.abs(centeredBounds.centerX() - getWidth() / 2f)
+                    > 0.01f
+                    || Math.abs(centeredBounds.centerY() - getHeight() / 2f)
+                    > 0.01f) {
+                throw new AssertionError("Image centering was not applied.");
+            }
+            image.horizontalCenter(false).verticalCenter(false);
+            if (!image.getBounds().equals(originalBounds)) {
+                throw new AssertionError(
+                        "Image did not restore its original region."
+                );
+            }
+
             image.setBitmap(alternateBitmap);
             if (image.getBitmap() != alternateBitmap) {
                 throw new AssertionError("Image bitmap was not replaced.");

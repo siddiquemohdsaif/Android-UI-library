@@ -209,6 +209,8 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                     .setPadding(42f, 18f)
                     .setCornerRadius(36f)
                     .setStrokeWidth(6f)
+                    .horizontalCenter(false)
+                    .verticalCenter(false)
                     .setOnFocusChangedListener((fieldId, focused) -> {
                         if (focused) {
                             eventMessage = "Focused: " + fieldId;
@@ -230,6 +232,26 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                         invalidate();
                         return false;
                     }));
+
+            RectF originalBounds = field.getBounds();
+            field.horizontalCenter(true).verticalCenter(true);
+            RectF centeredBounds = field.getBounds();
+            if (!field.isHorizontalCentered()
+                    || !field.isVerticalCentered()
+                    || Math.abs(centeredBounds.centerX() - getWidth() / 2f)
+                    > 0.01f
+                    || Math.abs(centeredBounds.centerY() - getHeight() / 2f)
+                    > 0.01f) {
+                throw new AssertionError(
+                        "TextField centering was not applied."
+                );
+            }
+            field.horizontalCenter(false).verticalCenter(false);
+            if (!field.getBounds().equals(originalBounds)) {
+                throw new AssertionError(
+                        "TextField did not restore its original region."
+                );
+            }
 
             // Exercise runtime font changes, then restore the displayed state.
             if (field.getTypeface() == null

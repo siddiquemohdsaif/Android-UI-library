@@ -78,6 +78,19 @@ such as text size, padding, radius, stroke width, and cursor width still use
 Figma units. Use the matching `Px` method only when exact runtime pixels are
 required.
 
+Center the complete field region inside its owning ZLayer:
+
+```java
+new TextField.Builder(context, "player_name", position, size)
+        .horizontalCenter(true)
+        .verticalCenter(true);
+```
+
+Both axes are independent. A root ZLayer centers against the host view; a Card
+content ZLayer centers against the Card. Disabling centering restores the
+original `Position` or `RectF`. Cursor, selection, touch, and IME geometry use
+the centered bounds.
+
 ## Build a field
 
 ```java
@@ -227,6 +240,8 @@ render normally, and API 24–25 safely retain the font's normal weight.
 | `setStrokeWidthPx(px)` | Set exact runtime-pixel border width |
 | `setCursorWidth(figmaWidth)` | Set cursor width in Figma units; scaled with the active `FigmaConfig` |
 | `setCursorWidthPx(px)` | Set exact cursor width in runtime pixels |
+| `horizontalCenter(enabled)` | Center the complete field region horizontally |
+| `verticalCenter(enabled)` | Center the complete field region vertically |
 | `setPassword(enabled)` | Mask displayed text |
 | `setEnabled(enabled)` | Enable input and focus |
 | `setOnTextChangedListener(listener)` | Receive content changes |
@@ -284,6 +299,12 @@ State and focus:
 ```java
 field.getId();
 field.getBounds();
+field.isHorizontalCentered();
+field.isVerticalCentered();
+field.setHorizontalCenter(true);
+field.setVerticalCenter(true);
+field.horizontalCenter(false);
+field.verticalCenter(false);
 
 field.isEnabled();
 field.setEnabled(false);

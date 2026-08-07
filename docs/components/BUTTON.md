@@ -235,6 +235,8 @@ Internal visual configuration:
 Button configuration:
 
 ```java
+.horizontalCenter(true)
+.verticalCenter(true)
 .setCornerRadius(36f)
 .setCornerRadiusPx(24f)
 .setAlpha(0.8f)
@@ -245,6 +247,11 @@ Button configuration:
 
 Component alpha multiplies the already configured Image and Text alpha without
 overwriting either child value.
+
+Centering moves the complete Button composite—including its Image, Text,
+clipping path, and touch region—inside the owning ZLayer. The axes are
+independent. A root layer uses the host view; a Card content layer uses the
+Card. Disabling an axis restores the source `Position` or `RectF`.
 
 ## Corner radius
 
@@ -285,6 +292,8 @@ button.isCornerRadiusInPixels();
 button.isVisible();
 button.isEnabled();
 button.isClickable();
+button.isHorizontalCentered();
+button.isVerticalCentered();
 
 button.setBitmap(newBitmap);
 button.setBackgroundColor(0xff0057b8);
@@ -293,6 +302,10 @@ button.removeText();
 
 button.setRegion(position, size);
 button.setRegion(rectF);
+button.setHorizontalCenter(true);
+button.setVerticalCenter(true);
+button.horizontalCenter(false);
+button.verticalCenter(false);
 button.setTextInsets(TextInsets.all(12f));
 button.setTextInsetsPx(TextInsets.all(12f));
 

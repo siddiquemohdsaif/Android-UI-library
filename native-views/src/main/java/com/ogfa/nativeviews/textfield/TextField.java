@@ -40,8 +40,10 @@ public final class TextField implements Component {
     public static final long CURSOR_BLINK_INTERVAL_MS = 500L;
 
     private final Context context;
+    private final View hostView;
     private final String id;
-    private final RectF bounds;
+    private final RectF baseBounds = new RectF();
+    private final RectF bounds = new RectF();
     private final SpannableStringBuilder editable = new SpannableStringBuilder();
     private final TextPaint textPaint = new TextPaint(
             Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG
@@ -80,6 +82,8 @@ public final class TextField implements Component {
     private FontVariation fontVariation;
     private boolean enabled;
     private boolean visible = true;
+    private boolean horizontalCentered;
+    private boolean verticalCentered;
     private boolean touchCaptured;
     private boolean password;
     private boolean focused;
@@ -90,9 +94,16 @@ public final class TextField implements Component {
 
     private TextField(Builder builder, View hostView) {
         context = builder.context.getApplicationContext();
+        this.hostView = Objects.requireNonNull(
+                hostView,
+                "Host view cannot be null."
+        );
         id = requireId(builder.id);
-        bounds = builder.resolveBounds(hostView);
-        requireBounds(bounds);
+        baseBounds.set(builder.resolveBounds(hostView));
+        requireBounds(baseBounds);
+        horizontalCentered = builder.horizontalCentered;
+        verticalCentered = builder.verticalCentered;
+        applyParentAlignment();
 
         hint = builder.hint;
         inputType = builder.inputType;
@@ -210,6 +221,40 @@ public final class TextField implements Component {
 
     public boolean isCursorWidthInPixels() {
         return cursorWidthInPixels;
+    }
+
+    public boolean isHorizontalCentered() {
+        return horizontalCentered;
+    }
+
+    public boolean isVerticalCentered() {
+        return verticalCentered;
+    }
+
+    public TextField setHorizontalCenter(boolean enabled) {
+        if (horizontalCentered == enabled) return this;
+        horizontalCentered = enabled;
+        applyParentAlignment();
+        ensureCursorVisible();
+        invalidate();
+        return this;
+    }
+
+    public TextField horizontalCenter(boolean enabled) {
+        return setHorizontalCenter(enabled);
+    }
+
+    public TextField setVerticalCenter(boolean enabled) {
+        if (verticalCentered == enabled) return this;
+        verticalCentered = enabled;
+        applyParentAlignment();
+        ensureCursorVisible();
+        invalidate();
+        return this;
+    }
+
+    public TextField verticalCenter(boolean enabled) {
+        return setVerticalCenter(enabled);
     }
 
     public TextField setText(CharSequence text) {
@@ -423,11 +468,34 @@ public final class TextField implements Component {
             );
         }
         this.owner = textFieldHost;
+        applyParentAlignment();
+        ensureCursorVisible();
     }
 
     void detach() {
         focused = false;
         owner = null;
+    }
+
+    private void applyParentAlignment() {
+        bounds.set(baseBounds);
+        if ((!horizontalCentered && !verticalCentered)
+                || baseBounds.isEmpty()) {
+            return;
+        }
+        RectF parentBounds = owner == null
+                ? new RectF(0f, 0f, hostView.getWidth(), hostView.getHeight())
+                : owner.getComponentBounds();
+        if (horizontalCentered) {
+            float width = baseBounds.width();
+            bounds.left = parentBounds.centerX() - width / 2f;
+            bounds.right = bounds.left + width;
+        }
+        if (verticalCentered) {
+            float height = baseBounds.height();
+            bounds.top = parentBounds.centerY() - height / 2f;
+            bounds.bottom = bounds.top + height;
+        }
     }
 
     void setFocusedInternal(boolean focused) {
@@ -993,6 +1061,8 @@ public final class TextField implements Component {
         private boolean cursorWidthInPixels;
         private boolean enabled = true;
         private boolean password;
+        private boolean horizontalCentered;
+        private boolean verticalCentered;
         private OnTextChangedListener textChangedListener;
         private OnEditorActionListener editorActionListener;
         private OnFocusChangedListener focusChangedListener;
@@ -1281,6 +1351,24 @@ public final class TextField implements Component {
         public Builder setEnabled(boolean enabled) {
             this.enabled = enabled;
             return this;
+        }
+
+        public Builder setHorizontalCenter(boolean enabled) {
+            horizontalCentered = enabled;
+            return this;
+        }
+
+        public Builder horizontalCenter(boolean enabled) {
+            return setHorizontalCenter(enabled);
+        }
+
+        public Builder setVerticalCenter(boolean enabled) {
+            verticalCentered = enabled;
+            return this;
+        }
+
+        public Builder verticalCenter(boolean enabled) {
+            return setVerticalCenter(enabled);
         }
 
         public Builder setOnTextChangedListener(

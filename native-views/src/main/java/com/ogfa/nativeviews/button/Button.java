@@ -33,12 +33,18 @@ public final class Button implements Component {
     private final Context context;
     private final View hostView;
     private final String id;
+    private final RectF baseBounds = new RectF();
     private final RectF bounds = new RectF();
     private final Path clipPath = new Path();
     private final ComponentHost childHost = new ComponentHost() {
         @Override
         public View getHostView() {
             return hostView;
+        }
+
+        @Override
+        public RectF getComponentBounds() {
+            return new RectF(bounds);
         }
 
         @Override
@@ -66,6 +72,8 @@ public final class Button implements Component {
     private float alpha;
     private boolean visible;
     private boolean enabled;
+    private boolean horizontalCentered;
+    private boolean verticalCentered;
     private boolean released;
     private boolean touchCaptured;
     private boolean clickCancelled;
@@ -85,11 +93,14 @@ public final class Button implements Component {
         alpha = builder.alpha;
         visible = builder.visible;
         enabled = builder.enabled;
+        horizontalCentered = builder.horizontalCentered;
+        verticalCentered = builder.verticalCentered;
         clickListener = builder.clickListener;
 
         if (builder.suppliedImage != null) {
             image = builder.suppliedImage;
-            bounds.set(image.getBounds());
+            baseBounds.set(image.getBounds());
+            bounds.set(baseBounds);
             figmaConfig = image.getFigmaConfig();
             dimensionScale = image.getDimensionScale();
             RectF insetTextBounds = resolveTextBounds(
@@ -149,6 +160,9 @@ public final class Button implements Component {
         // a transferred child from also belonging to a ZLayer.
         image.attach(childHost);
         if (text != null) text.attach(childHost);
+        RectF unalignedBounds = new RectF(bounds);
+        applyParentAlignment();
+        moveChildrenWithBounds(unalignedBounds);
         rebuildClipPath();
     }
 
@@ -216,6 +230,46 @@ public final class Button implements Component {
 
     public boolean isClickable() {
         return clickListener != null;
+    }
+
+    public boolean isHorizontalCentered() {
+        return horizontalCentered;
+    }
+
+    public boolean isVerticalCentered() {
+        return verticalCentered;
+    }
+
+    public Button setHorizontalCenter(boolean enabled) {
+        ensureActive();
+        if (horizontalCentered == enabled) return this;
+        RectF previousBounds = new RectF(bounds);
+        horizontalCentered = enabled;
+        applyParentAlignment();
+        moveChildrenWithBounds(previousBounds);
+        rebuildClipPath();
+        invalidate();
+        return this;
+    }
+
+    public Button horizontalCenter(boolean enabled) {
+        return setHorizontalCenter(enabled);
+    }
+
+    public Button setVerticalCenter(boolean enabled) {
+        ensureActive();
+        if (verticalCentered == enabled) return this;
+        RectF previousBounds = new RectF(bounds);
+        verticalCentered = enabled;
+        applyParentAlignment();
+        moveChildrenWithBounds(previousBounds);
+        rebuildClipPath();
+        invalidate();
+        return this;
+    }
+
+    public Button verticalCenter(boolean enabled) {
+        return setVerticalCenter(enabled);
     }
 
     public Button setBitmap(Bitmap bitmap) {
@@ -581,6 +635,10 @@ public final class Button implements Component {
             );
         }
         this.owner = owner;
+        RectF previousBounds = new RectF(bounds);
+        applyParentAlignment();
+        moveChildrenWithBounds(previousBounds);
+        rebuildClipPath();
     }
 
     @Override
@@ -608,7 +666,8 @@ public final class Button implements Component {
     ) {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
-            bounds.set(explicitBounds);
+            baseBounds.set(explicitBounds);
+            bounds.set(baseBounds);
             figmaConfig = FigmaConfig.getDefault();
             dimensionScale = figmaConfig.getScale(hostView.getWidth());
             return;
@@ -617,20 +676,22 @@ public final class Button implements Component {
         Objects.requireNonNull(size, "Size cannot be null.");
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
-        bounds.set(resolved);
+        baseBounds.set(resolved);
+        bounds.set(baseBounds);
         figmaConfig = position.getFigmaConfig();
         dimensionScale = position.getScale(hostView);
     }
 
     private void applyRegion(RectF newBounds, float newDimensionScale) {
         requireBounds(newBounds);
+        baseBounds.set(newBounds);
+        applyParentAlignment();
         RectF textBounds = resolveTextBounds(
-                newBounds,
+                bounds,
                 newDimensionScale,
                 textInsets,
                 textInsetsInPixels
         );
-        bounds.set(newBounds);
         dimensionScale = newDimensionScale;
         rebuildClipPath();
         image.setRegion(bounds);
@@ -638,6 +699,40 @@ public final class Button implements Component {
             applyTextRegion(text, textBounds, newDimensionScale);
         }
         invalidate();
+    }
+
+    private void applyParentAlignment() {
+        bounds.set(baseBounds);
+        if ((!horizontalCentered && !verticalCentered)
+                || baseBounds.isEmpty()) {
+            return;
+        }
+        RectF parentBounds = owner == null
+                ? new RectF(0f, 0f, hostView.getWidth(), hostView.getHeight())
+                : owner.getComponentBounds();
+        if (horizontalCentered) {
+            float width = baseBounds.width();
+            bounds.left = parentBounds.centerX() - width / 2f;
+            bounds.right = bounds.left + width;
+        }
+        if (verticalCentered) {
+            float height = baseBounds.height();
+            bounds.top = parentBounds.centerY() - height / 2f;
+            bounds.bottom = bounds.top + height;
+        }
+    }
+
+    private void moveChildrenWithBounds(RectF previousBounds) {
+        if (image == null || bounds.equals(previousBounds)) return;
+        image.setRegion(bounds);
+        if (text != null) {
+            RectF movedTextBounds = text.getBounds();
+            movedTextBounds.offset(
+                    bounds.left - previousBounds.left,
+                    bounds.top - previousBounds.top
+            );
+            applyTextRegion(text, movedTextBounds, dimensionScale);
+        }
     }
 
     private Text.Builder newTextBuilder(
@@ -881,6 +976,8 @@ public final class Button implements Component {
         private float alpha = 1f;
         private boolean visible = true;
         private boolean enabled = true;
+        private boolean horizontalCentered;
+        private boolean verticalCentered;
         private OnClickListener clickListener;
 
         public Builder(Context context, String id, Image image) {
@@ -1256,6 +1353,24 @@ public final class Button implements Component {
         public Builder setEnabled(boolean enabled) {
             this.enabled = enabled;
             return this;
+        }
+
+        public Builder setHorizontalCenter(boolean enabled) {
+            horizontalCentered = enabled;
+            return this;
+        }
+
+        public Builder horizontalCenter(boolean enabled) {
+            return setHorizontalCenter(enabled);
+        }
+
+        public Builder setVerticalCenter(boolean enabled) {
+            verticalCentered = enabled;
+            return this;
+        }
+
+        public Builder verticalCenter(boolean enabled) {
+            return setVerticalCenter(enabled);
         }
 
         public Builder setOnClickListener(OnClickListener listener) {

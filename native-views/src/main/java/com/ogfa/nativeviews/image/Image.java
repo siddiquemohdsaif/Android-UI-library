@@ -30,6 +30,7 @@ public final class Image implements Component {
 
     private final String id;
     private final View hostView;
+    private final RectF baseBounds = new RectF();
     private final RectF bounds = new RectF();
     private final RectF drawBounds = new RectF();
     private final Paint paint = new Paint(
@@ -46,6 +47,8 @@ public final class Image implements Component {
     private float alpha;
     private boolean visible;
     private boolean enabled;
+    private boolean horizontalCentered;
+    private boolean verticalCentered;
     private boolean released;
     private boolean touchCaptured;
     private boolean clickCancelled;
@@ -62,6 +65,8 @@ public final class Image implements Component {
         alpha = builder.alpha;
         visible = builder.visible;
         enabled = builder.enabled;
+        horizontalCentered = builder.horizontalCentered;
+        verticalCentered = builder.verticalCentered;
         clickListener = builder.clickListener;
         paint.setFilterBitmap(builder.filterBitmap);
         paint.setAlpha(Math.round(alpha * 255f));
@@ -116,6 +121,42 @@ public final class Image implements Component {
 
     public boolean isClickable() {
         return clickListener != null;
+    }
+
+    public boolean isHorizontalCentered() {
+        return horizontalCentered;
+    }
+
+    public boolean isVerticalCentered() {
+        return verticalCentered;
+    }
+
+    public Image setHorizontalCenter(boolean enabled) {
+        ensureActive();
+        if (horizontalCentered == enabled) return this;
+        horizontalCentered = enabled;
+        applyParentAlignment();
+        resolveDrawBounds();
+        invalidate();
+        return this;
+    }
+
+    public Image horizontalCenter(boolean enabled) {
+        return setHorizontalCenter(enabled);
+    }
+
+    public Image setVerticalCenter(boolean enabled) {
+        ensureActive();
+        if (verticalCentered == enabled) return this;
+        verticalCentered = enabled;
+        applyParentAlignment();
+        resolveDrawBounds();
+        invalidate();
+        return this;
+    }
+
+    public Image verticalCenter(boolean enabled) {
+        return setVerticalCenter(enabled);
     }
 
     public Image setBitmap(Bitmap bitmap) {
@@ -257,6 +298,8 @@ public final class Image implements Component {
             );
         }
         this.owner = owner;
+        applyParentAlignment();
+        resolveDrawBounds();
     }
 
     @Override
@@ -276,18 +319,41 @@ public final class Image implements Component {
     ) {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
-            bounds.set(explicitBounds);
+            baseBounds.set(explicitBounds);
             figmaConfig = FigmaConfig.getDefault();
             dimensionScale = figmaConfig.getScale(hostView.getWidth());
+            applyParentAlignment();
             return;
         }
         Objects.requireNonNull(position, "Position cannot be null.");
         Objects.requireNonNull(size, "Size cannot be null.");
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
-        bounds.set(resolved);
+        baseBounds.set(resolved);
         figmaConfig = position.getFigmaConfig();
         dimensionScale = position.getScale(hostView);
+        applyParentAlignment();
+    }
+
+    private void applyParentAlignment() {
+        bounds.set(baseBounds);
+        if ((!horizontalCentered && !verticalCentered)
+                || baseBounds.isEmpty()) {
+            return;
+        }
+        RectF parentBounds = owner == null
+                ? new RectF(0f, 0f, hostView.getWidth(), hostView.getHeight())
+                : owner.getComponentBounds();
+        if (horizontalCentered) {
+            float width = baseBounds.width();
+            bounds.left = parentBounds.centerX() - width / 2f;
+            bounds.right = bounds.left + width;
+        }
+        if (verticalCentered) {
+            float height = baseBounds.height();
+            bounds.top = parentBounds.centerY() - height / 2f;
+            bounds.bottom = bounds.top + height;
+        }
     }
 
     private void resolveDrawBounds() {
@@ -405,6 +471,8 @@ public final class Image implements Component {
         private boolean filterBitmap = true;
         private boolean visible = true;
         private boolean enabled = true;
+        private boolean horizontalCentered;
+        private boolean verticalCentered;
         private OnClickListener clickListener;
 
         public Builder(
@@ -474,6 +542,24 @@ public final class Image implements Component {
         public Builder setEnabled(boolean enabled) {
             this.enabled = enabled;
             return this;
+        }
+
+        public Builder setHorizontalCenter(boolean enabled) {
+            horizontalCentered = enabled;
+            return this;
+        }
+
+        public Builder horizontalCenter(boolean enabled) {
+            return setHorizontalCenter(enabled);
+        }
+
+        public Builder setVerticalCenter(boolean enabled) {
+            verticalCentered = enabled;
+            return this;
+        }
+
+        public Builder verticalCenter(boolean enabled) {
+            return setVerticalCenter(enabled);
         }
 
         public Builder setOnClickListener(OnClickListener listener) {
