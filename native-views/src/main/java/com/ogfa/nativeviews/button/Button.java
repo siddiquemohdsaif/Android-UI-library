@@ -1,13 +1,18 @@
 package com.ogfa.nativeviews.button;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 
 import com.ogfa.nativeviews.component.Component;
 import com.ogfa.nativeviews.component.ComponentFactory;
@@ -20,6 +25,8 @@ import com.ogfa.nativeviews.text.FontVariation;
 import com.ogfa.nativeviews.text.Text;
 import com.ogfa.nativeviews.text.TextStyle;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -30,12 +37,19 @@ import java.util.Objects;
  */
 public final class Button implements Component {
 
+    public static final float DEFAULT_PRESSED_SCALE = 0.92f;
+    public static final long DEFAULT_PRESS_ANIMATION_DURATION = 100L;
+    public static final long DEFAULT_RIPPLE_DURATION = 320L;
+    private static final int FALLBACK_RIPPLE_COLOR = 0x1f000000;
+
     private final Context context;
     private final View hostView;
     private final String id;
     private final RectF baseBounds = new RectF();
     private final RectF bounds = new RectF();
     private final Path clipPath = new Path();
+    private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final ArrayList<Ripple> ripples = new ArrayList<>();
     private final ComponentHost childHost = new ComponentHost() {
         @Override
         public View getHostView() {
@@ -70,6 +84,19 @@ public final class Button implements Component {
     private float resolvedCornerRadius;
     private boolean cornerRadiusInPixels;
     private float alpha;
+    private float pressedScale;
+    private float currentPressedScale = 1f;
+    private long pressAnimationDuration;
+    private ValueAnimator pressAnimator;
+    private boolean pressed;
+    private boolean rippleEnabled;
+    private int rippleColor;
+    private long rippleDuration;
+    private RippleOrigin rippleOrigin;
+    private float rippleRadius;
+    private boolean rippleRadiusAuto;
+    private boolean rippleRadiusInPixels;
+    private Ripple activeRipple;
     private boolean visible;
     private boolean enabled;
     private boolean horizontalCentered;
@@ -91,6 +118,17 @@ public final class Button implements Component {
         cornerRadius = builder.cornerRadius;
         cornerRadiusInPixels = builder.cornerRadiusInPixels;
         alpha = builder.alpha;
+        pressedScale = builder.pressedScale;
+        pressAnimationDuration = builder.pressAnimationDuration;
+        rippleEnabled = builder.rippleEnabled;
+        rippleColor = builder.rippleColor == null
+                ? resolveThemeRippleColor(builder.context)
+                : builder.rippleColor;
+        rippleDuration = builder.rippleDuration;
+        rippleOrigin = builder.rippleOrigin;
+        rippleRadius = builder.rippleRadius;
+        rippleRadiusAuto = builder.rippleRadiusAuto;
+        rippleRadiusInPixels = builder.rippleRadiusInPixels;
         visible = builder.visible;
         enabled = builder.enabled;
         horizontalCentered = builder.horizontalCentered;
@@ -204,6 +242,55 @@ public final class Button implements Component {
 
     public float getAlpha() {
         return alpha;
+    }
+
+    public float getPressedScale() {
+        return pressedScale;
+    }
+
+    public float getCurrentPressedScale() {
+        return currentPressedScale;
+    }
+
+    public long getPressAnimationDuration() {
+        return pressAnimationDuration;
+    }
+
+    public boolean isPressed() {
+        return pressed;
+    }
+
+    public boolean isRippleEnabled() {
+        return rippleEnabled;
+    }
+
+    public int getRippleColor() {
+        return rippleColor;
+    }
+
+    public long getRippleDuration() {
+        return rippleDuration;
+    }
+
+    public RippleOrigin getRippleOrigin() {
+        return rippleOrigin;
+    }
+
+    public float getRippleRadius() {
+        return rippleRadiusAuto ? 0f : rippleRadius;
+    }
+
+    public float getResolvedRippleRadius() {
+        if (activeRipple != null) return activeRipple.maxRadius;
+        return resolveRippleRadius(bounds.centerX(), bounds.centerY());
+    }
+
+    public boolean isRippleRadiusAuto() {
+        return rippleRadiusAuto;
+    }
+
+    public boolean isRippleRadiusInPixels() {
+        return !rippleRadiusAuto && rippleRadiusInPixels;
     }
 
     public float getCornerRadius() {
@@ -550,6 +637,73 @@ public final class Button implements Component {
         return this;
     }
 
+    public Button setPressedScale(float pressedScale) {
+        ensureActive();
+        this.pressedScale = requirePressedScale(pressedScale);
+        if (pressed) animatePressScale(pressedScale);
+        return this;
+    }
+
+    public Button setPressAnimationDuration(long durationMillis) {
+        ensureActive();
+        pressAnimationDuration = requirePressAnimationDuration(durationMillis);
+        return this;
+    }
+
+    public Button setRippleEnabled(boolean enabled) {
+        ensureActive();
+        rippleEnabled = enabled;
+        if (!enabled) clearRipples();
+        invalidate();
+        return this;
+    }
+
+    public Button setRippleColor(int color) {
+        ensureActive();
+        rippleColor = color;
+        invalidate();
+        return this;
+    }
+
+    public Button setRippleDuration(long durationMillis) {
+        ensureActive();
+        rippleDuration = requireRippleDuration(durationMillis);
+        return this;
+    }
+
+    public Button setRippleOrigin(RippleOrigin origin) {
+        ensureActive();
+        rippleOrigin = Objects.requireNonNull(
+                origin,
+                "Ripple origin cannot be null."
+        );
+        return this;
+    }
+
+    public Button setRippleRadius(float radius) {
+        ensureActive();
+        rippleRadius = requireRippleRadius(radius);
+        rippleRadiusAuto = false;
+        rippleRadiusInPixels = false;
+        return this;
+    }
+
+    public Button setRippleRadiusPx(float radius) {
+        ensureActive();
+        rippleRadius = requireRippleRadius(radius);
+        rippleRadiusAuto = false;
+        rippleRadiusInPixels = true;
+        return this;
+    }
+
+    public Button setRippleRadiusAuto() {
+        ensureActive();
+        rippleRadius = 0f;
+        rippleRadiusAuto = true;
+        rippleRadiusInPixels = false;
+        return this;
+    }
+
     public Button setVisible(boolean visible) {
         ensureActive();
         this.visible = visible;
@@ -585,12 +739,19 @@ public final class Button implements Component {
         int saveCount = alpha < 1f
                 ? canvas.saveLayerAlpha(bounds, Math.round(alpha * 255f))
                 : canvas.save();
+        canvas.scale(
+                currentPressedScale,
+                currentPressedScale,
+                bounds.centerX(),
+                bounds.centerY()
+        );
         if (resolvedCornerRadius > 0f) {
             canvas.clipPath(clipPath);
         } else {
             canvas.clipRect(bounds);
         }
         image.draw(canvas);
+        drawRipples(canvas);
         if (text != null) text.draw(canvas);
         canvas.restoreToCount(saveCount);
     }
@@ -602,11 +763,18 @@ public final class Button implements Component {
             case MotionEvent.ACTION_DOWN:
                 touchCaptured = acceptsTouch(event.getX(), event.getY());
                 clickCancelled = false;
+                if (touchCaptured) {
+                    setPressedState(true);
+                    startRipple(event.getX(), event.getY());
+                }
                 return touchCaptured;
             case MotionEvent.ACTION_MOVE:
                 if (!touchCaptured) return false;
-                if (!acceptsTouch(event.getX(), event.getY())) {
+                if (!clickCancelled
+                        && !acceptsTouch(event.getX(), event.getY())) {
                     clickCancelled = true;
+                    setPressedState(false);
+                    releaseActiveRipple();
                 }
                 return true;
             case MotionEvent.ACTION_UP:
@@ -614,6 +782,8 @@ public final class Button implements Component {
                 boolean click = !clickCancelled
                         && acceptsTouch(event.getX(), event.getY());
                 touchCaptured = false;
+                setPressedState(false);
+                releaseActiveRipple();
                 if (click) clickListener.onClick(id);
                 return true;
             case MotionEvent.ACTION_CANCEL:
@@ -644,8 +814,11 @@ public final class Button implements Component {
     @Override
     public void release() {
         if (released) return;
-        released = true;
         cancelTouch();
+        cancelPressAnimator();
+        clearRipples();
+        currentPressedScale = 1f;
+        released = true;
         clickListener = null;
         owner = null;
         if (text != null) {
@@ -853,6 +1026,163 @@ public final class Button implements Component {
     private void cancelTouch() {
         touchCaptured = false;
         clickCancelled = true;
+        setPressedState(false);
+        releaseActiveRipple();
+    }
+
+    private void startRipple(float touchX, float touchY) {
+        if (!rippleEnabled) return;
+        releaseActiveRipple();
+        float originX = rippleOrigin == RippleOrigin.CENTER
+                ? bounds.centerX()
+                : touchX;
+        float originY = rippleOrigin == RippleOrigin.CENTER
+                ? bounds.centerY()
+                : touchY;
+        Ripple ripple = new Ripple(
+                originX,
+                originY,
+                resolveRippleRadius(originX, originY)
+        );
+        ripples.add(ripple);
+        activeRipple = ripple;
+        if (rippleDuration == 0L) {
+            ripple.progress = 1f;
+            invalidate();
+            return;
+        }
+        ripple.expansionAnimator = ValueAnimator.ofFloat(0f, 1f);
+        ripple.expansionAnimator.setDuration(rippleDuration);
+        ripple.expansionAnimator.setInterpolator(new DecelerateInterpolator());
+        ripple.expansionAnimator.addUpdateListener(animation -> {
+            ripple.progress = (float) animation.getAnimatedValue();
+            invalidate();
+        });
+        ripple.expansionAnimator.start();
+    }
+
+    private void releaseActiveRipple() {
+        Ripple ripple = activeRipple;
+        activeRipple = null;
+        if (ripple == null || ripple.released) return;
+        ripple.released = true;
+        long fadeDuration = rippleDuration == 0L
+                ? 0L
+                : Math.max(1L, rippleDuration / 2L);
+        if (fadeDuration == 0L) {
+            removeRipple(ripple);
+            return;
+        }
+        ripple.fadeAnimator = ValueAnimator.ofFloat(ripple.opacity, 0f);
+        ripple.fadeAnimator.setDuration(fadeDuration);
+        ripple.fadeAnimator.setInterpolator(new DecelerateInterpolator());
+        ripple.fadeAnimator.addUpdateListener(animation -> {
+            ripple.opacity = (float) animation.getAnimatedValue();
+            invalidate();
+        });
+        ripple.fadeAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                removeRipple(ripple);
+            }
+        });
+        ripple.fadeAnimator.start();
+    }
+
+    private void drawRipples(Canvas canvas) {
+        if (ripples.isEmpty()) return;
+        int baseAlpha = Color.alpha(rippleColor);
+        ripplePaint.setColor(rippleColor);
+        for (Ripple ripple : ripples) {
+            ripplePaint.setAlpha(Math.round(baseAlpha * ripple.opacity));
+            canvas.drawCircle(
+                    ripple.x,
+                    ripple.y,
+                    ripple.maxRadius * ripple.progress,
+                    ripplePaint
+            );
+        }
+    }
+
+    private float resolveRippleRadius(float originX, float originY) {
+        if (!rippleRadiusAuto) {
+            return rippleRadiusInPixels
+                    ? rippleRadius
+                    : rippleRadius * dimensionScale;
+        }
+        float horizontal = Math.max(
+                Math.abs(originX - bounds.left),
+                Math.abs(bounds.right - originX)
+        );
+        float vertical = Math.max(
+                Math.abs(originY - bounds.top),
+                Math.abs(bounds.bottom - originY)
+        );
+        return (float) Math.hypot(horizontal, vertical);
+    }
+
+    private void removeRipple(Ripple ripple) {
+        cancelAnimator(ripple.expansionAnimator);
+        cancelAnimator(ripple.fadeAnimator);
+        ripples.remove(ripple);
+        if (activeRipple == ripple) activeRipple = null;
+        invalidate();
+    }
+
+    private void clearRipples() {
+        List<Ripple> copy = new ArrayList<>(ripples);
+        ripples.clear();
+        activeRipple = null;
+        for (Ripple ripple : copy) {
+            cancelAnimator(ripple.expansionAnimator);
+            cancelAnimator(ripple.fadeAnimator);
+        }
+    }
+
+    private static void cancelAnimator(ValueAnimator animator) {
+        if (animator == null) return;
+        animator.removeAllListeners();
+        animator.removeAllUpdateListeners();
+        animator.cancel();
+    }
+
+    private void setPressedState(boolean pressed) {
+        if (this.pressed == pressed
+                && currentPressedScale
+                == (pressed ? pressedScale : 1f)) {
+            return;
+        }
+        this.pressed = pressed;
+        animatePressScale(pressed ? pressedScale : 1f);
+    }
+
+    private void animatePressScale(float targetScale) {
+        cancelPressAnimator();
+        if (pressAnimationDuration == 0L
+                || currentPressedScale == targetScale) {
+            currentPressedScale = targetScale;
+            invalidate();
+            return;
+        }
+        pressAnimator = ValueAnimator.ofFloat(
+                currentPressedScale,
+                targetScale
+        );
+        pressAnimator.setDuration(pressAnimationDuration);
+        pressAnimator.setInterpolator(new DecelerateInterpolator());
+        pressAnimator.addUpdateListener(animation -> {
+            currentPressedScale = (float) animation.getAnimatedValue();
+            invalidate();
+        });
+        pressAnimator.start();
+    }
+
+    private void cancelPressAnimator() {
+        if (pressAnimator != null) {
+            pressAnimator.cancel();
+            pressAnimator.removeAllUpdateListeners();
+            pressAnimator = null;
+        }
     }
 
     private void invalidate() {
@@ -915,6 +1245,70 @@ public final class Button implements Component {
         return alpha;
     }
 
+    private static float requirePressedScale(float pressedScale) {
+        if (!Float.isFinite(pressedScale)
+                || pressedScale <= 0f
+                || pressedScale > 1f) {
+            throw new IllegalArgumentException(
+                    "Button pressed scale must be finite and in the "
+                            + "(0, 1] range."
+            );
+        }
+        return pressedScale;
+    }
+
+    private static long requirePressAnimationDuration(long durationMillis) {
+        if (durationMillis < 0L) {
+            throw new IllegalArgumentException(
+                    "Button press animation duration cannot be negative."
+            );
+        }
+        return durationMillis;
+    }
+
+    private static long requireRippleDuration(long durationMillis) {
+        if (durationMillis < 0L) {
+            throw new IllegalArgumentException(
+                    "Button ripple duration cannot be negative."
+            );
+        }
+        return durationMillis;
+    }
+
+    private static float requireRippleRadius(float radius) {
+        if (!Float.isFinite(radius) || radius <= 0f) {
+            throw new IllegalArgumentException(
+                    "Button ripple radius must be positive and finite."
+            );
+        }
+        return radius;
+    }
+
+    private static int resolveThemeRippleColor(Context context) {
+        TypedValue value = new TypedValue();
+        if (!context.getTheme().resolveAttribute(
+                android.R.attr.colorControlHighlight,
+                value,
+                true
+        )) {
+            return FALLBACK_RIPPLE_COLOR;
+        }
+        if (value.type >= TypedValue.TYPE_FIRST_COLOR_INT
+                && value.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+            return value.data;
+        }
+        if (value.resourceId != 0) {
+            try {
+                return context.getResources()
+                        .getColorStateList(value.resourceId, context.getTheme())
+                        .getDefaultColor();
+            } catch (RuntimeException ignored) {
+                // Fall through to the stable library fallback.
+            }
+        }
+        return FALLBACK_RIPPLE_COLOR;
+    }
+
     private static Bitmap createColorBitmap(int color) {
         Bitmap bitmap = Bitmap.createBitmap(
                 1,
@@ -947,6 +1341,28 @@ public final class Button implements Component {
         void onClick(String id);
     }
 
+    public enum RippleOrigin {
+        TOUCH,
+        CENTER
+    }
+
+    private static final class Ripple {
+        final float x;
+        final float y;
+        final float maxRadius;
+        float progress;
+        float opacity = 1f;
+        boolean released;
+        ValueAnimator expansionAnimator;
+        ValueAnimator fadeAnimator;
+
+        Ripple(float x, float y, float maxRadius) {
+            this.x = x;
+            this.y = y;
+            this.maxRadius = maxRadius;
+        }
+    }
+
     public static final class Builder implements ComponentFactory<Button> {
 
         private final Context context;
@@ -974,6 +1390,16 @@ public final class Button implements Component {
         private float cornerRadius;
         private boolean cornerRadiusInPixels;
         private float alpha = 1f;
+        private float pressedScale = DEFAULT_PRESSED_SCALE;
+        private long pressAnimationDuration =
+                DEFAULT_PRESS_ANIMATION_DURATION;
+        private boolean rippleEnabled;
+        private Integer rippleColor;
+        private long rippleDuration = DEFAULT_RIPPLE_DURATION;
+        private RippleOrigin rippleOrigin = RippleOrigin.TOUCH;
+        private float rippleRadius;
+        private boolean rippleRadiusAuto = true;
+        private boolean rippleRadiusInPixels;
         private boolean visible = true;
         private boolean enabled = true;
         private boolean horizontalCentered;
@@ -1342,6 +1768,61 @@ public final class Button implements Component {
 
         public Builder setAlpha(float alpha) {
             this.alpha = requireAlpha(alpha);
+            return this;
+        }
+
+        public Builder setPressedScale(float pressedScale) {
+            this.pressedScale = requirePressedScale(pressedScale);
+            return this;
+        }
+
+        public Builder setPressAnimationDuration(long durationMillis) {
+            pressAnimationDuration =
+                    requirePressAnimationDuration(durationMillis);
+            return this;
+        }
+
+        public Builder setRippleEnabled(boolean enabled) {
+            rippleEnabled = enabled;
+            return this;
+        }
+
+        public Builder setRippleColor(int color) {
+            rippleColor = color;
+            return this;
+        }
+
+        public Builder setRippleDuration(long durationMillis) {
+            rippleDuration = requireRippleDuration(durationMillis);
+            return this;
+        }
+
+        public Builder setRippleOrigin(RippleOrigin origin) {
+            rippleOrigin = Objects.requireNonNull(
+                    origin,
+                    "Ripple origin cannot be null."
+            );
+            return this;
+        }
+
+        public Builder setRippleRadius(float radius) {
+            rippleRadius = requireRippleRadius(radius);
+            rippleRadiusAuto = false;
+            rippleRadiusInPixels = false;
+            return this;
+        }
+
+        public Builder setRippleRadiusPx(float radius) {
+            rippleRadius = requireRippleRadius(radius);
+            rippleRadiusAuto = false;
+            rippleRadiusInPixels = true;
+            return this;
+        }
+
+        public Builder setRippleRadiusAuto() {
+            rippleRadius = 0f;
+            rippleRadiusAuto = true;
+            rippleRadiusInPixels = false;
             return this;
         }
 

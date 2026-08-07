@@ -343,13 +343,62 @@ public final class ButtonTestActivity extends AppCompatActivity {
             button.setBackgroundColor(0xff0057b8);
             button.setBitmap(blueBackground);
 
+            if (Math.abs(
+                    button.getPressedScale()
+                            - Button.DEFAULT_PRESSED_SCALE
+            ) > 0.0001f
+                    || button.getPressAnimationDuration()
+                    != Button.DEFAULT_PRESS_ANIMATION_DURATION
+                    || button.isRippleEnabled()
+                    || button.getRippleDuration()
+                    != Button.DEFAULT_RIPPLE_DURATION
+                    || button.getRippleOrigin()
+                    != Button.RippleOrigin.TOUCH
+                    || !button.isRippleRadiusAuto()) {
+                throw new AssertionError(
+                        "Button default touch animation state is invalid."
+                );
+            }
+            button.setPressedScale(0.88f)
+                    .setPressAnimationDuration(0L)
+                    .setRippleEnabled(true)
+                    .setRippleColor(0x33ffffff)
+                    .setRippleDuration(320L)
+                    .setRippleOrigin(Button.RippleOrigin.CENTER)
+                    .setRippleRadius(120f);
+            if (!button.isRippleEnabled()
+                    || button.getRippleColor() != 0x33ffffff
+                    || button.getRippleDuration() != 320L
+                    || button.getRippleOrigin()
+                    != Button.RippleOrigin.CENTER
+                    || button.isRippleRadiusAuto()
+                    || button.isRippleRadiusInPixels()
+                    || Math.abs(button.getRippleRadius() - 120f) > 0.0001f
+                    || button.getResolvedRippleRadius() <= 0f) {
+                throw new AssertionError(
+                        "Button ripple configuration was not retained."
+                );
+            }
+
             int[] syntheticClicks = {0};
             button.setOnClickListener(id -> syntheticClicks[0]++);
             float centerX = button.getBounds().centerX();
             float centerY = button.getBounds().centerY();
             dispatch(button, MotionEvent.ACTION_DOWN, centerX, centerY);
+            if (!button.isPressed()
+                    || Math.abs(
+                    button.getCurrentPressedScale() - 0.88f
+            ) > 0.0001f) {
+                throw new AssertionError(
+                        "Button did not enter its pressed scale."
+                );
+            }
             dispatch(button, MotionEvent.ACTION_UP, centerX, centerY);
-            if (syntheticClicks[0] != 1) {
+            if (syntheticClicks[0] != 1
+                    || button.isPressed()
+                    || Math.abs(
+                    button.getCurrentPressedScale() - 1f
+            ) > 0.0001f) {
                 throw new AssertionError("Button did not dispatch one valid click.");
             }
 
@@ -366,6 +415,13 @@ public final class ButtonTestActivity extends AppCompatActivity {
                         "Button click was not cancelled after moving outside."
                 );
             }
+            button.setPressedScale(Button.DEFAULT_PRESSED_SCALE)
+                    .setPressAnimationDuration(
+                            Button.DEFAULT_PRESS_ANIMATION_DURATION
+                    )
+                    .setRippleRadiusPx(90f)
+                    .setRippleRadiusAuto()
+                    .setRippleEnabled(false);
             button.setOnClickListener(this::onButtonClick);
         }
 

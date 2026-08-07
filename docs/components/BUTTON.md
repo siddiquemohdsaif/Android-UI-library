@@ -32,11 +32,48 @@ Button play = content.add(new Button.Builder(
         .setTextColor(Color.WHITE)
         .setFont(NativeFonts.INTER)
         .setFontVariations(FontVariation.BOLD)
+        .setPressedScale(0.92f)
+        .setPressAnimationDuration(100L)
         .setOnClickListener(id -> startGame()));
 ```
 
 `Position + Size` values and unsuffixed visual dimensions are Figma-space
 measurements. They scale from the captured `FigmaConfig`.
+
+Every Button shrinks by 8% while pressed by default. In other words, the
+default pressed scale is `0.92f` with a `100 ms` down/up animation. Override
+either value when a different interaction is needed:
+
+```java
+.setPressedScale(0.88f)
+.setPressAnimationDuration(140L)
+```
+
+Use `1f` to disable shrinking while retaining normal click handling.
+
+Ripple is separate from shrinking and is disabled by default. Enable the
+bounded Android-style wave explicitly:
+
+```java
+.setRippleEnabled(true)
+.setRippleColor(0x33ffffff)
+.setRippleDuration(320L)
+.setRippleOrigin(Button.RippleOrigin.TOUCH)
+.setRippleRadiusAuto()
+```
+
+The wave is drawn above the background Image and below the Text. It is clipped
+by the Button region and rounded corners. Automatic radius reaches the
+farthest corner from the selected origin. A released or cancelled ripple
+finishes with a fade, and rapid presses may overlap naturally.
+
+Use a fixed radius when required by the design:
+
+```java
+.setRippleRadius(180f)       // Figma units
+.setRippleRadiusPx(180f)     // exact runtime pixels
+.setRippleOrigin(Button.RippleOrigin.CENTER)
+```
 
 Use runtime-pixel bounds instead:
 
@@ -239,6 +276,13 @@ Button configuration:
 .verticalCenter(true)
 .setCornerRadius(36f)
 .setCornerRadiusPx(24f)
+.setPressedScale(0.92f)
+.setPressAnimationDuration(100L)
+.setRippleEnabled(true)
+.setRippleColor(0x33ffffff)
+.setRippleDuration(320L)
+.setRippleOrigin(Button.RippleOrigin.TOUCH)
+.setRippleRadiusAuto()
 .setAlpha(0.8f)
 .setVisible(true)
 .setEnabled(true)
@@ -286,6 +330,18 @@ button.getTextInsets();
 button.areTextInsetsInPixels();
 button.getFigmaConfig();
 button.getAlpha();
+button.getPressedScale();
+button.getCurrentPressedScale();
+button.getPressAnimationDuration();
+button.isPressed();
+button.isRippleEnabled();
+button.getRippleColor();
+button.getRippleDuration();
+button.getRippleOrigin();
+button.getRippleRadius();
+button.getResolvedRippleRadius();
+button.isRippleRadiusAuto();
+button.isRippleRadiusInPixels();
 button.getCornerRadius();
 button.getResolvedCornerRadius();
 button.isCornerRadiusInPixels();
@@ -313,6 +369,15 @@ button.setImageScaleType(Image.ScaleType.CENTER_CROP);
 button.setFilterBitmap(true);
 button.setCornerRadius(36f);
 button.setCornerRadiusPx(24f);
+button.setPressedScale(0.92f);
+button.setPressAnimationDuration(100L);
+button.setRippleEnabled(true);
+button.setRippleColor(0x33ffffff);
+button.setRippleDuration(320L);
+button.setRippleOrigin(Button.RippleOrigin.TOUCH);
+button.setRippleRadius(180f);
+button.setRippleRadiusPx(180f);
+button.setRippleRadiusAuto();
 
 button.setTextSize(60f);
 button.setTextSizePx(44f);
@@ -373,8 +438,11 @@ void release() {
 }
 ```
 
-A click fires only when down and up happen inside the button. Moving outside or
-receiving `ACTION_CANCEL` permanently cancels that gesture. Hidden, disabled,
+A click fires only when down and up happen inside the button. `ACTION_DOWN`
+animates the complete Button—Image, Text, and clipping—toward its pressed
+scale around the Button center. `ACTION_UP`, moving outside, disabling,
+hiding, removing the listener, or receiving `ACTION_CANCEL` animates it back
+to `1f`. Moving outside permanently cancels that gesture. Hidden, disabled,
 or listener-free buttons ignore touch.
 
 Releasing the button releases its private components but never recycles the
@@ -392,4 +460,8 @@ The API rejects:
 - supplied Text outside supplied Image;
 - child components already owned by a different host;
 - alpha outside `0..1`;
+- pressed scale outside `(0, 1]`;
+- negative press-animation duration;
+- non-positive or non-finite ripple radius;
+- negative ripple duration;
 - text runtime styling when the button currently has no Text.

@@ -5,17 +5,21 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.RectF;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.ogfa.nativeviews.button.Button;
 import com.ogfa.nativeviews.card.Card;
 import com.ogfa.nativeviews.card.DropShadow;
 import com.ogfa.nativeviews.component.FigmaConfig;
@@ -95,11 +99,17 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
         private Bitmap backgroundBitmap;
         private Bitmap logoBitmap;
         private Bitmap brandNameBitmap;
+        private Bitmap cardTitleBitmap;
+        private Bitmap cardDescriptionBitmap;
+        private Bitmap securityLockBitmap;
+        private Bitmap securityMessageBitmap;
+        private Bitmap nextButtonBitmap;
         private boolean initialized;
 
         FigmaUiCloneView(Context context) {
             super(context);
             setBackgroundColor(0xffffffff);
+            setClickable(true);
         }
 
         @Override
@@ -125,6 +135,11 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
             backgroundBitmap = loadBitmap("background.webp");
             logoBitmap = loadBitmap("logo.webp");
             brandNameBitmap = loadBitmap("brand_name.webp");
+            cardTitleBitmap = loadBitmap("card_title.webp");
+            cardDescriptionBitmap = loadBitmap("card_description.webp");
+            securityLockBitmap = loadBitmap("security_lock_icon.webp");
+            securityMessageBitmap = loadBitmap("security_message.webp");
+            nextButtonBitmap = loadBitmap("next_button.png");
 
             Position backgroundPosition = new Position(
                     this,
@@ -223,7 +238,7 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                     0f,
                     163f
             );
-            cardLayer.add(new Card.Builder(
+            Card phoneNumberCard = cardLayer.add(new Card.Builder(
                     getContext(),
                     "phone_number_card",
                     cardPosition,
@@ -239,6 +254,140 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                             4f,
                             Color.argb(13, 0, 0, 0)
                     )));
+
+            addCenteredCardImage(
+                    phoneNumberCard,
+                    "card_title",
+                    cardTitleBitmap,
+                    902f,
+                    529f,
+                    46f
+            );
+            addCenteredCardImage(
+                    phoneNumberCard,
+                    "card_description",
+                    cardDescriptionBitmap,
+                    799f,
+                    398f,
+                    76f
+            );
+            addCardImage(
+                    phoneNumberCard,
+                    "security_lock_icon",
+                    securityLockBitmap,
+                    165f,
+                    426.591f,
+                    25f,
+                    28.409f
+            );
+            addCardImage(
+                    phoneNumberCard,
+                    "security_message",
+                    securityMessageBitmap,
+                    204f,
+                    425f,
+                    465f,
+                    33f
+            );
+            addCardRelativeButton(
+                    phoneNumberCard,
+                    "next_button",
+                    nextButtonBitmap,
+                    1f,
+                    621f,
+                    740f,
+                    148f
+            );
+        }
+
+        private void addCardRelativeButton(
+                Card card,
+                String id,
+                Bitmap bitmap,
+                float relativeLeft,
+                float relativeTop,
+                float width,
+                float height
+        ) {
+            float scale = figmaConfig.getScale(getWidth());
+            RectF cardBounds = card.getBounds();
+            float left = cardBounds.left + relativeLeft * scale;
+            float top = cardBounds.top + relativeTop * scale;
+            RectF bounds = new RectF(
+                    left,
+                    top,
+                    left + width * scale,
+                    top + height * scale
+            );
+            card.getContentLayer().add(new Button.Builder(
+                    getContext(),
+                    id,
+                    bitmap,
+                    bounds
+            )
+                    .setImageScaleType(Image.ScaleType.FIT_XY)
+                    .setRippleEnabled(true)
+                    .setRippleColor(0x33ffffff)
+                    .setRippleDuration(320L)
+                    .setRippleOrigin(Button.RippleOrigin.TOUCH)
+                    .setOnClickListener(buttonId -> Toast.makeText(
+                            getContext(),
+                            "Next clicked",
+                            Toast.LENGTH_SHORT
+                    ).show()));
+        }
+
+        private void addCardImage(
+                Card card,
+                String id,
+                Bitmap bitmap,
+                float left,
+                float bottomMargin,
+                float width,
+                float height
+        ) {
+            Position position = new Position(
+                    this,
+                    figmaConfig,
+                    Position.HorizontalMarginFrom.LEFT,
+                    Position.VerticalMarginFrom.BOTTOM,
+                    left,
+                    bottomMargin
+            );
+            card.getContentLayer().add(new Image.Builder(
+                    getContext(),
+                    id,
+                    bitmap,
+                    position,
+                    new Size(width, height)
+            ).setScaleType(Image.ScaleType.FIT_XY));
+        }
+
+        private void addCenteredCardImage(
+                Card card,
+                String id,
+                Bitmap bitmap,
+                float bottomMargin,
+                float width,
+                float height
+        ) {
+            Position position = new Position(
+                    this,
+                    figmaConfig,
+                    Position.HorizontalMarginFrom.LEFT,
+                    Position.VerticalMarginFrom.BOTTOM,
+                    0f,
+                    bottomMargin
+            );
+            card.getContentLayer().add(new Image.Builder(
+                    getContext(),
+                    id,
+                    bitmap,
+                    position,
+                    new Size(width, height)
+            )
+                    .setScaleType(Image.ScaleType.FIT_XY)
+                    .horizontalCenter(true));
         }
 
         private void addCenteredTagline(
@@ -325,6 +474,11 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
             ui.draw(canvas);
         }
 
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            return ui.onTouchEvent(event) || super.onTouchEvent(event);
+        }
+
         void release() {
             ui.release();
             recycleBitmaps();
@@ -349,6 +503,36 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                     brandNameBitmap.recycle();
                 }
                 brandNameBitmap = null;
+            }
+            if (cardTitleBitmap != null) {
+                if (!cardTitleBitmap.isRecycled()) {
+                    cardTitleBitmap.recycle();
+                }
+                cardTitleBitmap = null;
+            }
+            if (cardDescriptionBitmap != null) {
+                if (!cardDescriptionBitmap.isRecycled()) {
+                    cardDescriptionBitmap.recycle();
+                }
+                cardDescriptionBitmap = null;
+            }
+            if (securityLockBitmap != null) {
+                if (!securityLockBitmap.isRecycled()) {
+                    securityLockBitmap.recycle();
+                }
+                securityLockBitmap = null;
+            }
+            if (securityMessageBitmap != null) {
+                if (!securityMessageBitmap.isRecycled()) {
+                    securityMessageBitmap.recycle();
+                }
+                securityMessageBitmap = null;
+            }
+            if (nextButtonBitmap != null) {
+                if (!nextButtonBitmap.isRecycled()) {
+                    nextButtonBitmap.recycle();
+                }
+                nextButtonBitmap = null;
             }
         }
     }
