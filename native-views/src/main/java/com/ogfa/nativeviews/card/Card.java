@@ -23,10 +23,14 @@ import com.ogfa.nativeviews.zlayer.ZLayer;
 import com.ogfa.nativeviews.zlayer.ZLayerOwner;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
- * A rounded background and drop-shadow container with one nested ZLayer.
+ * A rounded background and drop-shadow container with nested ZLayers.
  */
 public final class Card implements Component {
 
@@ -76,6 +80,28 @@ public final class Card implements Component {
         @Override
         public void invalidateLayer() {
             invalidate();
+        }
+
+        @Override
+        public boolean ownsLayerTranslation() {
+            return true;
+        }
+
+        @Override
+        public void setOwnedLayerTranslation(float x, float y) {
+            translationX = x;
+            translationY = y;
+            invalidate();
+        }
+
+        @Override
+        public float getOwnedLayerTranslationX() {
+            return translationX;
+        }
+
+        @Override
+        public float getOwnedLayerTranslationY() {
+            return translationY;
         }
     };
 
@@ -135,11 +161,15 @@ public final class Card implements Component {
         }
     };
 
+    private final ArrayList<ZLayer> contentLayers = new ArrayList<>();
+    private final Map<String, ZLayer> contentLayersById =
+            new LinkedHashMap<>();
     private final ZLayer contentLayer;
 
     private ComponentHost owner;
     private NestedComponentHost rootHost;
     private Component touchTarget;
+    private ZLayer touchLayer;
     private boolean blockedTouch;
     private BackgroundType backgroundType;
     private int backgroundColor;
@@ -157,6 +187,8 @@ public final class Card implements Component {
     private boolean enabled;
     private boolean horizontalCentered;
     private boolean verticalCentered;
+    private float translationX;
+    private float translationY;
     private boolean released;
 
     private Card(Builder builder, View hostView) {
@@ -165,7 +197,7 @@ public final class Card implements Component {
                 "Host view cannot be null."
         );
         id = requireId(builder.id);
-        contentLayer = new ZLayer(contentOwner, id + ":content");
+        contentLayer = addContentLayerInternal("content");
         backgroundType = builder.backgroundType;
         backgroundColor = builder.backgroundColor;
         backgroundImage = builder.backgroundImage;
@@ -191,23 +223,39 @@ public final class Card implements Component {
 
     @Override
     public RectF getBounds() {
-        return new RectF(bounds);
+        return offsetCopy(bounds, translationX, translationY);
     }
 
     public RectF getVisualBounds() {
-        return new RectF(visualBounds);
+        return offsetCopy(visualBounds, translationX, translationY);
     }
 
     /**
      * Returns the complete clipping region owned by the content ZLayer.
      */
     public RectF getContentBounds() {
-        return new RectF(bounds);
+        return offsetCopy(bounds, translationX, translationY);
     }
 
     public ZLayer getContentLayer() {
         ensureActive();
         return contentLayer;
+    }
+
+    public ZLayer addContentLayer(String layerId) {
+        ensureActive();
+        return addContentLayerInternal(layerId);
+    }
+
+    public ZLayer findContentLayer(String layerId) {
+        ensureActive();
+        if (layerId == null) return null;
+        return contentLayersById.get(layerId.trim());
+    }
+
+    public List<ZLayer> getContentLayers() {
+        ensureActive();
+        return Collections.unmodifiableList(contentLayers);
     }
 
     public BackgroundType getBackgroundType() {
@@ -456,6 +504,8 @@ public final class Card implements Component {
         Objects.requireNonNull(canvas, "Canvas cannot be null.");
         if (!visible || released || alpha <= 0f) return;
 
+        int translationSave = canvas.save();
+        canvas.translate(translationX, translationY);
         int compositeSave = alpha < 1f
                 ? canvas.saveLayerAlpha(
                         visualBounds,
@@ -472,14 +522,25 @@ public final class Card implements Component {
             canvas.clipRect(bounds);
         }
         drawBackground(canvas);
-        contentLayer.draw(canvas);
+        for (ZLayer layer : contentLayers) layer.draw(canvas);
         canvas.restoreToCount(cardSave);
         canvas.restoreToCount(compositeSave);
+        canvas.restoreToCount(translationSave);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         Objects.requireNonNull(event, "MotionEvent cannot be null.");
+        MotionEvent localEvent = MotionEvent.obtain(event);
+        localEvent.offsetLocation(-translationX, -translationY);
+        try {
+            return onLocalTouchEvent(localEvent);
+        } finally {
+            localEvent.recycle();
+        }
+    }
+
+    private boolean onLocalTouchEvent(MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 cancelTouch();
@@ -487,10 +548,26 @@ public final class Card implements Component {
                         || !bounds.contains(event.getX(), event.getY())) {
                     return false;
                 }
-                touchTarget = contentLayer.dispatchDown(event);
-                if (touchTarget != null) return true;
-                blockedTouch = contentLayer.getTouchPolicy()
-                        != ZLayer.TouchPolicy.PASS_THROUGH;
+                for (int i = contentLayers.size() - 1; i >= 0; i--) {
+                    ZLayer layer = contentLayers.get(i);
+                    touchTarget = layer.dispatchDown(event);
+                    if (touchTarget != null) {
+                        touchLayer = layer;
+                        return true;
+                    }
+                    if (layer.isVisible() && layer.isEnabled()
+                            && (layer.getTouchPolicy()
+                            == ZLayer.TouchPolicy.MODAL
+                            || (layer.getTouchPolicy()
+                            == ZLayer.TouchPolicy.BLOCK_BELOW
+                            && layer.containsPoint(
+                            event.getX(),
+                            event.getY()
+                    )))) {
+                        blockedTouch = true;
+                        return true;
+                    }
+                }
                 return blockedTouch;
             case MotionEvent.ACTION_MOVE:
             case MotionEvent.ACTION_UP:
@@ -501,9 +578,12 @@ public final class Card implements Component {
                     return true;
                 }
                 if (touchTarget == null) return false;
-                boolean handled = touchTarget.onTouchEvent(event);
+                boolean handled = touchLayer == null
+                        ? touchTarget.onTouchEvent(event)
+                        : touchLayer.dispatchTo(touchTarget, event);
                 if (event.getActionMasked() == MotionEvent.ACTION_UP) {
                     touchTarget = null;
+                    touchLayer = null;
                 }
                 return handled;
             case MotionEvent.ACTION_CANCEL:
@@ -535,10 +615,12 @@ public final class Card implements Component {
 
         ArrayList<Component> registered = new ArrayList<>();
         try {
-            for (Component component : contentLayer.getComponents()) {
-                rootHost.registerNestedComponent(component);
-                registered.add(component);
-                component.attach(childHost);
+            for (ZLayer layer : contentLayers) {
+                for (Component component : layer.getComponents()) {
+                    rootHost.registerNestedComponent(component);
+                    registered.add(component);
+                    component.attach(childHost);
+                }
             }
         } catch (RuntimeException exception) {
             for (Component component : registered) {
@@ -554,7 +636,11 @@ public final class Card implements Component {
     public void release() {
         if (released) return;
         cancelTouch();
-        contentLayer.clear();
+        for (ZLayer layer : new ArrayList<>(contentLayers)) {
+            layer.clear();
+        }
+        contentLayers.clear();
+        contentLayersById.clear();
         released = true;
         owner = null;
         rootHost = null;
@@ -575,6 +661,23 @@ public final class Card implements Component {
             }
             throw exception;
         }
+    }
+
+    private ZLayer addContentLayerInternal(String layerId) {
+        String normalizedId = requireLayerId(layerId);
+        if (contentLayersById.containsKey(normalizedId)) {
+            throw new IllegalArgumentException(
+                    "Duplicate Card content layer ID: " + normalizedId
+            );
+        }
+        ZLayer layer = new ZLayer(
+                contentOwner,
+                id + ":" + normalizedId
+        );
+        contentLayers.add(layer);
+        contentLayersById.put(normalizedId, layer);
+        invalidate();
+        return layer;
     }
 
     private void resolveRegion(
@@ -743,10 +846,15 @@ public final class Card implements Component {
                     0f,
                     0
             );
-            touchTarget.onTouchEvent(cancel);
+            if (touchLayer == null) {
+                touchTarget.onTouchEvent(cancel);
+            } else {
+                touchLayer.dispatchTo(touchTarget, cancel);
+            }
             cancel.recycle();
             touchTarget = null;
         }
+        touchLayer = null;
     }
 
     private void invalidate() {
@@ -766,6 +874,21 @@ public final class Card implements Component {
             );
         }
         return id.trim();
+    }
+
+    private static String requireLayerId(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Card content layer ID cannot be null or blank."
+            );
+        }
+        return id.trim();
+    }
+
+    private static RectF offsetCopy(RectF source, float dx, float dy) {
+        RectF result = new RectF(source);
+        result.offset(dx, dy);
+        return result;
     }
 
     private static Bitmap requireBitmap(Bitmap bitmap) {

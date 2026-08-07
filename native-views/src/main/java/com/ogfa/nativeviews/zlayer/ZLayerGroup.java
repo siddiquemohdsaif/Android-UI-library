@@ -28,6 +28,7 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
     private final Map<String, Component> componentsById = new LinkedHashMap<>();
     private final TextInputCoordinator textInput;
     private Component touchTarget;
+    private ZLayer touchLayer;
     private boolean blockedGesture;
     private boolean autoInvalidate = true;
     private boolean released;
@@ -132,7 +133,10 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
             for (int i = layers.size() - 1; i >= 0; i--) {
                 ZLayer layer = layers.get(i);
                 touchTarget = layer.dispatchDown(event);
-                if (touchTarget != null) return true;
+                if (touchTarget != null) {
+                    touchLayer = layer;
+                    return true;
+                }
                 if (layer.isVisible() && layer.isEnabled()
                         && (layer.getTouchPolicy() == ZLayer.TouchPolicy.MODAL
                         || (layer.getTouchPolicy() == ZLayer.TouchPolicy.BLOCK_BELOW
@@ -153,10 +157,13 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         }
         if (touchTarget == null) return false;
         Component target = touchTarget;
-        boolean handled = target.onTouchEvent(event);
+        boolean handled = touchLayer == null
+                ? target.onTouchEvent(event)
+                : touchLayer.dispatchTo(target, event);
         if (event.getActionMasked() == MotionEvent.ACTION_UP
                 || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
             touchTarget = null;
+            touchLayer = null;
         }
         return handled;
     }
@@ -258,10 +265,15 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
             long now = android.os.SystemClock.uptimeMillis();
             MotionEvent cancel = MotionEvent.obtain(now, now,
                     MotionEvent.ACTION_CANCEL, 0f, 0f, 0);
-            touchTarget.onTouchEvent(cancel);
+            if (touchLayer == null) {
+                touchTarget.onTouchEvent(cancel);
+            } else {
+                touchLayer.dispatchTo(touchTarget, cancel);
+            }
             cancel.recycle();
             touchTarget = null;
         }
+        touchLayer = null;
     }
     private ZLayer requireLayer(String id) {
         ZLayer layer = layersById.get(id);

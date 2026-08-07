@@ -1,19 +1,29 @@
 package app.builderx.ogfa.androiduicomponents;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
+import android.text.InputType;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsAnimation;
+import android.view.animation.DecelerateInterpolator;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
@@ -29,17 +39,16 @@ import com.ogfa.nativeviews.font.NativeFonts;
 import com.ogfa.nativeviews.image.Image;
 import com.ogfa.nativeviews.text.FontVariation;
 import com.ogfa.nativeviews.text.Text;
+import com.ogfa.nativeviews.textfield.TextField;
 import com.ogfa.nativeviews.zlayer.ZLayer;
 import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 /**
- * First incremental clone test for the extracted PingGo Figma login page.
- *
- * <p>This step intentionally renders only the background and bottom legal
- * terms asset in one ZLayer.</p>
+ * Native Canvas clone test for the extracted PingGo Figma login page.
  */
 public final class FigmaUiCloneTest1 extends AppCompatActivity {
 
@@ -89,12 +98,17 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
 
         private static final String ASSET_ROOT =
                 "figma/figma_login_page_1/";
+        private static final long PAN_ANIMATION_DURATION_MS = 220L;
 
         private final FigmaConfig figmaConfig =
                 new FigmaConfig(FIGMA_REFERENCE_WIDTH);
         private final ZLayerGroup ui = new ZLayerGroup(this);
         private final ZLayer backgroundLayer = ui.addLayer("background");
         private final ZLayer cardLayer = ui.addLayer("card");
+        private final Rect visibleWindow = new Rect();
+        private final int[] locationOnScreen = new int[2];
+        private final ViewTreeObserver.OnGlobalLayoutListener
+                globalLayoutListener = this::updateImeInsetFromVisibleWindow;
 
         private Bitmap backgroundBitmap;
         private Bitmap logoBitmap;
@@ -104,12 +118,52 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
         private Bitmap securityLockBitmap;
         private Bitmap securityMessageBitmap;
         private Bitmap nextButtonBitmap;
+        private Bitmap phoneLabelBackgroundBitmap;
+        private Bitmap phoneDividerBitmap;
+        private ZLayer cardContentLayer;
         private boolean initialized;
+        private int imeInsetBottom;
+        private float phoneFieldTranslationY;
+        private float panTargetY;
+        private ValueAnimator panAnimator;
 
         FigmaUiCloneView(Context context) {
             super(context);
             setBackgroundColor(0xffffffff);
             setClickable(true);
+            setFocusable(true);
+            setFocusableInTouchMode(true);
+            getViewTreeObserver().addOnGlobalLayoutListener(
+                    globalLayoutListener
+            );
+            setOnApplyWindowInsetsListener((view, insets) -> {
+                updateImeInsetFromWindowInsets(insets);
+                return insets;
+            });
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                setWindowInsetsAnimationCallback(
+                        new WindowInsetsAnimation.Callback(
+                                WindowInsetsAnimation.Callback
+                                        .DISPATCH_MODE_CONTINUE_ON_SUBTREE
+                        ) {
+                            @Override
+                            public WindowInsets onProgress(
+                                    WindowInsets insets,
+                                    List<WindowInsetsAnimation>
+                                            runningAnimations
+                            ) {
+                                updateImeInsetFromWindowInsets(insets);
+                                return insets;
+                            }
+                        }
+                );
+            }
+        }
+
+        @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            requestApplyInsets();
         }
 
         @Override
@@ -130,6 +184,7 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
         private void buildBackgroundLayer() {
             cardLayer.clear();
             backgroundLayer.clear();
+            cardContentLayer = null;
             recycleBitmaps();
 
             backgroundBitmap = loadBitmap("background.webp");
@@ -140,6 +195,10 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
             securityLockBitmap = loadBitmap("security_lock_icon.webp");
             securityMessageBitmap = loadBitmap("security_message.webp");
             nextButtonBitmap = loadBitmap("next_button.png");
+            phoneLabelBackgroundBitmap = createColorBitmap(Color.WHITE);
+            phoneDividerBitmap = createColorBitmap(
+                    Color.parseColor("#DDE3EA")
+            );
 
             Position backgroundPosition = new Position(
                     this,
@@ -255,6 +314,8 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                             Color.argb(13, 0, 0, 0)
                     )));
 
+            cardContentLayer = phoneNumberCard.getContentLayer();
+
             addCenteredCardImage(
                     phoneNumberCard,
                     "card_title",
@@ -271,6 +332,7 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                     398f,
                     76f
             );
+            addPhoneNumberField(phoneNumberCard, cardContentLayer);
             addCardImage(
                     phoneNumberCard,
                     "security_lock_icon",
@@ -298,6 +360,141 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                     740f,
                     148f
             );
+        }
+
+        private void addPhoneNumberField(Card card, ZLayer fieldLayer) {
+            float cardDesignLeft = card.getBounds().left
+                    / figmaConfig.getScale(getWidth());
+            float cardDesignTop = card.getBounds().top
+                    / figmaConfig.getScale(getWidth());
+
+            Position fieldPosition = absoluteCardPosition(
+                    cardDesignLeft,
+                    cardDesignTop,
+                    50f,
+                    405f
+            );
+            fieldLayer.add(new TextField.Builder(
+                    getContext(),
+                    "phone_number",
+                    fieldPosition,
+                    new Size(642f, 116f)
+            )
+//                    .setText("98765 43210")
+                    .setHint("98765 43210")
+                    .setMaxLength(14)
+                    .setInputType(InputType.TYPE_CLASS_PHONE)
+                    .setImeOptions(EditorInfo.IME_ACTION_DONE)
+                    .setFont(NativeFonts.INTER)
+                    .setFontVariations(FontVariation.REGULAR)
+                    .setTextSize(29f)
+                    .setTextColor(Color.parseColor("#000E1A"))
+                    .setHintColor(Color.parseColor("#757575"))
+                    .setCursorColor(Color.parseColor("#019CC4"))
+                    .setCursorWidth(4f)
+                    .setSelectionColor(0x443b9cff)
+                    .setBackgroundColor(Color.WHITE, Color.WHITE)
+                    .setStrokeColor(
+                            Color.parseColor("#DDE3EA"),
+                            Color.parseColor("#019CC4")
+                    )
+                    .setStrokeWidth(3.5f)
+                    .setCornerRadius(20f)
+                    .setPadding(155f, 18f)
+                    .setOnFocusChangedListener((id, focused) ->
+                            post(this::updateCanvasTranslation)));
+
+            fieldLayer.add(new Image.Builder(
+                    getContext(),
+                    "phone_number_divider",
+                    phoneDividerBitmap,
+                    absoluteCardPosition(
+                            cardDesignLeft,
+                            cardDesignTop,
+                            154f,
+                            441f
+                    ),
+                    new Size(3f, 44f)
+            ).setScaleType(Image.ScaleType.FIT_XY));
+
+            fieldLayer.add(new Text.Builder(
+                    getContext(),
+                    "phone_country_code",
+                    " +91",
+                    absoluteCardPosition(
+                            cardDesignLeft,
+                            cardDesignTop,
+                            70f,
+                            429f
+                    ),
+                    new Size(75f, 68f)
+            )
+                    .setFont(NativeFonts.INTER)
+                    .setFontVariations(FontVariation.REGULAR)
+                    .setTextSize(29f)
+                    .setTextColor(Color.parseColor("#000E1A"))
+                    .setAlignment(Text.Alignment.START)
+                    .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+                    .setWrapEnabled(false));
+
+            fieldLayer.add(new Image.Builder(
+                    getContext(),
+                    "phone_number_label_background",
+                    phoneLabelBackgroundBitmap,
+                    absoluteCardPosition(
+                            cardDesignLeft,
+                            cardDesignTop,
+                            70f,
+                            391f
+                    ),
+                    new Size(180f, 30f)
+            ).setScaleType(Image.ScaleType.FIT_XY));
+
+            fieldLayer.add(new Text.Builder(
+                    getContext(),
+                    "phone_number_label",
+                    "Phone number",
+                    absoluteCardPosition(
+                            cardDesignLeft,
+                            cardDesignTop,
+                            78f,
+                            386f
+                    ),
+                    new Size(185f, 40f)
+            )
+                    .setFont(NativeFonts.INTER)
+                    .setFontVariations(FontVariation.REGULAR)
+                    .setTextSize(24f)
+                    .setTextColor(Color.parseColor("#019CC4"))
+                    .setAlignment(Text.Alignment.START)
+                    .setVerticalAlignment(Text.VerticalAlignment.CENTER)
+                    .setWrapEnabled(false));
+        }
+
+        private Position absoluteCardPosition(
+                float cardDesignLeft,
+                float cardDesignTop,
+                float relativeLeft,
+                float relativeTop
+        ) {
+            return new Position(
+                    this,
+                    figmaConfig,
+                    Position.HorizontalMarginFrom.LEFT,
+                    Position.VerticalMarginFrom.TOP,
+                    cardDesignLeft + relativeLeft,
+                    cardDesignTop + relativeTop
+            );
+        }
+
+        private static Bitmap createColorBitmap(int color) {
+            Bitmap bitmap = Bitmap.createBitmap(
+                    1,
+                    1,
+                    Bitmap.Config.ARGB_8888
+            );
+            bitmap.eraseColor(color);
+            return bitmap;
         }
 
         private void addCardRelativeButton(
@@ -479,7 +676,124 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
             return ui.onTouchEvent(event) || super.onTouchEvent(event);
         }
 
+        @Override
+        public boolean onCheckIsTextEditor() {
+            return ui.onCheckIsTextEditor();
+        }
+
+        @Override
+        public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+            InputConnection connection = ui.onCreateInputConnection(outAttrs);
+            return connection != null
+                    ? connection
+                    : super.onCreateInputConnection(outAttrs);
+        }
+
+        @Override
+        public boolean onKeyDown(int keyCode, KeyEvent event) {
+            return ui.onKeyDown(keyCode, event)
+                    || super.onKeyDown(keyCode, event);
+        }
+
+        private void updateImeInsetFromWindowInsets(WindowInsets insets) {
+            int inset;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                inset = insets.getInsets(WindowInsets.Type.ime()).bottom;
+            } else {
+                int systemBottom = insets.getSystemWindowInsetBottom();
+                int stableBottom = insets.getStableInsetBottom();
+                inset = Math.max(0, systemBottom - stableBottom);
+            }
+            setImeInsetBottom(inset);
+        }
+
+        private void updateImeInsetFromVisibleWindow() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowInsets rootInsets = getRootWindowInsets();
+                if (rootInsets != null) {
+                    updateImeInsetFromWindowInsets(rootInsets);
+                }
+                return;
+            }
+            getWindowVisibleDisplayFrame(visibleWindow);
+            getLocationOnScreen(locationOnScreen);
+            int visibleBottomInView = visibleWindow.bottom
+                    - locationOnScreen[1];
+            int obscuredHeight = Math.max(
+                    0,
+                    getHeight() - visibleBottomInView
+            );
+            int detectedInset = obscuredHeight > getHeight() * 0.15f
+                    ? obscuredHeight
+                    : 0;
+            setImeInsetBottom(detectedInset);
+        }
+
+        private void setImeInsetBottom(int insetBottom) {
+            int safeInset = Math.max(0, insetBottom);
+            if (imeInsetBottom == safeInset) return;
+            imeInsetBottom = safeInset;
+            post(this::updateCanvasTranslation);
+        }
+
+        private void updateCanvasTranslation() {
+            TextField focusedField = ui.getFocusedTextField();
+            float target = 0f;
+            if (focusedField != null && imeInsetBottom > 0) {
+                RectF fieldBounds = focusedField.getBounds();
+                float safeGap = 24f * figmaConfig.getScale(getWidth());
+                float visibleBottom = getHeight()
+                        - imeInsetBottom
+                        - safeGap;
+                target = Math.min(0f, visibleBottom - fieldBounds.bottom);
+                target = Math.max(target, safeGap - fieldBounds.top);
+            }
+            animateCanvasTranslation(target);
+        }
+
+        private void animateCanvasTranslation(float target) {
+            if (Math.abs(panTargetY - target) < 0.5f
+                    && (panAnimator == null || panAnimator.isRunning())) {
+                return;
+            }
+            panTargetY = target;
+            if (panAnimator != null) panAnimator.cancel();
+            if (Math.abs(phoneFieldTranslationY - target) < 0.5f) {
+                phoneFieldTranslationY = target;
+                if (cardContentLayer != null) {
+                    cardContentLayer.setTranslationY(target);
+                }
+                invalidate();
+                return;
+            }
+            panAnimator = ValueAnimator.ofFloat(
+                    phoneFieldTranslationY,
+                    target
+            );
+            panAnimator.setDuration(PAN_ANIMATION_DURATION_MS);
+            panAnimator.setInterpolator(new DecelerateInterpolator());
+            panAnimator.addUpdateListener(animation -> {
+                phoneFieldTranslationY =
+                        (float) animation.getAnimatedValue();
+                if (cardContentLayer != null) {
+                    cardContentLayer.setTranslationY(
+                            phoneFieldTranslationY
+                    );
+                }
+            });
+            panAnimator.start();
+        }
+
         void release() {
+            if (getViewTreeObserver().isAlive()) {
+                getViewTreeObserver().removeOnGlobalLayoutListener(
+                        globalLayoutListener
+                );
+            }
+            if (panAnimator != null) {
+                panAnimator.cancel();
+                panAnimator = null;
+            }
             ui.release();
             recycleBitmaps();
             initialized = false;
@@ -533,6 +847,18 @@ public final class FigmaUiCloneTest1 extends AppCompatActivity {
                     nextButtonBitmap.recycle();
                 }
                 nextButtonBitmap = null;
+            }
+            if (phoneLabelBackgroundBitmap != null) {
+                if (!phoneLabelBackgroundBitmap.isRecycled()) {
+                    phoneLabelBackgroundBitmap.recycle();
+                }
+                phoneLabelBackgroundBitmap = null;
+            }
+            if (phoneDividerBitmap != null) {
+                if (!phoneDividerBitmap.isRecycled()) {
+                    phoneDividerBitmap.recycle();
+                }
+                phoneDividerBitmap = null;
             }
         }
     }

@@ -13,4 +13,22 @@ public interface ZLayerOwner {
     void registerLayerComponent(Component component);
     void unregisterLayerComponent(Component component);
     void invalidateLayer();
+
+    default boolean ownsLayerTranslation() {
+        return false;
+    }
+
+    default void setOwnedLayerTranslation(float x, float y) {
+        throw new UnsupportedOperationException(
+                "This layer owner does not own translation."
+        );
+    }
+
+    default float getOwnedLayerTranslationX() {
+        return 0f;
+    }
+
+    default float getOwnedLayerTranslationY() {
+        return 0f;
+    }
 }

@@ -1,14 +1,15 @@
 # Card
 
 `Card` is a composite Canvas component with a background, rounded clipping,
-an outside drop shadow, and one privately owned content `ZLayer`.
+an outside drop shadow, and an ordered stack of privately owned content
+`ZLayer`s.
 
 ```text
 Card
 ├── DropShadow
 ├── color or bitmap background
-└── content ZLayer
-    └── any number of mixed Components
+└── content ZLayers (bottom to top)
+    └── any number of mixed Components per layer
 ```
 
 Children are drawn only by Card, but their IDs and nested `TextField` input
@@ -104,6 +105,38 @@ content.add(new Image.Builder(...));
 content.add(new TextField.Builder(...));
 content.add(new Button.Builder(...));
 ```
+
+`getContentLayer()` returns the default layer for compact Cards. Add dedicated
+layers when one group needs independent ordering, touch policy, or visibility:
+
+```java
+ZLayer labels = card.getContentLayer();
+ZLayer fields = card.addContentLayer("fields");
+ZLayer actions = card.addContentLayer("actions");
+
+fields.add(new TextField.Builder(...));
+
+card.findContentLayer("fields");
+card.getContentLayers();
+```
+
+New Card content layers are drawn above earlier layers and checked first for
+touch. All layers remain clipped by the Card's rounded region. Component IDs
+remain globally unique in the root `ZLayerGroup`.
+
+### Card-owned layer translation
+
+A Card and all of its content layers form one composite. Calling translation
+on any Card-owned layer moves the complete Card—not only that layer:
+
+```java
+card.getContentLayer().setTranslationY(keyboardOffsetPx);
+```
+
+This moves the shadow, background, rounded clip, default content layer, and all
+additional content layers together. Root layers outside the Card remain fixed.
+Every Card-owned layer reports the same owner translation through
+`getTranslationX()` and `getTranslationY()`.
 
 The content layer uses the complete card region as its clip. Child regions use
 the normal screen `Position + Size` or `RectF` APIs and must be placed over the
@@ -249,6 +282,9 @@ card.getBounds();
 card.getVisualBounds();
 card.getContentBounds();
 card.getContentLayer();
+card.addContentLayer("fields");
+card.findContentLayer("fields");
+card.getContentLayers();
 
 card.getBackgroundType();
 card.getBackgroundColor();
@@ -288,11 +324,12 @@ The draw order is:
 outside shadow
 rounded Card clip
 background
-content components
+content layers from bottom to top
 ```
 
-On touch, Card asks its content layer for the topmost child. Card retains that
-child as the gesture target through move, up, or cancel. Nested `TextField`
+On touch, Card asks its content layers from top to bottom for the topmost child.
+Card retains both that layer and child as the gesture target through move, up,
+or cancel, applying the Card owner's inverse translation throughout. Nested `TextField`
 instances delegate focus and IME operations to the root `ZLayerGroup`.
 
 Release the root normally:
@@ -301,5 +338,5 @@ Release the root normally:
 ui.release();
 ```
 
-This releases the Card and its complete content layer without recycling
+This releases the Card and all its content layers without recycling
 caller-owned bitmaps.

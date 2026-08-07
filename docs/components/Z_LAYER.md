@@ -95,6 +95,39 @@ ZLayer.TouchPolicy.MODAL
 dialog.setTouchPolicy(ZLayer.TouchPolicy.MODAL);
 ```
 
+## Layer translation
+
+Translate a root-owned layer without moving sibling layers:
+
+```java
+formLayer.setTranslationY(-240f);
+
+formLayer.setTranslationX(40f);
+formLayer.setTranslation(40f, -240f);
+formLayer.resetTranslation();
+```
+
+Layer translation uses runtime pixels because it represents transient render
+state such as keyboard avoidance, scrolling, or drag motion. Drawing and hit
+testing use the same translation. The layer automatically applies inverse
+coordinates to the complete captured gesture, including move, up, and cancel,
+so callers must forward the original `MotionEvent` unchanged.
+
+```java
+ui.onTouchEvent(event); // Do not manually offset for ZLayer translation.
+```
+
+Card-owned layers are the deliberate exception. A Card is one visual and touch
+composite, so translating any of its content layers delegates translation to
+the Card owner. The background, shadow, rounded clip, and every content layer
+move together:
+
+```java
+card.getContentLayer().setTranslationY(-240f);
+```
+
+Sibling root layers outside the Card remain fixed.
+
 ## Shared contract
 
 ```java
@@ -120,6 +153,11 @@ component must implement `Component`/`ComponentFactory` and support
 layer.setVisible(false); // Not drawn or touched.
 layer.setEnabled(false); // Drawn, but not touched.
 layer.setTouchPolicy(ZLayer.TouchPolicy.MODAL);
+layer.setTranslationY(-240f);
+
+layer.getTranslationX();
+layer.getTranslationY();
+layer.resetTranslation();
 
 layer.find("title");
 layer.contains("title");

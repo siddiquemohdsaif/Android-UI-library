@@ -391,21 +391,33 @@ IDs must be unique within a group.
 Returning `true` means the callback handled the action. Unhandled `NEXT` moves to the
 next enabled field in drawing order; unhandled completion actions clear focus.
 
-## Full-Canvas keyboard avoidance
+## Layer-scoped keyboard avoidance
 
-`ZLayerGroup` owns input and focus but does not translate the whole game Canvas.
-The host should observe IME insets, find the focused field with
-`getFocusedField()`, and translate the Canvas so its bounds remain above the keyboard.
-The sample activity demonstrates this pattern for top, middle, and bottom fields.
-
-When the Canvas is translated, translate the touch event back before forwarding it:
+`ZLayerGroup` owns input and focus but does not choose which UI should move for
+the keyboard. For root content, put the field and its related decoration in a
+dedicated `ZLayer`, observe IME insets, and translate that layer:
 
 ```java
-MotionEvent translated = MotionEvent.obtain(event);
-translated.offsetLocation(0f, -canvasTranslationY);
-boolean handled = textFields.onTouchEvent(translated);
-translated.recycle();
+ZLayer fields = ui.addLayer("fields");
+fields.add(new TextField.Builder(...));
+
+fields.setTranslationY(keyboardOffsetPx);
 ```
+
+The root Canvas and sibling root layers remain fixed. `ZLayer` applies inverse touch
+coordinates internally, so forward the original event:
+
+```java
+boolean handled = ui.onTouchEvent(event);
+```
+
+Translate the root Canvas only when the intended design explicitly requires
+the complete scene to move.
+
+For a TextField inside a Card, translating its Card-owned content layer moves
+the complete Card composite, including its background, shadow, and all internal
+layers. This preserves Card ownership and clipping while sibling root layers
+remain fixed.
 
 ## Test activity
 

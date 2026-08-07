@@ -20,6 +20,8 @@ public final class ZLayer {
     private final ArrayList<Component> components = new ArrayList<>();
     private boolean visible = true;
     private boolean enabled = true;
+    private float translationX;
+    private float translationY;
     private TouchPolicy touchPolicy = TouchPolicy.PASS_THROUGH;
 
     public ZLayer(ZLayerOwner owner, String id) {
@@ -30,6 +32,16 @@ public final class ZLayer {
     public String getId() { return id; }
     public boolean isVisible() { return visible; }
     public boolean isEnabled() { return enabled; }
+    public float getTranslationX() {
+        return owner.ownsLayerTranslation()
+                ? owner.getOwnedLayerTranslationX()
+                : translationX;
+    }
+    public float getTranslationY() {
+        return owner.ownsLayerTranslation()
+                ? owner.getOwnedLayerTranslationY()
+                : translationY;
+    }
     public TouchPolicy getTouchPolicy() { return touchPolicy; }
 
     public ZLayer setVisible(boolean visible) {
@@ -41,6 +53,31 @@ public final class ZLayer {
     public ZLayer setEnabled(boolean enabled) {
         this.enabled = enabled;
         return this;
+    }
+
+    public ZLayer setTranslation(float translationX, float translationY) {
+        requireFiniteTranslation(translationX, "X");
+        requireFiniteTranslation(translationY, "Y");
+        if (owner.ownsLayerTranslation()) {
+            owner.setOwnedLayerTranslation(translationX, translationY);
+            return this;
+        }
+        this.translationX = translationX;
+        this.translationY = translationY;
+        owner.invalidateLayer();
+        return this;
+    }
+
+    public ZLayer setTranslationX(float translationX) {
+        return setTranslation(translationX, getTranslationY());
+    }
+
+    public ZLayer setTranslationY(float translationY) {
+        return setTranslation(getTranslationX(), translationY);
+    }
+
+    public ZLayer resetTranslation() {
+        return setTranslation(0f, 0f);
     }
 
     public ZLayer setTouchPolicy(TouchPolicy policy) {
@@ -129,25 +166,54 @@ public final class ZLayer {
 
     public void draw(Canvas canvas) {
         if (!visible) return;
+        int saveCount = canvas.save();
+        if (!owner.ownsLayerTranslation()) {
+            canvas.translate(translationX, translationY);
+        }
         for (Component component : components) {
             if (component.isVisible()) component.draw(canvas);
         }
+        canvas.restoreToCount(saveCount);
     }
 
     public Component dispatchDown(MotionEvent event) {
         if (!visible || !enabled) return null;
-        for (int i = components.size() - 1; i >= 0; i--) {
-            Component component = components.get(i);
-            if (component.isVisible() && component.isEnabled()
-                    && component.onTouchEvent(event)) return component;
+        MotionEvent translatedEvent = translatedEvent(event);
+        try {
+            for (int i = components.size() - 1; i >= 0; i--) {
+                Component component = components.get(i);
+                if (component.isVisible() && component.isEnabled()
+                        && component.onTouchEvent(translatedEvent)) {
+                    return component;
+                }
+            }
+        } finally {
+            translatedEvent.recycle();
         }
         return null;
     }
 
+    public boolean dispatchTo(Component component, MotionEvent event) {
+        Objects.requireNonNull(component, "Component cannot be null.");
+        MotionEvent translatedEvent = translatedEvent(event);
+        try {
+            return component.onTouchEvent(translatedEvent);
+        } finally {
+            translatedEvent.recycle();
+        }
+    }
+
     public boolean containsPoint(float x, float y) {
+        float localX = owner.ownsLayerTranslation()
+                ? x
+                : x - translationX;
+        float localY = owner.ownsLayerTranslation()
+                ? y
+                : y - translationY;
         for (Component component : components) {
             RectF bounds = component.getBounds();
-            if (component.isVisible() && bounds.contains(x, y)) return true;
+            if (component.isVisible()
+                    && bounds.contains(localX, localY)) return true;
         }
         return false;
     }
@@ -179,5 +245,21 @@ public final class ZLayer {
             throw new IllegalArgumentException("Layer ID cannot be null or blank.");
         }
         return id.trim();
+    }
+
+    private MotionEvent translatedEvent(MotionEvent event) {
+        MotionEvent translatedEvent = MotionEvent.obtain(event);
+        if (!owner.ownsLayerTranslation()) {
+            translatedEvent.offsetLocation(-translationX, -translationY);
+        }
+        return translatedEvent;
+    }
+
+    private static void requireFiniteTranslation(float value, String axis) {
+        if (!Float.isFinite(value)) {
+            throw new IllegalArgumentException(
+                    "Layer translation " + axis + " must be finite."
+            );
+        }
     }
 }

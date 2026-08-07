@@ -173,6 +173,8 @@ public final class CardTestActivity extends AppCompatActivity {
                         invalidate();
                     }));
 
+            verifyTranslatedContentLayer(profile);
+
             Card imageCard = cards.add(new Card.Builder(
                     getContext(),
                     "image_card",
@@ -286,6 +288,91 @@ public final class CardTestActivity extends AppCompatActivity {
                 throw new AssertionError("Card defaults are invalid.");
             }
             defaults.release();
+        }
+
+        private void verifyTranslatedContentLayer(Card card) {
+            ZLayer translated = card.addContentLayer("translated_test");
+            RectF originalCardBounds = card.getBounds();
+            RectF cardBounds = new RectF(originalCardBounds);
+            RectF buttonBounds = new RectF(
+                    cardBounds.left + dp(30),
+                    cardBounds.top + dp(30),
+                    cardBounds.left + dp(90),
+                    cardBounds.top + dp(70)
+            );
+            int[] clicks = {0};
+            translated.add(new Button.Builder(
+                    getContext(),
+                    "translated_touch_probe",
+                    Color.TRANSPARENT,
+                    buttonBounds
+            )
+                    .setPressedScale(1f)
+                    .setPressAnimationDuration(0L)
+                    .setOnClickListener(id -> clicks[0]++));
+
+            translated.setTranslation(12f, -24f);
+            RectF translatedCardBounds = card.getBounds();
+            if (card.findContentLayer("translated_test") != translated
+                    || card.getContentLayers().size() != 2
+                    || translated.getTranslationX() != 12f
+                    || translated.getTranslationY() != -24f
+                    || Math.abs(
+                    translatedCardBounds.left
+                            - (originalCardBounds.left + 12f)
+            ) > 0.0001f
+                    || Math.abs(
+                    translatedCardBounds.top
+                            - (originalCardBounds.top - 24f)
+            ) > 0.0001f) {
+                throw new AssertionError(
+                        "Card-owned layer did not translate its Card owner."
+                );
+            }
+
+            dispatch(
+                    card,
+                    MotionEvent.ACTION_DOWN,
+                    buttonBounds.centerX() + 12f,
+                    buttonBounds.centerY() - 24f
+            );
+            dispatch(
+                    card,
+                    MotionEvent.ACTION_UP,
+                    buttonBounds.centerX() + 12f,
+                    buttonBounds.centerY() - 24f
+            );
+            if (clicks[0] != 1) {
+                throw new AssertionError(
+                        "Translated Card layer did not map touch coordinates."
+                );
+            }
+            translated.clear();
+            translated.resetTranslation();
+            if (!card.getBounds().equals(originalCardBounds)) {
+                throw new AssertionError(
+                        "Card translation did not reset with its layer."
+                );
+            }
+        }
+
+        private static void dispatch(
+                Card card,
+                int action,
+                float x,
+                float y
+        ) {
+            long now = android.os.SystemClock.uptimeMillis();
+            MotionEvent event = MotionEvent.obtain(
+                    now,
+                    now,
+                    action,
+                    x,
+                    y,
+                    0
+            );
+            card.onTouchEvent(event);
+            event.recycle();
         }
 
         @Override
