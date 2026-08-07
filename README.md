@@ -107,10 +107,10 @@ complete:
 
 | Roadmap component | Current implementation |
 |---|---|
-| `AfterEffectAnimator` | `animation.aftereffect.AfterEffectAnimator` |
-| `DynamicViewAnimator` | `animation.dynamic.DynamicViewAnimator` |
-| `LottieViewAnimator` | `animation.LottieViewAnimator` |
-| `GifAnimator` | Currently `animation.gif.GIFViewAnimator` |
+| `AfterEffectAnimator` | Timeline Canvas component | [AFTER_EFFECT_ANIMATOR.md](docs/components/AFTER_EFFECT_ANIMATOR.md) |
+| `DynamicViewAnimator` | Programmatic Canvas animation component | [DYNAMIC_VIEW_ANIMATOR.md](docs/components/DYNAMIC_VIEW_ANIMATOR.md) |
+| `LottieAnimator` | Cached Lottie Canvas component | [LOTTIE_ANIMATOR.md](docs/components/LOTTIE_ANIMATOR.md) |
+| `GifAnimator` | Cached GIF Canvas component | [GIF_ANIMATOR.md](docs/components/GIF_ANIMATOR.md) |
 
 ### Planned secondary components
 
@@ -343,6 +343,7 @@ artifacts/
 | `TextFieldTestActivity` | IME, focus, cursor taps/dragging, selection, three screen positions, keyboard avoidance |
 | `ImageTestActivity` | Both region paths, all scale types, bitmap replacement, runtime API, alpha, click, cleanup |
 | `CustomAnimatorComponentTestActivity` | Bitmap, Lottie, GIF, dynamic and After Effects layers, touch, movement, cleanup |
+| `AnimatorComponentsTestActivity` | GIF, Lottie, dynamic and After Effects as direct ZLayer components |
 | `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 
 Example launch:

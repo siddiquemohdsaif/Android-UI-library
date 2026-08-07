@@ -109,23 +109,15 @@ import java.util.ArrayList;
 
 public class AfterEffectRenderer {
 
-    public static PointF positionForUpdate = new PointF(0,0);
-    public static PointF scaleForUpdate = new PointF(0,0);
+    public static void render(Canvas canvas, AfterEffectComposition composition,
+                              long elapsedTime, Matrix matrix, Paint paint,
+                              PointF positionForUpdate, PointF scaleForUpdate) {
+        float animWindowX = composition.getWindow().width;
+        float animWindowY = composition.getWindow().height;
 
-    public static void render(Canvas canvas, AfterEffectAnimator afterEffectAnimator, Matrix matrix, Paint paint) {
-        long currentTime = System.currentTimeMillis();
-        if (afterEffectAnimator.loop && afterEffectAnimator.startTime + afterEffectAnimator.duration <= currentTime){
-            afterEffectAnimator.startTime = currentTime;
-        }
+        for (Layer layer : composition.getLayers()) {
 
-        long elapsedTime = currentTime - afterEffectAnimator.startTime;
-
-        float animWindowX = afterEffectAnimator.animationWindow.width;
-        float animWindowY = afterEffectAnimator.animationWindow.height;
-
-        for (Layer layer : afterEffectAnimator.layers) {
-
-            layer.playSound(afterEffectAnimator.duration, elapsedTime); // play sound
+            layer.playSound(composition.getDurationMillis(), elapsedTime);
 
             // Determine the current KeyFrameAnimation for this layer
             KeyFrameAggregator definition = null;

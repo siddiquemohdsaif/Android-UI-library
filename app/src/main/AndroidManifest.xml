@@ -58,6 +58,10 @@
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustNothing" />
         <activity
+            android:name=".AnimatorComponentsTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".CustomAnimatorComponentTestActivity"
             android:exported="true"
             android:screenOrientation="portrait" >

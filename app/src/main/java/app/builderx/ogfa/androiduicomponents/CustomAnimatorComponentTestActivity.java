@@ -14,7 +14,7 @@ import android.view.View;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.ogfa.nativeviews.animation.gif.GIFViewAnimator;
+import com.ogfa.nativeviews.animation.gif.GifAnimator;
 import com.ogfa.nativeviews.animation.aftereffect.AfterEffectAnimator;
 import com.ogfa.nativeviews.animation.aftereffect.AnimationWindow;
 import com.ogfa.nativeviews.animator.component.CustomAnimatorComponent;
@@ -43,7 +43,7 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        GIFViewAnimator.preloadAnimations(this, "carrom_pass_buy");
+        GifAnimator.preload(this, "carrom_pass_buy");
         testView = new CustomAnimatorComponentTestView(this);
         setContentView(testView);
     }
@@ -148,7 +148,7 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
                     canvas.drawCircle(bounds.centerX(), bounds.centerY(),
                             Math.max(2f, bounds.width() * (0.15f + 0.25f * progress)), pulse);
                 }
-                @Override public long getDuration() { return 900L; }
+                @Override public long getDurationMillis() { return 900L; }
             }, LayerRegion.px(mainRect.width() - dp(22), dp(66), dp(12), dp(12))));
             mainLayers.add(AfterEffectLayer.create(
                     "after_effect",
@@ -215,19 +215,9 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
             );
 
             ArrayList<ComponentLayer> gifLayers = new ArrayList<>();
-            if (GIFViewAnimator.isLoaded("carrom_pass_buy")) {
-                gifLayers.add(GifLayer.create("gif", "carrom_pass_buy",
-                        LayerRegion.matchComponent()));
-            } else {
-                // Preload is asynchronous. This checks assets/gif once and fills the
-                // same cache when layout happens before background preload completes.
-                gifLayers.add(GifLayer.create(
-                        getContext(),
-                        "gif",
-                        "carrom_pass_buy.gif",
-                        LayerRegion.matchComponent()
-                ));
-            }
+            gifLayers.add(GifLayer.create(
+                    getContext(), "gif", "carrom_pass_buy.gif",
+                    LayerRegion.matchComponent()));
 
             components.add(new CustomAnimatorComponent.Builder(
                     getContext(), GIF_COMPONENT, gifLayers, gifRect)

@@ -26,7 +26,7 @@ com.ogfa.nativeviews
 8. CustomAnimatorComponent
 9. AfterEffectAnimator
 10. DynamicViewAnimator
-11. LottieViewAnimator
+11. LottieAnimator
 12. GifAnimator
 
 ### Secondary components
@@ -52,10 +52,10 @@ com.ogfa.nativeviews
 | List | Implemented | `ComponentList` provides virtualized vertical/horizontal scrolling, reusable layered items, stable IDs, child touch arbitration, fling, Figma spacing/padding, and dedicated documentation/test coverage. |
 | Dialog | Implemented | Modal dim overlay, Card-backed layered content, local Figma scope, outside/Back policies, show/dismiss lifecycle, transitions, callbacks, translation, and dedicated documentation/test coverage. |
 | CustomAnimatorComponent | Complete | Explicit regions, relative five-layer composition, bounds policies, interaction, movement, and ZLayer ownership implemented |
-| AfterEffectAnimator | Existing, needs hardening | `animation.aftereffect` |
-| DynamicViewAnimator | Existing, needs hardening | `animation.dynamic.DynamicViewAnimator` |
-| LottieViewAnimator | Implemented, needs final API review | `animation.LottieViewAnimator` |
-| GifAnimator | Existing, needs rename and hardening | Currently `animation.gif.GIFViewAnimator` |
+| AfterEffectAnimator | Complete | Standalone ZLayer component and reusable immutable composition |
+| DynamicViewAnimator | Complete | Standalone ZLayer component using the shared monotonic playback clock |
+| LottieAnimator | Complete | Standalone cached ZLayer component; old `LottieViewAnimator` is internal |
+| GifAnimator | Complete | Standalone cached ZLayer component; old `GIFViewAnimator` is internal |
 | Switch | Not started | — |
 | CheckBox | Not started | — |
 | RadioButton | Not started | — |
@@ -431,7 +431,7 @@ com.ogfa.nativeviews.progress
 - Frame timing owned by the host/group.
 - Bounds updates and cleanup.
 
-### LottieViewAnimator
+### LottieAnimator
 
 - One-name and multiple-name preload.
 - Normalized names with or without `.json`.
@@ -442,7 +442,7 @@ com.ogfa.nativeviews.progress
 
 ### GifAnimator
 
-- Rename the current `GIFViewAnimator` API to `GifAnimator`.
+- `GIFViewAnimator` loading internals are no longer public; `GifAnimator` is the component API.
 - One-name and multiple-name preload.
 - Normalize names with or without `.gif`.
 - Share one in-flight loading task per animation.
@@ -500,11 +500,11 @@ setOnCheckedChangeListener(listener)
 1. ComponentList
 2. Dialog
 
-### Phase 5 — Animator hardening
+### Phase 5 — Animator hardening (complete)
 
 1. AfterEffectAnimator
 2. DynamicViewAnimator
-3. LottieViewAnimator
+3. LottieAnimator
 4. GifAnimator
 
 ### Phase 6 — Secondary components
@@ -529,7 +529,7 @@ DialogTestActivity
 CustomAnimatorComponentTestActivity
 AfterEffectAnimatorTestActivity
 DynamicViewAnimatorTestActivity
-LottieViewAnimatorTestActivity
+LottieAnimatorTestActivity
 GifAnimatorTestActivity
 SwitchTestActivity
 CheckBoxTestActivity

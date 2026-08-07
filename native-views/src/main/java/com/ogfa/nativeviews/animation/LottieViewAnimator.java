@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
-public class LottieViewAnimator {
+final class LottieViewAnimator {
 
     private static final String TAG = "LottieViewAnimator";
     private static final String JSON_ASSET_DIRECTORY = "lottie/json/";
@@ -69,6 +69,14 @@ public class LottieViewAnimator {
 
     public static boolean isLoaded(String animationName) {
         return preloadedAnimations.containsKey(normalizeId(animationName));
+    }
+
+    public static void clearCache(String animationName) {
+        preloadedAnimations.remove(normalizeId(animationName));
+    }
+
+    public static void clearCache() {
+        preloadedAnimations.clear();
     }
 
     /**
@@ -391,6 +399,16 @@ public class LottieViewAnimator {
         drawable.setComposition(composition);
         drawable.setRepeatCount(repeatCount);
         drawable.playAnimation();
+        return drawable;
+    }
+
+    public static LottieDrawable createDrawableForComponent(
+            Context context,
+            LottieComposition composition
+    ) {
+        LottieDrawable drawable = createDrawable(context, composition, 0);
+        drawable.stop();
+        drawable.setProgress(0f);
         return drawable;
     }
 

@@ -20,7 +20,7 @@ import java.util.concurrent.FutureTask;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class GIFViewAnimator {
+final class GIFViewAnimator {
 
     public ArrayList<Animation> animations = new ArrayList<>();
     private static final ConcurrentHashMap<String, GIFComposition> preloadedAnimations =
@@ -57,6 +57,20 @@ public class GIFViewAnimator {
 
     public static boolean isLoaded(String animationName) {
         return preloadedAnimations.containsKey(normalizeId(animationName));
+    }
+
+    public static void clearCache(String animationName) {
+        preloadedAnimations.remove(normalizeId(animationName));
+    }
+
+    public static void clearCache() {
+        preloadedAnimations.clear();
+    }
+
+    public static void shutdown() {
+        for (FutureTask<GIFComposition> task : loadingAnimations.values()) task.cancel(true);
+        loadingAnimations.clear();
+        preloadedAnimations.clear();
     }
 
     private static void preloadAnimation(Context context, String animationName) {

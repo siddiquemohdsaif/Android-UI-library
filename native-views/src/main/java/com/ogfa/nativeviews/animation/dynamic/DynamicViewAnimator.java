@@ -1,62 +1,48 @@
 package com.ogfa.nativeviews.animation.dynamic;
 
-
+import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.RectF;
+import android.view.View;
+import com.ogfa.nativeviews.animation.BaseAnimatorBuilder;
+import com.ogfa.nativeviews.animation.BaseAnimatorComponent;
+import com.ogfa.nativeviews.component.Position;
+import com.ogfa.nativeviews.component.Size;
+import java.util.Objects;
 
-public class DynamicViewAnimator {
+/** Programmatic Canvas animation usable directly in a ZLayer. */
+public final class DynamicViewAnimator extends BaseAnimatorComponent {
+    private final CustomDynamicView dynamicView;
 
-    private final CustomDynamicView customDynamicView;
-    private long duration;
-    private int repeatCount;
-    private int currentRepeat;
-    private long startTime;
-    private long timeElapsed;
-    private boolean animationOn;
-    private RectF rectF;
-
-    public DynamicViewAnimator(CustomDynamicView customDynamicView, int repeatCount, RectF rectF){
-        this.duration = customDynamicView.getDuration();
-        this.customDynamicView = customDynamicView;
-        this.repeatCount = repeatCount;
-        this.rectF = rectF;
-        this.startTime = System.currentTimeMillis();
-        this.animationOn = true;
-        this.currentRepeat = 0;
-    }
-    public void setRect(RectF newRectF) {
-        this.rectF = new RectF(newRectF);
+    private DynamicViewAnimator(Builder builder, View host) {
+        super(builder, host);
+        dynamicView = Objects.requireNonNull(builder.dynamicView, "Dynamic view cannot be null.");
+        requireDuration(dynamicView);
     }
 
-    public void draw(Canvas canvas){
+    /** Detached constructor used by DynamicLayer. */
+    public DynamicViewAnimator(String id, CustomDynamicView view, int repeatCount, RectF bounds) {
+        super(id, bounds, true, repeatCount);
+        dynamicView = Objects.requireNonNull(view, "Dynamic view cannot be null.");
+        requireDuration(dynamicView);
+    }
 
-        // find time elapsed
-        timeElapsed = System.currentTimeMillis() - startTime;
-        if (timeElapsed > duration){
-            if (repeatCount == -1){
-                restartAnim();
-            }else if (currentRepeat < repeatCount){
-                restartAnim();
-            }else {
-                animationOn = false;
-                return;
-            }
+    @Override protected long getDurationMillis() { return dynamicView.getDurationMillis(); }
+    @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) { dynamicView.onDraw(canvas, progress, bounds); }
+    @Override protected void onRepeat() { dynamicView.onReset(); }
+    @Override protected void onStop() { dynamicView.onReset(); }
+    @Override protected void onReleaseResources() { dynamicView.onRelease(); }
+
+    public static final class Builder extends BaseAnimatorBuilder<Builder, DynamicViewAnimator> {
+        private final CustomDynamicView dynamicView;
+        public Builder(Context context, String id, CustomDynamicView view, Position position, Size size) {
+            super(context, id, position, size); dynamicView = Objects.requireNonNull(view, "Dynamic view cannot be null.");
         }
-
-
-
-        // draw
-        float progress = (float) timeElapsed / duration; // Calculate progress based on timeElapsed and duration
-        customDynamicView.onDraw(canvas, progress, rectF);
+        public Builder(Context context, String id, CustomDynamicView view, RectF bounds) {
+            super(context, id, bounds); dynamicView = Objects.requireNonNull(view, "Dynamic view cannot be null.");
+        }
+        @Override public DynamicViewAnimator build(View hostView) { return new DynamicViewAnimator(this, hostView); }
     }
 
-    private void restartAnim() {
-        startTime = System.currentTimeMillis();
-        timeElapsed = 0;
-        currentRepeat++;
-    }
-
-    public boolean isAnimating(){
-        return animationOn;
-    }
+    private static void requireDuration(CustomDynamicView view) { if (view.getDurationMillis() <= 0L) throw new IllegalArgumentException("Dynamic duration must be positive."); }
 }
