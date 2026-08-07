@@ -404,7 +404,8 @@ com.ogfa.nativeviews.progress
   configurable Back dismissal.
 - Implemented modal inside/outside touch routing with IGNORE/DISMISS policy.
 - Implemented fade, fade-scale, four slide transitions, and custom transition
-  interpolation/configuration.
+  interpolation/configuration, plus nested parallel/sequential transition groups
+  and plural parallel setters while preserving the singular API.
 - Implemented nested component/IME lifecycle cleanup and `HOST_RELEASED` reporting.
 - Covered by `DialogTestActivity` and `docs/components/DIALOG.md`.
 

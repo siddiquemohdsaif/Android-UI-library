@@ -262,8 +262,14 @@ public final class Dialog implements Component, BackHandler {
     public Dialog setEnterTransition(DialogTransition value) {
         enterTransition = Objects.requireNonNull(value); return this;
     }
+    public Dialog setEnterTransitions(DialogTransition... values) {
+        return setEnterTransition(DialogTransition.parallel(values));
+    }
     public Dialog setExitTransition(DialogTransition value) {
         exitTransition = Objects.requireNonNull(value); return this;
+    }
+    public Dialog setExitTransitions(DialogTransition... values) {
+        return setExitTransition(DialogTransition.parallel(values));
     }
     public Dialog setInteractiveDuringTransition(boolean value) {
         interactiveDuringTransition = value; return this;
@@ -291,21 +297,24 @@ public final class Dialog implements Component, BackHandler {
         if (!isVisible() || alpha <= 0f) return;
         updateOverlayBounds();
         DialogTransition transition = state == State.EXITING ? exitTransition : enterTransition;
-        float timeline = transition.interpolate(transitionProgress);
-        float effect = state == State.EXITING ? timeline : 1f - timeline;
-        float visibleFraction = 1f - effect;
+        float effectProgress = state == State.EXITING
+                ? transitionProgress
+                : 1f - transitionProgress;
+        DialogTransition.Transform transform = transition.sample(effectProgress);
+        float visibleFraction = state == State.EXITING
+                ? 1f - transitionProgress
+                : transitionProgress;
         if (dimEnabled) {
             dimPaint.setColor(dimColor);
             dimPaint.setAlpha(Math.round(Color.alpha(dimColor) * dimAlpha * alpha * visibleFraction));
             canvas.drawRect(overlayBounds, dimPaint);
         }
-        float surfaceVisualAlpha = (1f + (transition.getEffectAlpha() - 1f) * effect) * alpha;
+        float surfaceVisualAlpha = transform.alpha * alpha;
         if (surfaceVisualAlpha <= 0f) return;
         RectF surfaceBounds = surface.getBounds();
-        float scale = 1f + (transition.getEffectScale() - 1f) * effect;
-        float transitionScale = transition.isTranslationInPixels() ? 1f : dimensionScale;
-        float tx = transition.getTranslationX() * transitionScale * effect;
-        float ty = transition.getTranslationY() * transitionScale * effect;
+        float scale = transform.scale;
+        float tx = transform.translationXFigma * dimensionScale + transform.translationXPx;
+        float ty = transform.translationYFigma * dimensionScale + transform.translationYPx;
         int alphaSave = canvas.saveLayerAlpha(overlayBounds,
                 Math.round(surfaceVisualAlpha * 255f));
         canvas.translate(tx, ty);
@@ -508,7 +517,13 @@ public final class Dialog implements Component, BackHandler {
         public Builder setDismissOnBackPressed(boolean value) { dismissOnBackPressed = value; return this; }
         public Builder setOutsideTouchPolicy(OutsideTouchPolicy value) { outsideTouchPolicy = Objects.requireNonNull(value); return this; }
         public Builder setEnterTransition(DialogTransition value) { enterTransition = Objects.requireNonNull(value); return this; }
+        public Builder setEnterTransitions(DialogTransition... values) {
+            enterTransition = DialogTransition.parallel(values); return this;
+        }
         public Builder setExitTransition(DialogTransition value) { exitTransition = Objects.requireNonNull(value); return this; }
+        public Builder setExitTransitions(DialogTransition... values) {
+            exitTransition = DialogTransition.parallel(values); return this;
+        }
         public Builder setOnShowListener(OnShowListener value) { showListener = value; return this; }
         public Builder setOnDismissListener(OnDismissListener value) { dismissListener = value; return this; }
         public Builder setContent(ContentBuilder value) { contentBuilder = value; return this; }

@@ -196,6 +196,7 @@ A non-dismissible visible Dialog still consumes Back to preserve modality.
 ```java
 DialogTransition.none();
 DialogTransition.fade(180L);
+DialogTransition.scale(180L, 0.92f);
 DialogTransition.fadeScale(220L, 0.92f);
 DialogTransition.slideFromBottom(240L, 120f);
 DialogTransition.slideFromTop(240L, 120f);
@@ -209,6 +210,55 @@ Assign independent enter and exit transitions:
 dialog.setEnterTransition(DialogTransition.fadeScale(220L, 0.92f));
 dialog.setExitTransition(DialogTransition.slideFromBottom(180L, 80f));
 ```
+
+The singular setters remain supported. Calling a singular setter again replaces its
+previous value.
+
+Run multiple effects in parallel with the plural setters:
+
+```java
+dialog.setExitTransitions(
+        DialogTransition.fade(190L),
+        DialogTransition.scale(190L, 0.88f),
+        DialogTransition.slideFromBottom(190L, 80f)
+);
+```
+
+The plural setters wrap their arguments in a parallel group. Parallel duration is the
+longest child duration; shorter children finish and retain their final effect while
+the remaining children continue.
+
+Explicit parallel and sequential composition:
+
+```java
+DialogTransition.parallel(
+        DialogTransition.fade(190L),
+        DialogTransition.scale(190L, 0.88f)
+);
+
+DialogTransition.sequence(
+        DialogTransition.scale(100L, 0.92f),
+        DialogTransition.slideFromBottom(140L, 80f),
+        DialogTransition.fade(100L)
+);
+```
+
+Groups may be nested:
+
+```java
+dialog.setExitTransition(
+        DialogTransition.sequence(
+                DialogTransition.scale(100L, 0.92f),
+                DialogTransition.parallel(
+                        DialogTransition.fade(160L),
+                        DialogTransition.slideFromBottom(160L, 80f)
+                )
+        )
+);
+```
+
+For exit, a sequence runs in declaration order. Enter playback reverses the complete
+effect path, matching the existing enter-transition model.
 
 Custom transition:
 
@@ -298,4 +348,3 @@ dialogs.sendToBack("profile_dialog");
 Releasing the root `ZLayerGroup` cancels active transitions, releases the surface and
 all nested layers, unregisters nested components and TextFields, and reports
 `HOST_RELEASED` when a Dialog was still showing.
-

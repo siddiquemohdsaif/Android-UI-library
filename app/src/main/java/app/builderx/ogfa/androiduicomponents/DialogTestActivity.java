@@ -78,6 +78,20 @@ public final class DialogTestActivity extends AppCompatActivity {
 
         private void createDialog() {
             dialogLayer.clear();
+            DialogTransition parallelProbe = DialogTransition.parallel(
+                    DialogTransition.fade(100L),
+                    DialogTransition.scale(160L, 0.9f)
+            );
+            DialogTransition sequenceProbe = DialogTransition.sequence(
+                    DialogTransition.fade(100L),
+                    DialogTransition.scale(160L, 0.9f)
+            );
+            if (parallelProbe.getPlayMode() != DialogTransition.PlayMode.PARALLEL
+                    || parallelProbe.getDuration() != 160L
+                    || sequenceProbe.getPlayMode() != DialogTransition.PlayMode.SEQUENCE
+                    || sequenceProbe.getDuration() != 260L) {
+                throw new AssertionError("Composite DialogTransition timing failed.");
+            }
             dialog = dialogLayer.add(new Dialog.Builder(
                     getContext(),
                     "confirmation",
@@ -103,7 +117,11 @@ public final class DialogTestActivity extends AppCompatActivity {
                     .setOutsideTouchPolicy(Dialog.OutsideTouchPolicy.DISMISS)
                     .setDismissOnBackPressed(true)
                     .setEnterTransition(DialogTransition.fadeScale(240L, 0.88f))
-                    .setExitTransition(DialogTransition.fadeScale(190L, 0.88f))
+                    .setExitTransitions(
+                            DialogTransition.fade(190L),
+                            DialogTransition.scale(190L, 0.88f),
+                            DialogTransition.slideFromBottom(190L, 80f)
+                    )
                     .setOnShowListener(id -> {
                         status = "SHOWN: " + id;
                         invalidate();
