@@ -37,6 +37,7 @@ public final class Card implements Component {
 
     private final View hostView;
     private final String id;
+    private final RectF baseBounds = new RectF();
     private final RectF bounds = new RectF();
     private final RectF visualBounds = new RectF();
     private final RectF backgroundDrawBounds = new RectF();
@@ -82,6 +83,11 @@ public final class Card implements Component {
         @Override
         public View getHostView() {
             return hostView;
+        }
+
+        @Override
+        public RectF getComponentBounds() {
+            return new RectF(bounds);
         }
 
         @Override
@@ -149,6 +155,8 @@ public final class Card implements Component {
     private float alpha;
     private boolean visible;
     private boolean enabled;
+    private boolean horizontalCentered;
+    private boolean verticalCentered;
     private boolean released;
 
     private Card(Builder builder, View hostView) {
@@ -170,6 +178,8 @@ public final class Card implements Component {
         alpha = builder.alpha;
         visible = builder.visible;
         enabled = builder.enabled;
+        horizontalCentered = builder.horizontalCentered;
+        verticalCentered = builder.verticalCentered;
         resolveRegion(builder.position, builder.size, builder.explicitBounds);
         rebuildGeometry();
     }
@@ -251,6 +261,14 @@ public final class Card implements Component {
 
     public float getAlpha() {
         return alpha;
+    }
+
+    public boolean isHorizontalCentered() {
+        return horizontalCentered;
+    }
+
+    public boolean isVerticalCentered() {
+        return verticalCentered;
     }
 
     @Override
@@ -353,14 +371,43 @@ public final class Card implements Component {
         return setDropShadow(DropShadow.DEFAULT);
     }
 
+    public Card setHorizontalCenter(boolean enabled) {
+        ensureActive();
+        if (horizontalCentered == enabled) return this;
+        horizontalCentered = enabled;
+        applyParentAlignment();
+        rebuildGeometry();
+        invalidate();
+        return this;
+    }
+
+    public Card horizontalCenter(boolean enabled) {
+        return setHorizontalCenter(enabled);
+    }
+
+    public Card setVerticalCenter(boolean enabled) {
+        ensureActive();
+        if (verticalCentered == enabled) return this;
+        verticalCentered = enabled;
+        applyParentAlignment();
+        rebuildGeometry();
+        invalidate();
+        return this;
+    }
+
+    public Card verticalCenter(boolean enabled) {
+        return setVerticalCenter(enabled);
+    }
+
     public Card setRegion(Position position, Size size) {
         ensureActive();
         Objects.requireNonNull(position, "Position cannot be null.");
         Objects.requireNonNull(size, "Size cannot be null.");
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
-        bounds.set(resolved);
+        baseBounds.set(resolved);
         dimensionScale = position.getScale(hostView);
+        applyParentAlignment();
         rebuildGeometry();
         invalidate();
         return this;
@@ -373,8 +420,9 @@ public final class Card implements Component {
                 "Bounds cannot be null."
         ));
         requireBounds(copy);
-        this.bounds.set(copy);
+        baseBounds.set(copy);
         dimensionScale = 1f;
+        applyParentAlignment();
         rebuildGeometry();
         invalidate();
         return this;
@@ -482,6 +530,8 @@ public final class Card implements Component {
         }
         this.owner = owner;
         rootHost = (NestedComponentHost) owner;
+        applyParentAlignment();
+        rebuildGeometry();
 
         ArrayList<Component> registered = new ArrayList<>();
         try {
@@ -534,16 +584,39 @@ public final class Card implements Component {
     ) {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
-            bounds.set(explicitBounds);
+            baseBounds.set(explicitBounds);
             dimensionScale = 1f;
+            applyParentAlignment();
             return;
         }
         Objects.requireNonNull(position, "Position cannot be null.");
         Objects.requireNonNull(size, "Size cannot be null.");
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
-        bounds.set(resolved);
+        baseBounds.set(resolved);
         dimensionScale = position.getScale(hostView);
+        applyParentAlignment();
+    }
+
+    private void applyParentAlignment() {
+        bounds.set(baseBounds);
+        if ((!horizontalCentered && !verticalCentered)
+                || baseBounds.isEmpty()) {
+            return;
+        }
+        RectF parentBounds = owner == null
+                ? new RectF(0f, 0f, hostView.getWidth(), hostView.getHeight())
+                : owner.getComponentBounds();
+        if (horizontalCentered) {
+            float width = baseBounds.width();
+            bounds.left = parentBounds.centerX() - width / 2f;
+            bounds.right = bounds.left + width;
+        }
+        if (verticalCentered) {
+            float height = baseBounds.height();
+            bounds.top = parentBounds.centerY() - height / 2f;
+            bounds.bottom = bounds.top + height;
+        }
     }
 
     private void rebuildGeometry() {
@@ -765,6 +838,8 @@ public final class Card implements Component {
         private float alpha = 1f;
         private boolean visible = true;
         private boolean enabled = true;
+        private boolean horizontalCentered;
+        private boolean verticalCentered;
 
         public Builder(
                 Context context,
@@ -879,6 +954,24 @@ public final class Card implements Component {
         public Builder setEnabled(boolean enabled) {
             this.enabled = enabled;
             return this;
+        }
+
+        public Builder setHorizontalCenter(boolean enabled) {
+            horizontalCentered = enabled;
+            return this;
+        }
+
+        public Builder horizontalCenter(boolean enabled) {
+            return setHorizontalCenter(enabled);
+        }
+
+        public Builder setVerticalCenter(boolean enabled) {
+            verticalCentered = enabled;
+            return this;
+        }
+
+        public Builder verticalCenter(boolean enabled) {
+            return setVerticalCenter(enabled);
         }
 
         @Override

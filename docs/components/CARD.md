@@ -51,6 +51,49 @@ Explicit runtime bounds:
 new Card.Builder(context, "profile_card", runtimeRectF);
 ```
 
+## Parent-relative centering
+
+Center the complete Card region inside its owning ZLayer without calculating
+Figma margins:
+
+```java
+Card card = screen.add(new Card.Builder(
+        context,
+        "centered_card",
+        new Position(
+                hostView,
+                figmaConfig,
+                Position.HorizontalMarginFrom.LEFT,
+                Position.VerticalMarginFrom.BOTTOM,
+                0f,
+                163f
+        ),
+        new Size(742f, 849f)
+)
+        .horizontalCenter(true));
+```
+
+Both axes are supported:
+
+```java
+.horizontalCenter(true)
+.verticalCenter(true)
+```
+
+A root ZLayer centers against the full host view. A Card nested in another
+Card's content ZLayer centers against the parent Card. Centering keeps the
+declared Card size; it only replaces placement on the enabled axis. Disabling
+an axis restores the corresponding position resolved from the original
+`Position` or `RectF`:
+
+```java
+card.setHorizontalCenter(false);
+card.setVerticalCenter(false);
+```
+
+The background, rounded clip, content layer, touch region, and outside shadow
+all move with the Card.
+
 ## Add mixed content
 
 ```java
@@ -190,6 +233,9 @@ new Card.Builder(context, id, rectF);
 .setDropShadowPx(shadow)
 .removeDropShadow()
 
+.horizontalCenter(enabled)
+.verticalCenter(enabled)
+
 .setAlpha(alpha)
 .setVisible(visible)
 .setEnabled(enabled)
@@ -216,6 +262,13 @@ card.isCornerRadiusInPixels();
 card.getDropShadow();
 card.getResolvedDropShadow();
 card.isDropShadowInPixels();
+
+card.isHorizontalCentered();
+card.isVerticalCentered();
+card.setHorizontalCenter(true);
+card.setVerticalCenter(true);
+card.horizontalCenter(false);
+card.verticalCenter(false);
 
 card.setRegion(position, size);
 card.setRegion(rectF);

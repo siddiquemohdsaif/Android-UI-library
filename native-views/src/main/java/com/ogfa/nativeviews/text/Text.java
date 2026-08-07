@@ -53,6 +53,7 @@ public final class Text implements Component {
     private final Context context;
     private final View hostView;
     private final String id;
+    private final RectF baseBounds = new RectF();
     private final RectF bounds = new RectF();
     private final RectF contentBounds = new RectF();
     private final TextPaint paint = new TextPaint(
@@ -69,6 +70,7 @@ public final class Text implements Component {
     private float layoutTop;
     private boolean visible = true;
     private boolean enabled;
+    private boolean horizontalCentered;
     private boolean released;
     private boolean touchCaptured;
     private boolean clickCancelled;
@@ -84,6 +86,7 @@ public final class Text implements Component {
         value = Objects.requireNonNull(builder.value, "Text cannot be null.");
         style = builder.styleBuilder.build();
         enabled = builder.enabled;
+        horizontalCentered = builder.horizontalCentered;
         clickListener = builder.clickListener;
         resolveRegion(builder.position, builder.size, builder.explicitBounds);
         rebuildLayout();
@@ -144,6 +147,28 @@ public final class Text implements Component {
         return clickListener != null;
     }
 
+    public boolean isHorizontalCentered() {
+        return horizontalCentered;
+    }
+
+    public Text setHorizontalCenter(boolean enabled) {
+        ensureActive();
+        if (horizontalCentered == enabled) {
+            return this;
+        }
+        horizontalCentered = enabled;
+        applyHorizontalPosition();
+        rebuildLayout();
+        return this;
+    }
+
+    /**
+     * Fluent alias for {@link #setHorizontalCenter(boolean)}.
+     */
+    public Text horizontalCenter(boolean enabled) {
+        return setHorizontalCenter(enabled);
+    }
+
     public Text setOnClickListener(OnClickListener listener) {
         ensureActive();
         clickListener = listener;
@@ -194,6 +219,12 @@ public final class Text implements Component {
         );
     }
 
+    public Text setLetterSpacingPercent(float percent) {
+        return updateStyle(
+                new TextStyle.Builder(style).setLetterSpacingPercent(percent)
+        );
+    }
+
     public Text setLineSpacing(float spacing) {
         return updateStyle(
                 new TextStyle.Builder(style).setLineSpacing(spacing)
@@ -203,6 +234,12 @@ public final class Text implements Component {
     public Text setLineSpacingPx(float pixels) {
         return updateStyle(
                 new TextStyle.Builder(style).setLineSpacingPx(pixels)
+        );
+    }
+
+    public Text setLineHeightPercent(float percent) {
+        return updateStyle(
+                new TextStyle.Builder(style).setLineHeightPercent(percent)
         );
     }
 
@@ -392,6 +429,10 @@ public final class Text implements Component {
             );
         }
         this.owner = owner;
+        if (horizontalCentered) {
+            applyHorizontalPosition();
+            rebuildLayout();
+        }
     }
 
     private boolean acceptsTouch(float x, float y) {
@@ -425,18 +466,33 @@ public final class Text implements Component {
     ) {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
-            bounds.set(explicitBounds);
+            baseBounds.set(explicitBounds);
             dimensionScale = FigmaConfig.getDefault().getScale(
                     hostView.getWidth()
             );
+            applyHorizontalPosition();
             return;
         }
         Objects.requireNonNull(position, "Position cannot be null.");
         Objects.requireNonNull(size, "Size cannot be null.");
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
-        bounds.set(resolved);
+        baseBounds.set(resolved);
         dimensionScale = position.getScale(hostView);
+        applyHorizontalPosition();
+    }
+
+    private void applyHorizontalPosition() {
+        bounds.set(baseBounds);
+        if (!horizontalCentered || baseBounds.isEmpty()) {
+            return;
+        }
+        RectF parentBounds = owner == null
+                ? new RectF(0f, 0f, hostView.getWidth(), hostView.getHeight())
+                : owner.getComponentBounds();
+        float width = baseBounds.width();
+        bounds.left = parentBounds.centerX() - width / 2f;
+        bounds.right = bounds.left + width;
     }
 
     private void rebuildLayout() {
@@ -530,11 +586,15 @@ public final class Text implements Component {
         paint.setAlpha(Math.round(
                 Color.alpha(style.textColor) * style.alpha
         ));
-        float letterSpacingPx = scaleDimension(
-                style.letterSpacing,
-                style.letterSpacingUnit
-        );
-        paint.setLetterSpacing(letterSpacingPx / textSize);
+        if (style.letterSpacingUnit == TextStyle.DimensionUnit.PERCENT) {
+            paint.setLetterSpacing(style.letterSpacing / 100f);
+        } else {
+            float letterSpacingPx = scaleDimension(
+                    style.letterSpacing,
+                    style.letterSpacingUnit
+            );
+            paint.setLetterSpacing(letterSpacingPx / textSize);
+        }
         if (style.shadowRadius > 0f) {
             paint.setShadowLayer(
                     scaleDimension(style.shadowRadius, style.shadowUnit),
@@ -656,6 +716,7 @@ public final class Text implements Component {
         private final RectF explicitBounds;
         private TextStyle.Builder styleBuilder = new TextStyle.Builder();
         private boolean enabled = true;
+        private boolean horizontalCentered;
         private OnClickListener clickListener;
 
         public Builder(
@@ -704,6 +765,18 @@ public final class Text implements Component {
                     Objects.requireNonNull(style, "TextStyle cannot be null.")
             );
             return this;
+        }
+
+        public Builder setHorizontalCenter(boolean enabled) {
+            horizontalCentered = enabled;
+            return this;
+        }
+
+        /**
+         * Fluent alias for {@link #setHorizontalCenter(boolean)}.
+         */
+        public Builder horizontalCenter(boolean enabled) {
+            return setHorizontalCenter(enabled);
         }
 
         public Builder useDefaultFont() {
@@ -766,6 +839,11 @@ public final class Text implements Component {
             return this;
         }
 
+        public Builder setLetterSpacingPercent(float percent) {
+            styleBuilder.setLetterSpacingPercent(percent);
+            return this;
+        }
+
         public Builder setLineSpacing(float spacing) {
             styleBuilder.setLineSpacing(spacing);
             return this;
@@ -778,6 +856,11 @@ public final class Text implements Component {
 
         public Builder setLineSpacingMultiplier(float multiplier) {
             styleBuilder.setLineSpacingMultiplier(multiplier);
+            return this;
+        }
+
+        public Builder setLineHeightPercent(float percent) {
+            styleBuilder.setLineHeightPercent(percent);
             return this;
         }
 

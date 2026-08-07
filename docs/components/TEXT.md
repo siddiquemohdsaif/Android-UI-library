@@ -267,6 +267,36 @@ Text.VerticalAlignment.CENTER
 Text.VerticalAlignment.BOTTOM
 ```
 
+`setAlignment(CENTER)` centers glyphs inside the Text region.
+`horizontalCenter(true)` centers the complete Text region inside its owning
+ZLayer, so no calculated left margin is required:
+
+```java
+Text footer = layer.add(
+        new Text.Builder(
+                getContext(),
+                "footer",
+                "Centered at runtime",
+                new Position(
+                        hostView,
+                        figmaConfig,
+                        Position.HorizontalMarginFrom.LEFT,
+                        Position.VerticalMarginFrom.BOTTOM,
+                        0f,
+                        57f
+                ),
+                new Size(500f, 70f)
+        )
+                .horizontalCenter(true)
+                .setAlignment(Text.Alignment.CENTER)
+);
+```
+
+For a root ZLayer, the parent region is the full host view. For a Card content
+ZLayer, the parent region is the Card. The region retains its declared width
+and vertical position. `horizontalCenter(false)` restores the horizontal
+position resolved from the supplied `Position` or `RectF`.
+
 Overflow:
 
 ```java
@@ -301,6 +331,30 @@ Text description = texts.add(
 );
 ```
 
+### Figma percentage spacing
+
+Figma line height uses `100%` as the unchanged natural font line height:
+
+```java
+.setLineHeightPercent(100f) // Natural line height
+.setLineHeightPercent(120f) // 1.20 x natural line height
+```
+
+Calling `setLineHeightPercent()` clears additive line spacing and converts the
+percentage to Android's internal line-spacing multiplier.
+
+Figma letter spacing uses `0%` as unchanged tracking:
+
+```java
+.setLetterSpacingPercent(0f)  // Normal character spacing
+.setLetterSpacingPercent(5f)  // Add 0.05 em
+.setLetterSpacingPercent(-2f) // Tighten by 0.02 em
+```
+
+Percentage tracking is resolution-independent because Android stores it in
+`em` units. The most recently called letter-spacing method selects the mode:
+Figma units, exact pixels, or percentage.
+
 ## Styling
 
 All builder styling methods:
@@ -319,11 +373,15 @@ All builder styling methods:
 | `setAlpha(alpha)` | Set additional alpha in the `0..1` range |
 | `setLetterSpacing(value)` | Add Figma-space character spacing |
 | `setLetterSpacingPx(px)` | Add exact runtime-pixel character spacing |
+| `setLetterSpacingPercent(percent)` | Set Figma percentage tracking; `0%` is neutral |
 | `setLineSpacing(value)` | Add Figma-space line spacing |
 | `setLineSpacingPx(px)` | Add exact runtime-pixel line spacing |
 | `setLineSpacingMultiplier(value)` | Multiply normal line spacing |
+| `setLineHeightPercent(percent)` | Set Figma percentage line height; `100%` is neutral |
 | `setPadding(horizontal, vertical)` | Inset using Figma-space values |
 | `setPaddingPx(horizontal, vertical)` | Inset using exact runtime pixels |
+| `horizontalCenter(enabled)` | Center the complete region in its owning ZLayer |
+| `setHorizontalCenter(enabled)` | Setter-form alias of `horizontalCenter` |
 | `setAlignment(value)` | Horizontal alignment |
 | `setVerticalAlignment(value)` | Vertical alignment |
 | `setOverflow(value)` | Clip or ellipsize overflow |
@@ -396,8 +454,10 @@ text.setTextSize(64f);
 text.setTextSizePx(48f);
 text.setLetterSpacing(2f);
 text.setLetterSpacingPx(2f);
+text.setLetterSpacingPercent(5f);
 text.setLineSpacing(10f);
 text.setLineSpacingPx(10f);
+text.setLineHeightPercent(120f);
 text.setPadding(24f, 12f);
 text.setPaddingPx(24f, 12f);
 text.setShadow(4f, 0f, 3f, 0xaa000000);
@@ -409,6 +469,8 @@ text.setFont(typeface);
 text.setFontVariations(FontVariation.BOLD);
 text.clearFontVariations();
 text.useDefaultFont();
+text.horizontalCenter(true);
+text.setHorizontalCenter(false);
 text.setAlignment(Text.Alignment.END);
 text.setVerticalAlignment(Text.VerticalAlignment.BOTTOM);
 text.setMaxLines(2);

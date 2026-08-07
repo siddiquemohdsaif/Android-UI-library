@@ -19,7 +19,8 @@ public final class TextStyle {
 
     enum DimensionUnit {
         FIGMA,
-        PIXELS
+        PIXELS,
+        PERCENT
     }
 
     final FontSource fontSource;
@@ -250,6 +251,20 @@ public final class TextStyle {
             return this;
         }
 
+        /**
+         * Sets Figma-style tracking. Zero percent preserves normal spacing.
+         */
+        public Builder setLetterSpacingPercent(float percent) {
+            if (!Float.isFinite(percent)) {
+                throw new IllegalArgumentException(
+                        "Letter spacing percentage must be finite."
+                );
+            }
+            letterSpacing = percent;
+            letterSpacingUnit = DimensionUnit.PERCENT;
+            return this;
+        }
+
         public Builder setLineSpacing(float spacing) {
             lineSpacing = requireNonNegativeFinite(spacing, "Line spacing");
             lineSpacingUnit = DimensionUnit.FIGMA;
@@ -270,6 +285,21 @@ public final class TextStyle {
                     multiplier,
                     "Line spacing multiplier"
             );
+            return this;
+        }
+
+        /**
+         * Sets Figma-style line height. One hundred percent preserves the
+         * font's natural line height.
+         */
+        public Builder setLineHeightPercent(float percent) {
+            float checked = requirePositiveFinite(
+                    percent,
+                    "Line height percentage"
+            );
+            lineSpacing = 0f;
+            lineSpacingUnit = DimensionUnit.FIGMA;
+            lineSpacingMultiplier = checked / 100f;
             return this;
         }
 
