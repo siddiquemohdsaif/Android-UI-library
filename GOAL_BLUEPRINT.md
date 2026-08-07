@@ -49,7 +49,7 @@ com.ogfa.nativeviews
 | Button | Implemented | Image-backed composite with optional native Text, insets, runtime updates, and click |
 | Image | Implemented | Standalone `Image` component with bitmap scaling, runtime updates, and optional click |
 | Card | Implemented | Rounded color/image background, outside drop shadow, and one nested mixed-component ZLayer |
-| List | Not started | — |
+| List | Implemented | `ComponentList` provides virtualized vertical/horizontal scrolling, reusable layered items, stable IDs, child touch arbitration, fling, Figma spacing/padding, and dedicated documentation/test coverage. |
 | Dialog | Not started | — |
 | CustomAnimatorComponent | Implemented foundation | Renamed API and five-layer system are in `animator.component` |
 | AfterEffectAnimator | Existing, needs hardening | `animation.aftereffect` |
@@ -375,11 +375,21 @@ com.ogfa.nativeviews.progress
 
 ### ComponentList
 
-- Vertical and horizontal layouts.
-- Viewport clipping and scrolling.
-- Item recycling or bounded lazy creation.
-- Item click and long-click.
-- Correct touch cancellation while scrolling.
+- Implemented vertical and horizontal layouts.
+- Implemented `Position + Size` and runtime `RectF` viewport regions.
+- Implemented viewport clipping, drag scrolling, fling, smooth/programmatic
+  scrolling, optional resisted overscroll, and edge settlement.
+- Implemented holder recycling by view type and visible-item lazy creation.
+- Implemented fixed and variable Figma item sizes, optional cross size, Figma/Px
+  spacing, and Figma/Px padding.
+- Each reusable item owns ordered `ZLayer`s containing mixed components.
+- `ItemScope` provides item-relative Figma bounds and globally safe component IDs.
+- Implemented stable data IDs, visible item/component lookup, and adapter data
+  notifications.
+- Implemented item click and long-click.
+- Implemented child-first touch routing and child cancellation when scrolling starts.
+- Implemented nested component registration, IME delegation, holder cleanup, and
+  dedicated `ComponentListTestActivity`/`COMPONENT_LIST.md` coverage.
 
 ### Dialog
 

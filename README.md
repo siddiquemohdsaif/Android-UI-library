@@ -84,6 +84,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `Button` | Image-backed composite with optional native text | [BUTTON.md](docs/components/BUTTON.md) |
 | `Image` | Standalone Canvas bitmap with scaling and optional click | [IMAGE.md](docs/components/IMAGE.md) |
 | `Card` | Rounded color/image container with nested ZLayer and outside shadow | [CARD.md](docs/components/CARD.md) |
+| `ComponentList` | Virtualized vertical/horizontal list with reusable layered items | [COMPONENT_LIST.md](docs/components/COMPONENT_LIST.md) |
 | `CustomAnimatorComponent` | Generic five-layer animated Canvas element | [CUSTOM_ANIMATOR_COMPONENT.md](docs/components/CUSTOM_ANIMATOR_COMPONENT.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -113,7 +114,6 @@ complete:
 ### Planned primary components
 
 ```text
-List
 Dialog
 ```
 
