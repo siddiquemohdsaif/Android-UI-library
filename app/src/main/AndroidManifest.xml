@@ -23,6 +23,10 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".DialogTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".ComponentListTestActivity"
             android:exported="true"
             android:screenOrientation="portrait" />

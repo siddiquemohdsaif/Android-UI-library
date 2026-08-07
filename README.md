@@ -85,6 +85,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `Image` | Standalone Canvas bitmap with scaling and optional click | [IMAGE.md](docs/components/IMAGE.md) |
 | `Card` | Rounded color/image container with nested ZLayer and outside shadow | [CARD.md](docs/components/CARD.md) |
 | `ComponentList` | Virtualized vertical/horizontal list with reusable layered items | [COMPONENT_LIST.md](docs/components/COMPONENT_LIST.md) |
+| `Dialog` | Modal dim overlay with layered Card surface, Back handling, and transitions | [DIALOG.md](docs/components/DIALOG.md) |
 | `CustomAnimatorComponent` | Generic five-layer animated Canvas element | [CUSTOM_ANIMATOR_COMPONENT.md](docs/components/CUSTOM_ANIMATOR_COMPONENT.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -110,12 +111,6 @@ complete:
 | `DynamicViewAnimator` | `animation.dynamic.DynamicViewAnimator` |
 | `LottieViewAnimator` | `animation.LottieViewAnimator` |
 | `GifAnimator` | Currently `animation.gif.GIFViewAnimator` |
-
-### Planned primary components
-
-```text
-Dialog
-```
 
 ### Planned secondary components
 

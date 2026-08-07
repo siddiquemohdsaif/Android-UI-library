@@ -258,6 +258,54 @@ public final class Card implements Component {
         return Collections.unmodifiableList(contentLayers);
     }
 
+    public void bringContentLayerToFront(String layerId) {
+        moveContentLayer(layerId, contentLayers.size() - 1);
+    }
+
+    public void sendContentLayerToBack(String layerId) {
+        moveContentLayer(layerId, 0);
+    }
+
+    public void moveContentLayerAbove(String layerId, String referenceId) {
+        ZLayer layer = requireContentLayer(layerId);
+        ZLayer reference = requireContentLayer(referenceId);
+        contentLayers.remove(layer);
+        contentLayers.add(contentLayers.indexOf(reference) + 1, layer);
+        invalidate();
+    }
+
+    public void moveContentLayerBelow(String layerId, String referenceId) {
+        ZLayer layer = requireContentLayer(layerId);
+        ZLayer reference = requireContentLayer(referenceId);
+        contentLayers.remove(layer);
+        contentLayers.add(Math.max(0, contentLayers.indexOf(reference)), layer);
+        invalidate();
+    }
+
+    public void setContentLayerIndex(String layerId, int index) {
+        if (index < 0 || index >= contentLayers.size()) {
+            throw new IndexOutOfBoundsException("Content layer index: " + index);
+        }
+        moveContentLayer(layerId, index);
+    }
+
+    public float getTranslationX() { return translationX; }
+    public float getTranslationY() { return translationY; }
+
+    public Card setTranslation(float x, float y) {
+        if (!Float.isFinite(x) || !Float.isFinite(y)) {
+            throw new IllegalArgumentException("Card translation must be finite.");
+        }
+        translationX = x;
+        translationY = y;
+        invalidate();
+        return this;
+    }
+
+    public Card setTranslationX(float value) { return setTranslation(value, translationY); }
+    public Card setTranslationY(float value) { return setTranslation(translationX, value); }
+    public Card resetTranslation() { return setTranslation(0f, 0f); }
+
     public BackgroundType getBackgroundType() {
         return backgroundType;
     }
@@ -678,6 +726,21 @@ public final class Card implements Component {
         contentLayersById.put(normalizedId, layer);
         invalidate();
         return layer;
+    }
+
+    private ZLayer requireContentLayer(String layerId) {
+        ZLayer layer = findContentLayer(layerId);
+        if (layer == null) {
+            throw new IllegalArgumentException("Unknown Card content layer: " + layerId);
+        }
+        return layer;
+    }
+
+    private void moveContentLayer(String layerId, int index) {
+        ZLayer layer = requireContentLayer(layerId);
+        contentLayers.remove(layer);
+        contentLayers.add(Math.max(0, Math.min(index, contentLayers.size())), layer);
+        invalidate();
     }
 
     private void resolveRegion(

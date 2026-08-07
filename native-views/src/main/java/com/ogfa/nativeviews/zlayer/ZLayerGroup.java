@@ -9,6 +9,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
 import com.ogfa.nativeviews.component.Component;
+import com.ogfa.nativeviews.component.BackHandler;
 import com.ogfa.nativeviews.component.ComponentHost;
 import com.ogfa.nativeviews.textfield.TextField;
 import com.ogfa.nativeviews.textfield.TextFieldHost;
@@ -166,6 +167,25 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
             touchLayer = null;
         }
         return handled;
+    }
+
+    /** Dispatches Back to the topmost visible, enabled Back-aware component. */
+    public boolean onBackPressed() {
+        ensureActive();
+        for (int layerIndex = layers.size() - 1; layerIndex >= 0; layerIndex--) {
+            ZLayer layer = layers.get(layerIndex);
+            if (!layer.isVisible() || !layer.isEnabled()) continue;
+            java.util.List<Component> components = layer.getComponents();
+            for (int index = components.size() - 1; index >= 0; index--) {
+                Component component = components.get(index);
+                if (component.isVisible() && component.isEnabled()
+                        && component instanceof BackHandler
+                        && ((BackHandler) component).onBackPressed()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public InputConnection onCreateInputConnection(EditorInfo attrs) {

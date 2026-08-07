@@ -50,7 +50,7 @@ com.ogfa.nativeviews
 | Image | Implemented | Standalone `Image` component with bitmap scaling, runtime updates, and optional click |
 | Card | Implemented | Rounded color/image background, outside drop shadow, and one nested mixed-component ZLayer |
 | List | Implemented | `ComponentList` provides virtualized vertical/horizontal scrolling, reusable layered items, stable IDs, child touch arbitration, fling, Figma spacing/padding, and dedicated documentation/test coverage. |
-| Dialog | Not started | — |
+| Dialog | Implemented | Modal dim overlay, Card-backed layered content, local Figma scope, outside/Back policies, show/dismiss lifecycle, transitions, callbacks, translation, and dedicated documentation/test coverage. |
 | CustomAnimatorComponent | Implemented foundation | Renamed API and five-layer system are in `animator.component` |
 | AfterEffectAnimator | Existing, needs hardening | `animation.aftereffect` |
 | DynamicViewAnimator | Existing, needs hardening | `animation.dynamic.DynamicViewAnimator` |
@@ -393,10 +393,20 @@ com.ogfa.nativeviews.progress
 
 ### Dialog
 
-- Modal overlay and background dimming.
-- Show, dismiss, back handling, and outside-touch policy.
-- Enter and exit animation.
-- Child component composition and lifecycle cleanup.
+- Implemented modal overlay and animated full-parent dimming.
+- Implemented Card-backed surface with color/image, radius, shadow, alpha, and
+  multiple ordered content layers.
+- Implemented Dialog-local Figma `Scope`, safe nested IDs, lookup, and Builder
+  content callback.
+- Implemented show, immediate show, dismiss, immediate dismiss, toggle, state,
+  dismissal reasons, and lifecycle callbacks.
+- Implemented topmost-first `BackHandler` dispatch through `ZLayerGroup` and
+  configurable Back dismissal.
+- Implemented modal inside/outside touch routing with IGNORE/DISMISS policy.
+- Implemented fade, fade-scale, four slide transitions, and custom transition
+  interpolation/configuration.
+- Implemented nested component/IME lifecycle cleanup and `HOST_RELEASED` reporting.
+- Covered by `DialogTestActivity` and `docs/components/DIALOG.md`.
 
 ### CustomAnimatorComponent
 
