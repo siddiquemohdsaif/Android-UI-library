@@ -55,7 +55,10 @@ public final class Button implements Component {
     private ComponentHost owner;
     private Image image;
     private Text text;
+    private Bitmap ownedBackgroundBitmap;
+    private FigmaConfig figmaConfig;
     private TextInsets textInsets;
+    private boolean textInsetsInPixels;
     private float dimensionScale;
     private float cornerRadius;
     private float resolvedCornerRadius;
@@ -76,6 +79,7 @@ public final class Button implements Component {
         );
         id = requireId(builder.id);
         textInsets = builder.textInsets;
+        textInsetsInPixels = builder.textInsetsInPixels;
         cornerRadius = builder.cornerRadius;
         cornerRadiusInPixels = builder.cornerRadiusInPixels;
         alpha = builder.alpha;
@@ -86,11 +90,13 @@ public final class Button implements Component {
         if (builder.suppliedImage != null) {
             image = builder.suppliedImage;
             bounds.set(image.getBounds());
-            dimensionScale = 1f;
+            figmaConfig = image.getFigmaConfig();
+            dimensionScale = image.getDimensionScale();
             RectF insetTextBounds = resolveTextBounds(
                     bounds,
                     dimensionScale,
-                    textInsets
+                    textInsets,
+                    textInsetsInPixels
             );
             if (builder.suppliedText != null) {
                 requireContainedText(bounds, builder.suppliedText.getBounds());
@@ -108,12 +114,23 @@ public final class Button implements Component {
             RectF textBounds = resolveTextBounds(
                     bounds,
                     dimensionScale,
-                    textInsets
+                    textInsets,
+                    textInsetsInPixels
             );
+            Bitmap resolvedBitmap = builder.bitmap;
+            if (resolvedBitmap == null) {
+                ownedBackgroundBitmap = createColorBitmap(
+                        Objects.requireNonNull(
+                                builder.backgroundColor,
+                                "Button background color cannot be null."
+                        )
+                );
+                resolvedBitmap = ownedBackgroundBitmap;
+            }
             image = new Image.Builder(
                     context,
                     childId("image"),
-                    builder.bitmap,
+                    resolvedBitmap,
                     bounds
             )
                     .setScaleType(builder.imageScaleType)
@@ -163,6 +180,14 @@ public final class Button implements Component {
         return textInsets;
     }
 
+    public boolean areTextInsetsInPixels() {
+        return textInsetsInPixels;
+    }
+
+    public FigmaConfig getFigmaConfig() {
+        return figmaConfig;
+    }
+
     public float getAlpha() {
         return alpha;
     }
@@ -195,7 +220,28 @@ public final class Button implements Component {
 
     public Button setBitmap(Bitmap bitmap) {
         ensureActive();
+        Objects.requireNonNull(bitmap, "Button bitmap cannot be null.");
+        if (bitmap != ownedBackgroundBitmap) {
+            recycleOwnedBackground();
+        }
         image.setBitmap(bitmap);
+        return this;
+    }
+
+    /**
+     * Replaces the image background with a privately owned solid-color bitmap.
+     */
+    public Button setBackgroundColor(int color) {
+        ensureActive();
+        if (ownedBackgroundBitmap == null
+                || ownedBackgroundBitmap.isRecycled()) {
+            ownedBackgroundBitmap = createColorBitmap(color);
+            image.setBitmap(ownedBackgroundBitmap);
+        } else {
+            ownedBackgroundBitmap.eraseColor(color);
+        }
+        image.setScaleType(Image.ScaleType.FIT_XY);
+        invalidate();
         return this;
     }
 
@@ -239,19 +285,39 @@ public final class Button implements Component {
         RectF resolved = position.toRectF(hostView, size);
         float newDimensionScale = position.getScale(hostView);
         applyRegion(resolved, newDimensionScale);
+        figmaConfig = position.getFigmaConfig();
         return this;
     }
 
     public Button setRegion(RectF bounds) {
         ensureActive();
+        FigmaConfig newConfig = FigmaConfig.getDefault();
         applyRegion(new RectF(Objects.requireNonNull(
                 bounds,
                 "Bounds cannot be null."
-        )), 1f);
+        )), newConfig.getScale(hostView.getWidth()));
+        figmaConfig = newConfig;
         return this;
     }
 
+    /**
+     * Sets label-region insets in Figma/design-space units.
+     */
     public Button setTextInsets(TextInsets textInsets) {
+        return setTextInsetsInternal(textInsets, false);
+    }
+
+    /**
+     * Sets exact label-region insets in runtime pixels.
+     */
+    public Button setTextInsetsPx(TextInsets textInsets) {
+        return setTextInsetsInternal(textInsets, true);
+    }
+
+    private Button setTextInsetsInternal(
+            TextInsets textInsets,
+            boolean inPixels
+    ) {
         ensureActive();
         TextInsets newInsets = Objects.requireNonNull(
                 textInsets,
@@ -260,9 +326,11 @@ public final class Button implements Component {
         RectF textBounds = resolveTextBounds(
                 bounds,
                 dimensionScale,
-                newInsets
+                newInsets,
+                inPixels
         );
         this.textInsets = newInsets;
+        textInsetsInPixels = inPixels;
         if (text != null) {
             applyTextRegion(text, textBounds, dimensionScale);
         }
@@ -283,7 +351,7 @@ public final class Button implements Component {
     }
 
     /**
-     * Uses Figma units for Position + Size and runtime pixels for RectF.
+     * Uses Figma/design-space units regardless of the region type.
      */
     public Button setCornerRadius(float cornerRadius) {
         ensureActive();
@@ -313,6 +381,61 @@ public final class Button implements Component {
 
     public Button setTextSizePx(float pixels) {
         requireText().setTextSizePx(pixels);
+        return this;
+    }
+
+    public Button setTextLetterSpacing(float spacing) {
+        requireText().setLetterSpacing(spacing);
+        return this;
+    }
+
+    public Button setTextLetterSpacingPx(float pixels) {
+        requireText().setLetterSpacingPx(pixels);
+        return this;
+    }
+
+    public Button setTextLineSpacing(float spacing) {
+        requireText().setLineSpacing(spacing);
+        return this;
+    }
+
+    public Button setTextLineSpacingPx(float pixels) {
+        requireText().setLineSpacingPx(pixels);
+        return this;
+    }
+
+    public Button setTextPadding(float horizontal, float vertical) {
+        requireText().setPadding(horizontal, vertical);
+        return this;
+    }
+
+    public Button setTextPaddingPx(float horizontal, float vertical) {
+        requireText().setPaddingPx(horizontal, vertical);
+        return this;
+    }
+
+    public Button setTextShadow(
+            float radius,
+            float dx,
+            float dy,
+            int color
+    ) {
+        requireText().setShadow(radius, dx, dy, color);
+        return this;
+    }
+
+    public Button setTextShadowPx(
+            float radius,
+            float dx,
+            float dy,
+            int color
+    ) {
+        requireText().setShadowPx(radius, dx, dy, color);
+        return this;
+    }
+
+    public Button clearTextShadow() {
+        requireText().clearShadow();
         return this;
     }
 
@@ -475,6 +598,7 @@ public final class Button implements Component {
             image.release();
             image = null;
         }
+        recycleOwnedBackground();
     }
 
     private void resolveOwnRegion(
@@ -485,7 +609,8 @@ public final class Button implements Component {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
             bounds.set(explicitBounds);
-            dimensionScale = 1f;
+            figmaConfig = FigmaConfig.getDefault();
+            dimensionScale = figmaConfig.getScale(hostView.getWidth());
             return;
         }
         Objects.requireNonNull(position, "Position cannot be null.");
@@ -493,6 +618,7 @@ public final class Button implements Component {
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
         bounds.set(resolved);
+        figmaConfig = position.getFigmaConfig();
         dimensionScale = position.getScale(hostView);
     }
 
@@ -501,7 +627,8 @@ public final class Button implements Component {
         RectF textBounds = resolveTextBounds(
                 newBounds,
                 newDimensionScale,
-                textInsets
+                textInsets,
+                textInsetsInPixels
         );
         bounds.set(newBounds);
         dimensionScale = newDimensionScale;
@@ -517,14 +644,6 @@ public final class Button implements Component {
             CharSequence label,
             RectF textBounds
     ) {
-        if (dimensionScale == 1f) {
-            return new Text.Builder(
-                    context,
-                    childId("text"),
-                    label,
-                    textBounds
-            );
-        }
         Position textPosition = designPosition(textBounds, dimensionScale);
         Size textSize = designSize(textBounds, dimensionScale);
         return new Text.Builder(
@@ -541,10 +660,6 @@ public final class Button implements Component {
             RectF textBounds,
             float scale
     ) {
-        if (scale == 1f) {
-            target.setRegion(textBounds);
-            return;
-        }
         target.setRegion(
                 designPosition(textBounds, scale),
                 designSize(textBounds, scale)
@@ -570,18 +685,25 @@ public final class Button implements Component {
     }
 
     private RectF resolveTextBounds() {
-        return resolveTextBounds(bounds, dimensionScale, textInsets);
+        return resolveTextBounds(
+                bounds,
+                dimensionScale,
+                textInsets,
+                textInsetsInPixels
+        );
     }
 
     private RectF resolveTextBounds(
             RectF buttonBounds,
             float scale,
-            TextInsets insets
+            TextInsets insets,
+            boolean inPixels
     ) {
-        float left = buttonBounds.left + insets.getLeft() * scale;
-        float top = buttonBounds.top + insets.getTop() * scale;
-        float right = buttonBounds.right - insets.getRight() * scale;
-        float bottom = buttonBounds.bottom - insets.getBottom() * scale;
+        float insetScale = inPixels ? 1f : scale;
+        float left = buttonBounds.left + insets.getLeft() * insetScale;
+        float top = buttonBounds.top + insets.getTop() * insetScale;
+        float right = buttonBounds.right - insets.getRight() * insetScale;
+        float bottom = buttonBounds.bottom - insets.getBottom() * insetScale;
         RectF result = new RectF(left, top, right, bottom);
         if (result.width() <= 0f || result.height() <= 0f) {
             throw new IllegalArgumentException(
@@ -698,6 +820,25 @@ public final class Button implements Component {
         return alpha;
     }
 
+    private static Bitmap createColorBitmap(int color) {
+        Bitmap bitmap = Bitmap.createBitmap(
+                1,
+                1,
+                Bitmap.Config.ARGB_8888
+        );
+        bitmap.eraseColor(color);
+        return bitmap;
+    }
+
+    private void recycleOwnedBackground() {
+        if (ownedBackgroundBitmap != null) {
+            if (!ownedBackgroundBitmap.isRecycled()) {
+                ownedBackgroundBitmap.recycle();
+            }
+            ownedBackgroundBitmap = null;
+        }
+    }
+
     private static float requireCornerRadius(float cornerRadius) {
         if (!Float.isFinite(cornerRadius) || cornerRadius < 0f) {
             throw new IllegalArgumentException(
@@ -718,6 +859,7 @@ public final class Button implements Component {
         private final Image suppliedImage;
         private final Text suppliedText;
         private final Bitmap bitmap;
+        private final Integer backgroundColor;
         private final CharSequence label;
         private final Position position;
         private final Size size;
@@ -731,6 +873,7 @@ public final class Button implements Component {
                         .setWrapEnabled(false);
 
         private TextInsets textInsets = TextInsets.none();
+        private boolean textInsetsInPixels;
         private Image.ScaleType imageScaleType = Image.ScaleType.FIT_XY;
         private boolean filterBitmap = true;
         private float cornerRadius;
@@ -761,6 +904,7 @@ public final class Button implements Component {
             );
             suppliedText = text;
             bitmap = null;
+            backgroundColor = null;
             label = null;
             position = null;
             size = null;
@@ -794,6 +938,7 @@ public final class Button implements Component {
                     bitmap,
                     "Button bitmap cannot be null."
             );
+            backgroundColor = null;
             label = text;
             this.position = Objects.requireNonNull(
                     position,
@@ -830,6 +975,7 @@ public final class Button implements Component {
                     bitmap,
                     "Button bitmap cannot be null."
             );
+            backgroundColor = null;
             label = text;
             explicitBounds = new RectF(Objects.requireNonNull(
                     bounds,
@@ -841,11 +987,91 @@ public final class Button implements Component {
             size = null;
         }
 
+        public Builder(
+                Context context,
+                String id,
+                int backgroundColor,
+                Position position,
+                Size size
+        ) {
+            this(context, id, backgroundColor, null, position, size);
+        }
+
+        public Builder(
+                Context context,
+                String id,
+                int backgroundColor,
+                CharSequence text,
+                Position position,
+                Size size
+        ) {
+            this.context = Objects.requireNonNull(
+                    context,
+                    "Context cannot be null."
+            );
+            this.id = id;
+            this.backgroundColor = backgroundColor;
+            label = text;
+            this.position = Objects.requireNonNull(
+                    position,
+                    "Position cannot be null."
+            );
+            this.size = Objects.requireNonNull(size, "Size cannot be null.");
+            suppliedImage = null;
+            suppliedText = null;
+            bitmap = null;
+            explicitBounds = null;
+        }
+
+        public Builder(
+                Context context,
+                String id,
+                int backgroundColor,
+                RectF bounds
+        ) {
+            this(context, id, backgroundColor, null, bounds);
+        }
+
+        public Builder(
+                Context context,
+                String id,
+                int backgroundColor,
+                CharSequence text,
+                RectF bounds
+        ) {
+            this.context = Objects.requireNonNull(
+                    context,
+                    "Context cannot be null."
+            );
+            this.id = id;
+            this.backgroundColor = backgroundColor;
+            label = text;
+            explicitBounds = new RectF(Objects.requireNonNull(
+                    bounds,
+                    "Bounds cannot be null."
+            ));
+            suppliedImage = null;
+            suppliedText = null;
+            bitmap = null;
+            position = null;
+            size = null;
+        }
+
         public Builder setTextInsets(TextInsets textInsets) {
             this.textInsets = Objects.requireNonNull(
                     textInsets,
                     "Text insets cannot be null."
             );
+            textInsetsInPixels = false;
+            return this;
+        }
+
+        public Builder setTextInsetsPx(TextInsets textInsets) {
+            this.textInsets = Objects.requireNonNull(
+                    textInsets,
+                    "Text insets cannot be null."
+            );
+            textInsetsInPixels = true;
             return this;
         }
 
@@ -894,6 +1120,70 @@ public final class Button implements Component {
         public Builder setTextSizePx(float pixels) {
             requireInternalText();
             textStyleBuilder.setTextSizePx(pixels);
+            return this;
+        }
+
+        public Builder setTextLetterSpacing(float spacing) {
+            requireInternalText();
+            textStyleBuilder.setLetterSpacing(spacing);
+            return this;
+        }
+
+        public Builder setTextLetterSpacingPx(float pixels) {
+            requireInternalText();
+            textStyleBuilder.setLetterSpacingPx(pixels);
+            return this;
+        }
+
+        public Builder setTextLineSpacing(float spacing) {
+            requireInternalText();
+            textStyleBuilder.setLineSpacing(spacing);
+            return this;
+        }
+
+        public Builder setTextLineSpacingPx(float pixels) {
+            requireInternalText();
+            textStyleBuilder.setLineSpacingPx(pixels);
+            return this;
+        }
+
+        public Builder setTextPadding(float horizontal, float vertical) {
+            requireInternalText();
+            textStyleBuilder.setPadding(horizontal, vertical);
+            return this;
+        }
+
+        public Builder setTextPaddingPx(float horizontal, float vertical) {
+            requireInternalText();
+            textStyleBuilder.setPaddingPx(horizontal, vertical);
+            return this;
+        }
+
+        public Builder setTextShadow(
+                float radius,
+                float dx,
+                float dy,
+                int color
+        ) {
+            requireInternalText();
+            textStyleBuilder.setShadow(radius, dx, dy, color);
+            return this;
+        }
+
+        public Builder setTextShadowPx(
+                float radius,
+                float dx,
+                float dy,
+                int color
+        ) {
+            requireInternalText();
+            textStyleBuilder.setShadowPx(radius, dx, dy, color);
+            return this;
+        }
+
+        public Builder clearTextShadow() {
+            requireInternalText();
+            textStyleBuilder.clearShadow();
             return this;
         }
 

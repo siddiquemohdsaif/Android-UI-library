@@ -340,13 +340,14 @@ com.ogfa.nativeviews.progress
 ### Button
 
 - Implemented required private `Image` background and optional private `Text`.
-- Implemented supplied-component, bitmap-only, and bitmap-plus-text builders.
+- Implemented supplied-component, bitmap, and privately owned solid-color
+  background builders, each with optional text.
 - Implemented `Position + Size` and `RectF` regions.
-- Implemented scaled `TextInsets`, containment validation, and automatic child
+- Implemented Figma/Px `TextInsets`, containment validation, and automatic child
   region updates.
 - Implemented component alpha, visibility, enabled state, and cancellation-safe click.
 - Implemented cached composite corner clipping with Figma-scaled and fixed-pixel
-  radius APIs.
+  radius APIs for both region forms.
 - Implemented runtime bitmap, label, region, inset, image, text, font, and listener APIs.
 - Child components are privately hosted and never registered or dispatched separately.
 - Future interaction expansion: long-click, pressed/selected visuals, optional

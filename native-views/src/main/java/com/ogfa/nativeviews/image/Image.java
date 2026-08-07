@@ -11,6 +11,7 @@ import android.view.View;
 import com.ogfa.nativeviews.component.Component;
 import com.ogfa.nativeviews.component.ComponentFactory;
 import com.ogfa.nativeviews.component.ComponentHost;
+import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 
@@ -38,6 +39,8 @@ public final class Image implements Component {
     );
 
     private ComponentHost owner;
+    private FigmaConfig figmaConfig;
+    private float dimensionScale;
     private Bitmap bitmap;
     private ScaleType scaleType;
     private float alpha;
@@ -83,6 +86,14 @@ public final class Image implements Component {
 
     public ScaleType getScaleType() {
         return scaleType;
+    }
+
+    public FigmaConfig getFigmaConfig() {
+        return figmaConfig;
+    }
+
+    public float getDimensionScale() {
+        return dimensionScale;
     }
 
     public float getAlpha() {
@@ -266,6 +277,8 @@ public final class Image implements Component {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
             bounds.set(explicitBounds);
+            figmaConfig = FigmaConfig.getDefault();
+            dimensionScale = figmaConfig.getScale(hostView.getWidth());
             return;
         }
         Objects.requireNonNull(position, "Position cannot be null.");
@@ -273,6 +286,8 @@ public final class Image implements Component {
         RectF resolved = position.toRectF(hostView, size);
         requireBounds(resolved);
         bounds.set(resolved);
+        figmaConfig = position.getFigmaConfig();
+        dimensionScale = position.getScale(hostView);
     }
 
     private void resolveDrawBounds() {

@@ -75,6 +75,8 @@ image.getId();
 image.getBitmap();
 image.getBounds();
 image.getScaleType();
+image.getFigmaConfig();
+image.getDimensionScale();
 image.getAlpha();
 image.isFilterBitmap();
 image.isVisible();

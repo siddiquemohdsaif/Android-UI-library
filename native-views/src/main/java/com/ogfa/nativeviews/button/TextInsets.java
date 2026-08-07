@@ -5,8 +5,9 @@ import java.util.Objects;
 /**
  * Immutable spacing that restricts a Button's text region.
  *
- * <p>Values use Figma/design-space units for a {@code Position + Size} button
- * and runtime pixels for a {@code RectF} button.</p>
+ * <p>The Button method receiving this value determines its unit:
+ * {@code setTextInsets()} uses Figma/design-space units and
+ * {@code setTextInsetsPx()} uses exact runtime pixels.</p>
  */
 public final class TextInsets {
 

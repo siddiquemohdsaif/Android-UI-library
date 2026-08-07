@@ -104,6 +104,9 @@ public final class ButtonTestActivity extends AppCompatActivity {
                     .setTextInsets(TextInsets.of(40f, 20f, 40f, 20f))
                     .setCornerRadius(60f)
                     .setTextSize(72f)
+                    .setTextLetterSpacing(2f)
+                    .setTextPadding(8f, 4f)
+                    .setTextShadow(4f, 0f, 3f, 0x99000000)
                     .setTextColor(Color.WHITE)
                     .setFont(NativeFonts.INTER)
                     .setFontVariations(FontVariation.BOLD)
@@ -163,13 +166,16 @@ public final class ButtonTestActivity extends AppCompatActivity {
             buttons.add(new Button.Builder(
                     getContext(),
                     "rect_button",
-                    blueBackground,
+                    0xff0057b8,
                     "RECTF + 55% ALPHA",
                     runtimeBounds
             )
-                    .setTextInsets(TextInsets.horizontal(dp(24)))
+                    .setTextInsetsPx(TextInsets.horizontal(dp(24)))
                     .setCornerRadiusPx(dp(24))
                     .setTextSizePx(dp(22))
+                    .setTextLetterSpacingPx(dp(1))
+                    .setTextPaddingPx(dp(4), dp(2))
+                    .setTextShadowPx(dp(2), 0f, dp(1), 0x99000000)
                     .setAlpha(0.55f)
                     .setOnClickListener(this::onButtonClick));
 
@@ -242,9 +248,13 @@ public final class ButtonTestActivity extends AppCompatActivity {
             }
 
             scaled.setRegion(new RectF(0f, 0f, 200f, 200f));
-            if (Math.abs(scaled.getResolvedCornerRadius() - 36f) > 0.01f) {
+            float defaultExpected = 36f * getWidth()
+                    / FigmaConfig.getDefault().getReferenceWidth();
+            if (Math.abs(
+                    scaled.getResolvedCornerRadius() - defaultExpected
+            ) > 0.01f) {
                 throw new AssertionError(
-                        "RectF region did not resolve radius in runtime pixels."
+                        "RectF region did not retain Figma radius semantics."
                 );
             }
             scaled.setRegion(
@@ -280,23 +290,38 @@ public final class ButtonTestActivity extends AppCompatActivity {
             RectF original = button.getBounds();
             button.setRegion(new RectF(original))
                     .setRegion(position(90f, 320f), new Size(900f, 240f))
+                    .setTextInsetsPx(TextInsets.of(12f, 6f, 12f, 6f));
+            if (!button.areTextInsetsInPixels()) {
+                throw new AssertionError(
+                        "Runtime-pixel TextInsets mode was not retained."
+                );
+            }
+            button
                     .setTextInsets(TextInsets.of(40f, 20f, 40f, 20f))
                     .setImageScaleType(Image.ScaleType.FIT_XY)
                     .setFilterBitmap(true)
                     .setCornerRadius(60f)
+                    .setTextLetterSpacing(2f)
+                    .setTextLineSpacing(4f)
+                    .setTextPadding(8f, 4f)
+                    .setTextShadow(4f, 0f, 3f, 0x99000000)
+                    .clearTextShadow()
                     .setAlpha(0.8f)
                     .setAlpha(1f)
                     .setVisible(false)
                     .setVisible(true)
                     .setEnabled(false)
                     .setEnabled(true);
-            if (button.getCornerRadius() != 60f
+            if (button.areTextInsetsInPixels()
+                    || button.getCornerRadius() != 60f
                     || button.getResolvedCornerRadius() <= 0f
                     || button.isCornerRadiusInPixels()) {
                 throw new AssertionError(
                         "Button corner-radius getters returned invalid state."
                 );
             }
+            button.setBackgroundColor(0xff0057b8);
+            button.setBitmap(blueBackground);
 
             int[] syntheticClicks = {0};
             button.setOnClickListener(id -> syntheticClicks[0]++);

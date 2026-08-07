@@ -35,8 +35,8 @@ Button play = content.add(new Button.Builder(
         .setOnClickListener(id -> startGame()));
 ```
 
-`Position + Size` values and `TextInsets` are Figma-space measurements. They
-all scale from the `FigmaConfig` captured by `Position`.
+`Position + Size` values and unsuffixed visual dimensions are Figma-space
+measurements. They scale from the captured `FigmaConfig`.
 
 Use runtime-pixel bounds instead:
 
@@ -50,8 +50,26 @@ Button play = content.add(new Button.Builder(
 ));
 ```
 
-With `RectF`, text insets and `setTextSize()` are runtime pixels. Explicit
-pixel text is also available through `setTextSizePx()`.
+`RectF` defines exact runtime bounds, but it does not change styling units.
+Unsuffixed styling methods still use Figma units. Use methods ending in `Px`
+for exact runtime pixels.
+
+## Solid-color background
+
+A Button can create and privately own its background without a bitmap:
+
+```java
+Button play = content.add(new Button.Builder(
+        context,
+        "play",
+        0xff0057b8,
+        "PLAY",
+        position,
+        new Size(900f, 240f)
+));
+```
+
+Color-background overloads also support `RectF` and image-only buttons.
 
 ## Image-only button
 
@@ -156,6 +174,13 @@ textBottom = button.bottom - bottomInset;
 Insets that leave zero or negative width/height throw a descriptive
 `IllegalArgumentException`.
 
+The receiving method selects the unit:
+
+```java
+.setTextInsets(TextInsets.all(20f))   // Figma units
+.setTextInsetsPx(TextInsets.all(20f)) // exact runtime pixels
+```
+
 ## Complete construction API
 
 ```java
@@ -168,17 +193,33 @@ new Button.Builder(context, id, bitmap, position, size);
 new Button.Builder(context, id, bitmap, label, position, size);
 new Button.Builder(context, id, bitmap, rectF);
 new Button.Builder(context, id, bitmap, label, rectF);
+
+// Internally created solid-color Image
+new Button.Builder(context, id, color, position, size);
+new Button.Builder(context, id, color, label, position, size);
+new Button.Builder(context, id, color, rectF);
+new Button.Builder(context, id, color, label, rectF);
 ```
 
 Internal visual configuration:
 
 ```java
 .setTextInsets(insets)
+.setTextInsetsPx(insets)
 .setImageScaleType(Image.ScaleType.FIT_XY)
 .setFilterBitmap(true)
 .setTextStyle(textStyle)
 .setTextSize(72f)
 .setTextSizePx(48f)
+.setTextLetterSpacing(2f)
+.setTextLetterSpacingPx(2f)
+.setTextLineSpacing(8f)
+.setTextLineSpacingPx(8f)
+.setTextPadding(12f, 6f)
+.setTextPaddingPx(12f, 6f)
+.setTextShadow(4f, 0f, 3f, 0xaa000000)
+.setTextShadowPx(4f, 0f, 3f, 0xaa000000)
+.clearTextShadow()
 .setTextColor(Color.WHITE)
 .setTextAlpha(0.8f)
 .setTextAlignment(Text.Alignment.CENTER)
@@ -213,9 +254,8 @@ The radius clips the complete Button composite, including both Image and Text:
 .setCornerRadius(36f)
 ```
 
-With `Position + Size`, `36f` is a Figma-space value converted using the
-`FigmaConfig` captured by Position. With `RectF`, it is already a runtime-pixel
-value.
+`36f` is always a Figma-space value converted with the Button's captured
+`FigmaConfig`, including when the region is a `RectF`.
 
 ```java
 .setCornerRadiusPx(36f)
@@ -236,6 +276,8 @@ button.getImage();
 button.getText();       // null for image-only
 button.hasText();
 button.getTextInsets();
+button.areTextInsetsInPixels();
+button.getFigmaConfig();
 button.getAlpha();
 button.getCornerRadius();
 button.getResolvedCornerRadius();
@@ -245,12 +287,14 @@ button.isEnabled();
 button.isClickable();
 
 button.setBitmap(newBitmap);
+button.setBackgroundColor(0xff0057b8);
 button.setLabel("CONTINUE");
 button.removeText();
 
 button.setRegion(position, size);
 button.setRegion(rectF);
 button.setTextInsets(TextInsets.all(12f));
+button.setTextInsetsPx(TextInsets.all(12f));
 
 button.setImageScaleType(Image.ScaleType.CENTER_CROP);
 button.setFilterBitmap(true);
@@ -259,6 +303,15 @@ button.setCornerRadiusPx(24f);
 
 button.setTextSize(60f);
 button.setTextSizePx(44f);
+button.setTextLetterSpacing(2f);
+button.setTextLetterSpacingPx(2f);
+button.setTextLineSpacing(8f);
+button.setTextLineSpacingPx(8f);
+button.setTextPadding(12f, 6f);
+button.setTextPaddingPx(12f, 6f);
+button.setTextShadow(4f, 0f, 3f, 0xaa000000);
+button.setTextShadowPx(4f, 0f, 3f, 0xaa000000);
+button.clearTextShadow();
 button.setTextColor(Color.WHITE);
 button.setTextAlpha(0.75f);
 button.setTextAlignment(Text.Alignment.CENTER);
