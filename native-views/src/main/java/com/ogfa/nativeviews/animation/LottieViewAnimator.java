@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.util.Base64;
 import android.view.View;
 
@@ -515,6 +516,18 @@ public class LottieViewAnimator {
         }
     }
 
+    public void setAnimationBounds(String id, RectF bounds) {
+        String normalizedId = normalizeId(id);
+        for (Animation animation : animations) {
+            if (animation.id.equals(normalizedId)) {
+                animation.width = Math.max(1, Math.round(bounds.width()));
+                animation.height = Math.max(1, Math.round(bounds.height()));
+                animation.x = Math.round(bounds.left);
+                animation.y = Math.round(bounds.top);
+            }
+        }
+    }
+
     public static void releaseLottieResources(
             LottieViewAnimator lottieViewAnimator
     ) {
@@ -624,10 +637,10 @@ public class LottieViewAnimator {
         private final Callback callback;
         private final String id;
         public final LottieDrawable drawable;
-        private final int width;
-        private final int height;
-        private final int x;
-        private final int y;
+        private int width;
+        private int height;
+        private int x;
+        private int y;
         private final float angle;
         private boolean callbackDispatched;
         private boolean disposed;

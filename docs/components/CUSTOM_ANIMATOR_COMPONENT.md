@@ -1,492 +1,237 @@
 # CustomAnimatorComponent
 
-`CustomAnimatorComponent` is a generic layered Canvas element. It can combine bitmap,
-GIF, Lottie, dynamic Canvas, and After Effects content in one region, with optional
-button-like interaction and movement.
+`CustomAnimatorComponent` is one Canvas component made from an ordered stack of bitmap,
+GIF, Lottie, dynamic, and After Effects layers. `ZLayerGroup` owns drawing, topmost touch
+dispatch, invalidation, and cleanup; no separate component group or static list helpers are
+needed.
 
-It is not an Android XML `Button`. The future primary `Button` will provide a simpler
-API for ordinary text, icon, bitmap, and background buttons.
+## Declared region
 
-Packages:
-
-```java
-import com.ogfa.nativeviews.animator.component.CustomAnimatorComponent;
-import com.ogfa.nativeviews.zlayer.ZLayer;
-import com.ogfa.nativeviews.zlayer.ZLayerGroup;
-import com.ogfa.nativeviews.animator.component.layer.ComponentLayer;
-```
-
-## Supported layers
-
-Layers draw in list order: the first is at the back and the last is on top.
-
-```text
-BitmapLayer
-GifLayer
-LottieLayer
-DynamicLayer
-AfterEffectLayer
-```
-
-Every layer implements:
+Every component has an explicit region. Bitmap dimensions are never used to guess it.
 
 ```java
-public interface ComponentLayer {
-    void draw(Canvas canvas);
-    void release();
-    void setBounds(RectF bounds);
-}
+CustomAnimatorComponent component = layer.add(
+        new CustomAnimatorComponent.Builder(
+                getContext(),
+                "reward",
+                layers,
+                position,
+                new Size(420f, 160f)
+        )
+);
+
+// Runtime-pixel alternative
+new CustomAnimatorComponent.Builder(getContext(), "reward", layers, rectF);
 ```
 
-## Minimal bitmap component
+A single bitmap can be supplied directly. The builder creates a match-component
+`BitmapLayer` internally:
+
+```java
+CustomAnimatorComponent play = layer.add(
+        new CustomAnimatorComponent.Builder(
+                getContext(), "play", playBitmap, position, new Size(420f, 160f)
+        )
+                .setClickListener(id -> startGame())
+                .setPressedScale(0.92f)
+                .setPressAnimationDuration(100L)
+);
+```
+
+## Relative layer regions
+
+Layer regions are relative to the component, so moving or resizing the component moves all
+layers together.
+
+```java
+ArrayList<ComponentLayer> layers = new ArrayList<>();
+
+layers.add(BitmapLayer.create(
+        "background", backgroundBitmap, LayerRegion.matchComponent()
+));
+
+layers.add(BitmapLayer.create(
+        "icon", iconBitmap, LayerRegion.figma(24f, 20f, 96f, 96f)
+));
+
+layers.add(GifLayer.create(
+        getContext(), "glow", "reward_glow.gif",
+        LayerRegion.figma(0f, 0f, 420f, 160f)
+));
+
+layers.add(LottieLayer.create(
+        getContext(), "sparkles", "reward_sparkles",
+        LayerRegion.figma(280f, 8f, 120f, 120f)
+));
+
+layers.add(DynamicLayer.create(
+        "counter", customDynamicView, LayerRegion.figma(140f, 45f, 120f, 60f)
+));
+
+layers.add(AfterEffectLayer.create(
+        "effect", afterEffectAnimator, LayerRegion.matchComponent()
+));
+```
+
+`LayerRegion.figma(...)` scales from the component's `Position`/`FigmaConfig` reference.
+`LayerRegion.px(...)` uses runtime pixels. `LayerRegion.matchComponent()` fills the declared
+component region.
+
+## Layer API
+
+Every layer has a unique ID inside its component.
+
+```java
+component.getLayerCount();
+component.getLayers();                 // unmodifiable
+component.containsLayer("icon");
+component.findLayer("icon");
+component.findLayer("icon", BitmapLayer.class);
+
+component.addLayer(layer);
+component.addLayer(1, layer);
+component.removeLayer("icon");         // releases that layer
+component.clearLayers();                // releases all layers
+
+component.bringLayerToFront("sparkles");
+component.sendLayerToBack("background");
+component.moveLayerAbove("icon", "background");
+component.moveLayerBelow("glow", "icon");
+component.setLayerIndex("icon", 2);
+
+component.setLayerRegion("icon", LayerRegion.figma(30f, 20f, 90f, 90f));
+component.setLayerVisible("glow", false);
+component.setLayerAlpha("sparkles", 0.65f);
+```
+
+`BitmapLayer` does not own or recycle its bitmap:
+
+```java
+BitmapLayer icon = component.findLayer("icon", BitmapLayer.class);
+icon.getBitmap();
+icon.setBitmap(updatedBitmap);
+```
+
+## Bounds and clipping
+
+The declared layout region, visual union, and interaction bounds are separate:
+
+```java
+component.getLayoutBounds();
+component.getVisualBounds();
+component.getBounds();          // active BoundsPolicy result
+```
+
+Policies:
+
+```java
+BoundsPolicy.DECLARED_REGION    // default
+BoundsPolicy.LAYER_UNION
+BoundsPolicy.LARGEST_LAYER
+BoundsPolicy.CUSTOM
+```
+
+```java
+new CustomAnimatorComponent.Builder(context, id, layers, position, size)
+        .setBoundsPolicy(BoundsPolicy.LAYER_UNION)
+        .setClipToBounds(true);
+
+// Setting a resolver selects CUSTOM automatically.
+.setBoundsResolver((declared, layerBounds) -> calculatedRect);
+```
+
+Clipping is independent of hit bounds. It is off by default, allowing effects to render
+outside the declared region.
+
+## Optional interaction
+
+Without a click or long-click listener, the component is display-only and touch passes to
+the component below it.
+
+```java
+new CustomAnimatorComponent.Builder(context, id, layers, rectF)
+        .setClickListener(clickedId -> openReward())
+        .setOnLongClickListener(clickedId -> showDetails())
+        .setLongClickDelay(500L)
+        .setPressedScale(0.92f)
+        .setPressAnimationDuration(100L);
+```
+
+Down must begin inside the component. Moving outside cancels the gesture. Click fires only
+when up remains inside; long click fires once after its delay. Press animation uses
+`ValueAnimator`, not polling threads.
+
+Sound and haptics are both opt-in:
+
+```java
+.setSoundMode(CustomAnimatorComponent.SoundMode.NATIVE_VIEWS)
+
+.setSoundAction(this::playGameSound)  // selects CUSTOM sound mode
+.setHapticAction(() ->
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP))
+
+.setSoundMode(CustomAnimatorComponent.SoundMode.NONE) // default
+```
+
+## Position animation
+
+All layer rectangles and the touch bounds resolve on every movement frame. GIF and Lottie
+animations retain their current playback instead of being recreated.
+
+```java
+component.animateRegionTo(
+        targetPosition,
+        new Size(420f, 160f),
+        650L,
+        CustomAnimatorComponent.Interpolator.EASE_IN_OUT,
+        () -> onMoveFinished()
+);
+
+component.animateRegionTo(targetRectF, 650L,
+        CustomAnimatorComponent.Interpolator.LINEAR, null);
+
+component.isMoving();
+component.pauseMovement();
+component.resumeMovement();
+component.cancelMovement();
+component.finishMovement();
+```
+
+## General state and alignment
+
+```java
+component.setRegion(position, size);
+component.setRegion(rectF);
+component.horizontalCenter(true);
+component.verticalCenter(true);
+component.setAlpha(0.7f);
+component.setVisible(false);
+component.setEnabled(false);
+```
+
+Builder centering is also available with `.horizontalCenter(true)` and
+`.verticalCenter(true)`. Centering uses the owning `ZLayer`/composite component bounds.
+
+## Lifecycle
 
 ```java
 private final ZLayerGroup ui = new ZLayerGroup(this);
-private final ZLayer components = ui.addLayer("components");
-```
+private final ZLayer content = ui.addLayer("content");
 
-```java
-Position position = new Position(
-        this,
-        Position.HorizontalMarginFrom.LEFT,
-        Position.VerticalMarginFrom.TOP,
-        48f,
-        450f
-);
-
-CustomAnimatorComponent play = components.add(
-        new CustomAnimatorComponent.Builder(
-                getContext(),
-                "play",
-                playBitmap,
-                position
-        )
-                .setClickListener(id -> startGame())
-                .setPressScale(0.92f)
-);
-```
-
-The bitmap constructor creates `BitmapLayer` internally. Its bitmap dimensions are
-treated as Figma-space dimensions.
-
-## Host integration
-
-```java
-@Override
-protected void onDraw(Canvas canvas) {
+@Override protected void onDraw(Canvas canvas) {
     super.onDraw(canvas);
     ui.draw(canvas);
 }
 
-@Override
-public boolean onTouchEvent(MotionEvent event) {
-    return ui.onTouchEvent(event)
-            || super.onTouchEvent(event);
+@Override public boolean onTouchEvent(MotionEvent event) {
+    return ui.onTouchEvent(event) || super.onTouchEvent(event);
 }
 
-@Override
-protected void onDetachedFromWindow() {
+@Override protected void onDetachedFromWindow() {
     ui.release();
     super.onDetachedFromWindow();
 }
 ```
 
-The group automatically calls `postInvalidateOnAnimation()` while non-empty so
-animated layers and press effects continue rendering.
-
-Disable this for a completely static group:
-
-```java
-components.setAutoInvalidate(false);
-boolean enabled = components.isAutoInvalidate();
-```
-
-## Builder regions
-
-Explicit runtime bounds:
-
-```java
-new CustomAnimatorComponent.Builder(
-        context,
-        "play",
-        bitmap,
-        new RectF(left, top, right, bottom)
-);
-```
-
-```java
-new CustomAnimatorComponent.Builder(
-        context,
-        "play",
-        layers,
-        bounds
-);
-```
-
-Position-derived bitmap bounds:
-
-```java
-new CustomAnimatorComponent.Builder(
-        context,
-        "play",
-        bitmap,
-        position
-);
-```
-
-Position-derived layered bounds:
-
-```java
-new CustomAnimatorComponent.Builder(
-        context,
-        "free_coin",
-        layers,
-        position
-);
-```
-
-The layered `Position` overload selects the largest `BitmapLayer` by rendered area.
-At least one bitmap layer is therefore required. Use explicit bounds when a layered
-component has no bitmap.
-
-The planned shared region API will add `Position + Size` overloads and remove the
-requirement to infer layered bounds from a bitmap.
-
-Separate movement bounds for `DynamicLayer`:
-
-```java
-new CustomAnimatorComponent.Builder(
-        context,
-        "moving_component",
-        layers,
-        componentBounds,
-        dynamicLayerBounds
-);
-```
-
-## Layer creation
-
-### BitmapLayer
-
-```java
-BitmapLayer bitmapLayer = BitmapLayer.create(bitmap, bounds);
-BitmapLayer positioned = BitmapLayer.create(bitmap, position);
-```
-
-Canvas stretches the bitmap into the resolved region. Keep assets in `drawable-nodpi`
-or assets when bitmap dimensions represent Figma dimensions.
-
-### LottieLayer
-
-Cached animation:
-
-```java
-LottieLayer lottie = LottieLayer.create(
-        "win_animation",
-        bounds
-);
-```
-
-Asset fallback:
-
-```java
-LottieLayer lottie = LottieLayer.create(
-        context,
-        "win_animation.json",
-        bounds
-);
-```
-
-Position plus bitmap-sized bounds:
-
-```java
-LottieLayer lottie = LottieLayer.create(
-        context,
-        "win_animation",
-        position,
-        referenceBitmap
-);
-```
-
-### GifLayer
-
-Cached animation:
-
-```java
-GifLayer gif = GifLayer.create("carrom_pass_buy", bounds);
-```
-
-Asset fallback:
-
-```java
-GifLayer gif = GifLayer.create(
-        context,
-        "carrom_pass_buy.gif",
-        bounds
-);
-```
-
-### DynamicLayer
-
-```java
-DynamicLayer dynamic = DynamicLayer.create(
-        customDynamicView,
-        bounds
-);
-```
-
-The supplied dynamic view draws into the component's Canvas lifecycle.
-
-### AfterEffectLayer
-
-```java
-AfterEffectLayer effect = AfterEffectLayer.create(
-        afterEffectAnimator,
-        bounds
-);
-```
-
-The layer delegates frame drawing and cleanup to the After Effects animation system.
-
-## Layered example
-
-```java
-ArrayList<ComponentLayer> layers = new ArrayList<>();
-layers.add(BitmapLayer.create(background, bounds));
-layers.add(GifLayer.create("reward_glow", bounds));
-layers.add(LottieLayer.create("reward_icon", iconBounds));
-
-components.add(
-        new CustomAnimatorComponent.Builder(
-                getContext(),
-                "reward",
-                layers,
-                bounds
-        )
-                .setClickListener(id -> claimReward())
-                .setPressScale(0.92f)
-                .setSoundAction(this::playRewardSound)
-);
-```
-
-## Interaction
-
-Normal click:
-
-```java
-.setClickListener(id -> openShop())
-```
-
-Explicit click enable state:
-
-```java
-.setClickListener(id -> openShop(), true)
-```
-
-Long click:
-
-```java
-.setOnLongClickListener(id -> showShopHelp(), true)
-```
-
-Long press is detected after 500 ms. When long-click is enabled, also provide a normal
-click listener for shorter presses.
-
-Pressed scale:
-
-```java
-.setPressScale(0.90f)
-```
-
-The default is `0.96f`; `1f` disables the visible shrink.
-
-Custom sound or haptic:
-
-```java
-.setSoundAction(() ->
-        performHapticFeedback(
-                HapticFeedbackConstants.KEYBOARD_TAP
-        ))
-```
-
-## Default button sound
-
-If no sound action is supplied, the component uses:
-
-```text
-nativeviews/audio/sfx/g_button.mp3
-```
-
-The SDK preloads it asynchronously once per process and reuses the `SoundPool` entry.
-
-Optional global controls:
-
-```java
-NativeViewsSoundPlayer.preload(context);
-NativeViewsSoundPlayer.isButtonSoundLoaded();
-NativeViewsSoundPlayer.playButtonSound(context);
-
-NativeViewsSoundPlayer.setButtonSoundOverride(
-        () -> appSoundManager.playButton()
-);
-
-NativeViewsSoundPlayer.setButtonSoundOverride(null);
-NativeViewsSoundPlayer.release();
-```
-
-A component-specific `setSoundAction()` has priority over the global/default sound.
-
-## Group API
-
-```java
-CustomAnimatorComponent added = components.add(builder);
-components.add(existingComponent);
-
-CustomAnimatorComponent found = components.find("play");
-components.contains("play");
-components.remove("play");
-
-components.size();
-components.isEmpty();
-
-ui.draw(canvas);
-components.drawVisible(canvas);
-components.drawVisible(canvas, scrollView);
-
-ui.onTouchEvent(event);
-components.onScrollChanged();
-
-components.clear();
-ui.release();
-components.close();
-```
-
-IDs must be unique. The group draws from first to last and dispatches touch from last
-to first, giving the topmost overlapping component priority.
-
-`onScrollChanged()` cancels active pressed states to prevent accidental clicks while
-scrolling.
-
-## Visibility drawing
-
-Draw only components intersecting the host:
-
-```java
-components.drawVisible(canvas);
-```
-
-Or use another view as the visible viewport:
-
-```java
-components.drawVisible(canvas, scrollView);
-```
-
-## Movement
-
-```java
-components.animateToPosition(
-        "reward",
-        targetLeft,
-        targetTop,
-        350L,
-        this::onMovementFinished
-);
-```
-
-Direct component API:
-
-```java
-component.animateToPositionWithValueAnimator(
-        targetLeft,
-        targetTop,
-        350L,
-        hostView,
-        onComplete
-);
-```
-
-Drawing and touch bounds move together. `BitmapLayer` and `DynamicLayer` currently
-follow bounds changes. Lottie, GIF, and After Effects layer movement remains part of
-their API-hardening work.
-
-## Component state and public API
-
-```java
-component.getId();
-component.getBounds();
-component.getLeft();
-component.getTop();
-component.draw(canvas);
-component.onTouchEvent(event);
-```
-
-Builder summary:
-
-| API | Purpose |
-|---|---|
-| `Builder(context, id, bitmap, RectF)` | Bitmap component with runtime bounds |
-| `Builder(context, id, layers, RectF)` | Layered component with runtime bounds |
-| `Builder(context, id, bitmap, Position)` | Bitmap component with Figma placement |
-| `Builder(context, id, layers, Position)` | Bounds from largest bitmap layer |
-| `Builder(..., bounds, dynamicBounds)` | Separate dynamic movement bounds |
-| `setClickListener(listener)` | Enable normal clicks |
-| `setClickListener(listener, enabled)` | Store listener with explicit state |
-| `setOnLongClickListener(listener, enabled)` | Enable long-click |
-| `setPressScale(scale)` | Configure pressed scale |
-| `setSoundAction(action)` | Replace default sound |
-| `build()` | Create without adding to a group |
-
-## Manual collection API
-
-`ZLayerGroup` is recommended. Static compatibility helpers also
-exist for manual `ArrayList<CustomAnimatorComponent>` ownership:
-
-```java
-CustomAnimatorComponent.draw(canvas, list);
-CustomAnimatorComponent.drawVisible(canvas, list, view);
-CustomAnimatorComponent.getVisible(source, output, view);
-CustomAnimatorComponent.handleTouch(event, list);
-CustomAnimatorComponent.handleTouchScrollChanged(list);
-CustomAnimatorComponent.addComponent(list, component);
-CustomAnimatorComponent.removeComponent(id, list);
-CustomAnimatorComponent.findComponentById(id, list);
-CustomAnimatorComponent.releaseResources(list);
-```
-
-## Custom layer
-
-```java
-public final class BadgeLayer implements ComponentLayer {
-
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF bounds = new RectF();
-
-    public BadgeLayer(RectF bounds) {
-        this.bounds.set(bounds);
-        paint.setColor(Color.RED);
-    }
-
-    @Override
-    public void draw(Canvas canvas) {
-        canvas.drawOval(bounds, paint);
-    }
-
-    @Override
-    public void setBounds(RectF bounds) {
-        this.bounds.set(bounds);
-    }
-
-    @Override
-    public void release() {
-    }
-}
-```
-
-## Test activity
-
-```text
-app.builderx.ogfa.androiduicomponents.CustomAnimatorComponentTestActivity
-```
-
-It exercises bitmap, Lottie, GIF, dynamic, and After Effects layers, drawing, touch,
-press effects, movement, and cleanup.
+Release is idempotent. Animator resources are stopped/cleared, but caller-owned bitmaps are
+never recycled.

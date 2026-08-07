@@ -289,6 +289,17 @@ public class GIFViewAnimator {
         }
     }
 
+    public void setAnimationBounds(String id, RectF bounds) {
+        String normalized = normalizeId(id);
+        for (Animation animation : animations) {
+            if (animation.id.equals(normalized)) animation.rectF.set(bounds);
+        }
+    }
+
+    public void clear() {
+        animations.clear();
+    }
+
     public static void Draw(Canvas canvas, GIFViewAnimator gifViewAnimator) {
         Draw(canvas,gifViewAnimator.animations);
     }

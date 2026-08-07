@@ -15,12 +15,18 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ogfa.nativeviews.animation.gif.GIFViewAnimator;
+import com.ogfa.nativeviews.animation.aftereffect.AfterEffectAnimator;
+import com.ogfa.nativeviews.animation.aftereffect.AnimationWindow;
 import com.ogfa.nativeviews.animator.component.CustomAnimatorComponent;
+import com.ogfa.nativeviews.animator.component.LayerRegion;
 import com.ogfa.nativeviews.zlayer.ZLayer;
 import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 import com.ogfa.nativeviews.animator.component.layer.BitmapLayer;
 import com.ogfa.nativeviews.animator.component.layer.ComponentLayer;
+import com.ogfa.nativeviews.animator.component.layer.DynamicLayer;
 import com.ogfa.nativeviews.animator.component.layer.GifLayer;
+import com.ogfa.nativeviews.animator.component.layer.LottieLayer;
+import com.ogfa.nativeviews.animator.component.layer.AfterEffectLayer;
 
 import java.util.ArrayList;
 
@@ -103,8 +109,9 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
 
             ArrayList<ComponentLayer> mainLayers = new ArrayList<>();
             complexBackgroundLayer = BitmapLayer.create(
+                    "background",
                     roundedBitmap(600, 180, alternateColor ? 0xff7b2cbf : 0xff146c94,
-                            0xff90e0ef, 32), mainRect);
+                            0xff90e0ef, 32), LayerRegion.matchComponent());
             mainLayers.add(complexBackgroundLayer);
 
             float iconSize = dp(54);
@@ -113,21 +120,49 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
                     mainRect.centerY() - iconSize / 2f,
                     mainRect.left + dp(18) + iconSize,
                     mainRect.centerY() + iconSize / 2f);
-            mainLayers.add(BitmapLayer.create(iconBitmap(128), iconRect));
+            mainLayers.add(BitmapLayer.create("icon", iconBitmap(128), LayerRegion.px(
+                    iconRect.left - mainRect.left, iconRect.top - mainRect.top,
+                    iconRect.width(), iconRect.height())));
 
             RectF labelRect = new RectF(
                     iconRect.right + dp(12), mainRect.top + dp(21),
                     mainRect.right - dp(52), mainRect.bottom - dp(21));
             complexLabelLayer = BitmapLayer.create(
+                    "label",
                     textBitmap("TAP ME  •  " + clickCount, 520, 90, dp(20), Color.WHITE),
-                    labelRect);
+                    LayerRegion.px(labelRect.left - mainRect.left, labelRect.top - mainRect.top,
+                            labelRect.width(), labelRect.height()));
             mainLayers.add(complexLabelLayer);
+
+            // The main test component intentionally contains all supported layer types.
+            mainLayers.add(LottieLayer.create(
+                    getContext(), "lottie", "win_animation",
+                    LayerRegion.px(mainRect.width() - dp(58), dp(14), dp(44), dp(44))));
+            mainLayers.add(GifLayer.create(
+                    getContext(), "gif_preview", "carrom_pass_buy.gif",
+                    LayerRegion.px(dp(4), dp(4), dp(34), dp(34))));
+            mainLayers.add(DynamicLayer.create("dynamic", new com.ogfa.nativeviews.animation.dynamic.CustomDynamicView() {
+                @Override public void onDraw(Canvas canvas, float progress, RectF bounds) {
+                    Paint pulse = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    pulse.setColor(0x99ffffff);
+                    canvas.drawCircle(bounds.centerX(), bounds.centerY(),
+                            Math.max(2f, bounds.width() * (0.15f + 0.25f * progress)), pulse);
+                }
+                @Override public long getDuration() { return 900L; }
+            }, LayerRegion.px(mainRect.width() - dp(22), dp(66), dp(12), dp(12))));
+            mainLayers.add(AfterEffectLayer.create(
+                    "after_effect",
+                    new AfterEffectAnimator(
+                            new AnimationWindow(mainRect.width(), mainRect.height(),
+                                    mainRect.left, mainRect.top),
+                            new ArrayList<>(), 1000L, true),
+                    LayerRegion.matchComponent()));
 
             components.add(new CustomAnimatorComponent.Builder(
                     getContext(), MAIN_COMPONENT, mainLayers, mainRect)
                     .setClickListener(this)
-                    .setOnLongClickListener(this, true)
-                    .setPressScale(0.90f)
+                    .setOnLongClickListener(this)
+                    .setPressedScale(0.90f)
                     .setSoundAction(this::performTestFeedback));
 
             // This separate component overlaps the main component and is added later. It demonstrates
@@ -138,11 +173,12 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
                     mainRect.right - dp(8), mainRect.top + dp(8) + badgeSize);
             ArrayList<ComponentLayer> badgeLayers = new ArrayList<>();
             badgeLayers.add(BitmapLayer.create(
-                    circleTextBitmap("!", 120, 0xffffb703, 0xff4a2c00), badgeRect));
+                    "badge", circleTextBitmap("!", 120, 0xffffb703, 0xff4a2c00),
+                    LayerRegion.matchComponent()));
             components.add(new CustomAnimatorComponent.Builder(
                     getContext(), BADGE_COMPONENT, badgeLayers, badgeRect)
                     .setClickListener(this)
-                    .setPressScale(0.78f)
+                    .setPressedScale(0.78f)
                     .setSoundAction(this::performTestFeedback));
 
             float actionTop = mainRect.bottom + dp(76);
@@ -150,22 +186,24 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
             movingStartRect = new RectF(margin, actionTop, margin + actionWidth, actionTop + dp(60));
             ArrayList<ComponentLayer> moveLayers = new ArrayList<>();
             moveLayers.add(BitmapLayer.create(
-                    labeledComponentBitmap("MOVE", 420, 140, 0xff2a9d8f), movingStartRect));
+                    "move", labeledComponentBitmap("MOVE", 420, 140, 0xff2a9d8f),
+                    LayerRegion.matchComponent()));
             components.add(new CustomAnimatorComponent.Builder(
                     getContext(), MOVE_COMPONENT, moveLayers, movingStartRect)
                     .setClickListener(this)
-                    .setPressScale(0.93f)
+                    .setPressedScale(0.93f)
                     .setSoundAction(this::performTestFeedback));
 
             RectF resetRect = new RectF(
                     margin, actionTop + dp(92), viewWidth - margin, actionTop + dp(152));
             ArrayList<ComponentLayer> resetLayers = new ArrayList<>();
             resetLayers.add(BitmapLayer.create(
-                    labeledComponentBitmap("RESET TEST", 700, 140, 0xffe76f51), resetRect));
+                    "reset", labeledComponentBitmap("RESET TEST", 700, 140, 0xffe76f51),
+                    LayerRegion.matchComponent()));
             components.add(new CustomAnimatorComponent.Builder(
                     getContext(), RESET_COMPONENT, resetLayers, resetRect)
                     .setClickListener(this)
-                    .setPressScale(0.96f));
+                    .setPressedScale(0.96f));
 
             float gifWidth = viewWidth - margin * 2f;
             float gifHeight = gifWidth * (95f / 340f);
@@ -178,21 +216,23 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
 
             ArrayList<ComponentLayer> gifLayers = new ArrayList<>();
             if (GIFViewAnimator.isLoaded("carrom_pass_buy")) {
-                gifLayers.add(GifLayer.create("carrom_pass_buy", gifRect));
+                gifLayers.add(GifLayer.create("gif", "carrom_pass_buy",
+                        LayerRegion.matchComponent()));
             } else {
                 // Preload is asynchronous. This checks assets/gif once and fills the
                 // same cache when layout happens before background preload completes.
                 gifLayers.add(GifLayer.create(
                         getContext(),
+                        "gif",
                         "carrom_pass_buy.gif",
-                        gifRect
+                        LayerRegion.matchComponent()
                 ));
             }
 
             components.add(new CustomAnimatorComponent.Builder(
                     getContext(), GIF_COMPONENT, gifLayers, gifRect)
                     .setClickListener(this)
-                    .setPressScale(0.96f)
+                    .setPressedScale(0.96f)
                     .setSoundAction(this::performTestFeedback));
         }
 
@@ -234,8 +274,8 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
             switch (id) {
                 case MAIN_COMPONENT:
                     clickCount++;
-                    complexLabelLayer.bitmap = textBitmap(
-                            "TAP ME  •  " + clickCount, 520, 90, dp(20), Color.WHITE);
+                    complexLabelLayer.setBitmap(textBitmap(
+                            "TAP ME  •  " + clickCount, 520, 90, dp(20), Color.WHITE));
                     eventMessage = "Main click received: " + clickCount;
                     break;
 
@@ -271,9 +311,9 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
                 return;
             }
             alternateColor = !alternateColor;
-            complexBackgroundLayer.bitmap = roundedBitmap(
+            complexBackgroundLayer.setBitmap(roundedBitmap(
                     600, 180, alternateColor ? 0xff7b2cbf : 0xff146c94,
-                    0xff90e0ef, 32);
+                    0xff90e0ef, 32));
             eventMessage = "Long click released; background toggled";
             invalidate();
         }
@@ -287,11 +327,11 @@ public class CustomAnimatorComponentTestActivity extends AppCompatActivity {
             CustomAnimatorComponent moving =
                     (CustomAnimatorComponent) components.find(MOVE_COMPONENT);
             if (moving != null) {
-                moving.animateToPositionWithValueAnimator(
-                        targetLeft,
-                        movingStartRect.top,
+                moving.animateRegionTo(
+                        new RectF(targetLeft, movingStartRect.top,
+                                targetLeft + movingStartRect.width(), movingStartRect.bottom),
                         650,
-                        this,
+                        CustomAnimatorComponent.Interpolator.EASE_IN_OUT,
                         () -> eventMessage =
                                 "MOVE completed; hitbox moved with it"
                 );

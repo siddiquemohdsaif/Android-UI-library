@@ -228,7 +228,7 @@ components.add(
                 position
         )
                 .setClickListener(id -> openProfile())
-                .setPressScale(0.92f)
+                .setPressedScale(0.92f)
 );
 ```
 

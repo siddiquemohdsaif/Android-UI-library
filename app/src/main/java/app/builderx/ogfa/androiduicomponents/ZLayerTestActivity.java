@@ -202,7 +202,7 @@ public final class ZLayerTestActivity extends AppCompatActivity {
                     buttonBounds
             )
                     .setClickListener(id -> showDialog())
-                    .setPressScale(0.94f)
+                    .setPressedScale(0.94f)
                     .setSoundAction(() -> {
                     }));
 

@@ -51,7 +51,7 @@ com.ogfa.nativeviews
 | Card | Implemented | Rounded color/image background, outside drop shadow, and one nested mixed-component ZLayer |
 | List | Implemented | `ComponentList` provides virtualized vertical/horizontal scrolling, reusable layered items, stable IDs, child touch arbitration, fling, Figma spacing/padding, and dedicated documentation/test coverage. |
 | Dialog | Implemented | Modal dim overlay, Card-backed layered content, local Figma scope, outside/Back policies, show/dismiss lifecycle, transitions, callbacks, translation, and dedicated documentation/test coverage. |
-| CustomAnimatorComponent | Implemented foundation | Renamed API and five-layer system are in `animator.component` |
+| CustomAnimatorComponent | Complete | Explicit regions, relative five-layer composition, bounds policies, interaction, movement, and ZLayer ownership implemented |
 | AfterEffectAnimator | Existing, needs hardening | `animation.aftereffect` |
 | DynamicViewAnimator | Existing, needs hardening | `animation.dynamic.DynamicViewAnimator` |
 | LottieViewAnimator | Implemented, needs final API review | `animation.LottieViewAnimator` |
@@ -209,9 +209,10 @@ Button-like behavior becomes optional configuration:
 new CustomAnimatorComponent.Builder(context, id, layers, bounds)
         .setOnClickListener(listener)
         .setOnLongClickListener(listener)
-        .setPressScale(0.92f)
+        .setPressedScale(0.92f)
+        .setPressAnimationDuration(100L)
         .setSoundAction(soundAction)
-        .build();
+        .build(hostView);
 ```
 
 If no interaction listener is supplied, the component is display-only.
@@ -223,39 +224,39 @@ provide a simpler API for common bitmap, text, icon, background, and click use c
 
 ```java
 public interface ComponentLayer {
-    void draw(Canvas canvas);
+    String getId();
+    LayerRegion getRegion();
     RectF getBounds();
-    void setBounds(RectF bounds);
-    boolean isAnimating();
+    ComponentLayer setRegion(LayerRegion region);
+    void draw(Canvas canvas);
+    boolean isVisible();
+    ComponentLayer setVisible(boolean visible);
+    float getAlpha();
+    ComponentLayer setAlpha(float alpha);
+    boolean needsNextFrame();
     void release();
 }
 ```
 
-Animator-specific layers may extend the contract without adding type checks to the
-component:
-
-```java
-public interface AnimatedComponentLayer extends ComponentLayer {
-    void start();
-    void stop();
-}
-```
+`BaseComponentLayer` provides the common ID, visibility, alpha, relative-region resolution,
+draw isolation, and idempotent cleanup implementation.
 
 ### Bounds policy
 
 Replace implicit bitmap-only bounds discovery with an explicit policy:
 
 ```java
-BoundsPolicy.EXPLICIT
+BoundsPolicy.DECLARED_REGION
+BoundsPolicy.LAYER_UNION
 BoundsPolicy.LARGEST_LAYER
-BoundsPolicy.UNION_OF_LAYERS
+BoundsPolicy.CUSTOM
 ```
 
 Default:
 
 ```text
-Explicit RectF or Position dimensions when supplied.
-Otherwise use UNION_OF_LAYERS.
+The declared `RectF` or `Position + Size` region is always required and is the default
+interaction policy. Layer union, largest layer, and custom resolution are opt-in.
 ```
 
 This removes the current requirement that a position-based component must contain a
@@ -273,7 +274,7 @@ This removes the current requirement that a position-based component must contai
 | `LottieView.get(...)` | `LottieLayer.create(...)` |
 | `DynamicView.get(...)` | `DynamicLayer.create(...)` |
 | `AfterEffectView.get(...)` | `AfterEffectLayer.create(...)` |
-| `setShrink(...)` | `setPressScale(...)` |
+| `setShrink(...)` | `setPressedScale(...)` |
 | `setProxySoundPlay(...)` | `setSoundAction(...)` |
 | `Draw(...)` | `draw(...)` |
 | `HandleTouch(...)` | `onTouchEvent(...)` |
@@ -477,12 +478,12 @@ setOnCheckedChangeListener(listener)
 3. Normalize public naming and method casing.
 4. Add reusable Canvas viewport translation for IME avoidance.
 
-### Phase 2 — Animator component restructure
+### Phase 2 — Animator component restructure (complete)
 
 1. Rename the five view types to layers.
 2. Introduce `ComponentLayer`.
 3. Extract generic composition from `CustomAnimatorComponent`.
-4. Create `CustomAnimatorComponent` and its group.
+4. Create `CustomAnimatorComponent` and integrate it directly with `ZLayer`.
 5. Add explicit bounds policies.
 6. Migrate tests and documentation.
 7. Remove the old `CustomAnimatorComponent` API after migration.

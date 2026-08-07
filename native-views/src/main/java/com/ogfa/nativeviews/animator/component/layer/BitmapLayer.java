@@ -3,45 +3,32 @@ package com.ogfa.nativeviews.animator.component.layer;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.RectF;
+import com.ogfa.nativeviews.animator.component.LayerRegion;
+import java.util.Objects;
 
-import com.ogfa.nativeviews.component.Position;
+public final class BitmapLayer extends BaseComponentLayer {
+    private Bitmap bitmap;
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
 
-public class BitmapLayer implements ComponentLayer {
-    public Bitmap bitmap;
-    private RectF rectF;
-    private Paint paint = new Paint();
-
-    public BitmapLayer(Bitmap bitmap, RectF rectF) {
-        this.bitmap = bitmap;
-        this.rectF = rectF;
-        paint.setAntiAlias(true);
-        paint.setDither(true);
+    private BitmapLayer(String id, Bitmap bitmap, LayerRegion region) {
+        super(id, region);
+        this.bitmap = requireBitmap(bitmap);
     }
 
-    public static BitmapLayer create(Bitmap bitmap, RectF rectF){
-        return new BitmapLayer(bitmap, rectF);
+    public static BitmapLayer create(String id, Bitmap bitmap, LayerRegion region) {
+        return new BitmapLayer(id, bitmap, region);
     }
 
-    /**
-     * Evaluates a host-bound Position using the bitmap's dimensions in Figma space.
-     */
-    public static BitmapLayer create(Bitmap bitmap, Position position) {
-        return new BitmapLayer(bitmap, position.toRectF(bitmap));
+    public Bitmap getBitmap() { return bitmap; }
+    public BitmapLayer setBitmap(Bitmap bitmap) { this.bitmap = requireBitmap(bitmap); return this; }
+
+    @Override protected void onDraw(Canvas canvas) {
+        if (!bitmap.isRecycled()) canvas.drawBitmap(bitmap, null, getBounds(), paint);
     }
 
-    @Override
-    public void draw(Canvas canvas) {
-        canvas.drawBitmap(bitmap, null, rectF, paint);
-    }
-
-    @Override
-    public void release() {
-        //empty
-    }
-
-    @Override
-    public void setBounds(RectF rectF) {
-        this.rectF = rectF;
+    private static Bitmap requireBitmap(Bitmap bitmap) {
+        Objects.requireNonNull(bitmap, "Layer bitmap cannot be null.");
+        if (bitmap.isRecycled()) throw new IllegalArgumentException("Layer bitmap is recycled.");
+        return bitmap;
     }
 }
