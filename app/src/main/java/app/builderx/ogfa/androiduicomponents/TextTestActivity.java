@@ -111,6 +111,7 @@ public final class TextTestActivity extends AppCompatActivity {
                     .setFont(NativeFonts.INTER)
                     .setFontVariations(FontVariation.BOLD)
                     .setTextSize(72f)
+                    .setLetterSpacing(1.5f)
                     .setTextColor(Color.WHITE)
                     .setAlignment(Text.Alignment.CENTER)
                     .setVerticalAlignment(Text.VerticalAlignment.CENTER)
@@ -177,13 +178,16 @@ public final class TextTestActivity extends AppCompatActivity {
                     // Lilita One is not variable; this must safely render normally.
                     .setFontVariations(FontVariation.BOLD)
                     .setTextSizePx(dp(25))
+                    .setLetterSpacingPx(dp(1))
+                    .setLineSpacingPx(dp(2))
                     .setTextColor(0xffffd166)
                     .setAlignment(Text.Alignment.CENTER)
                     .setVerticalAlignment(Text.VerticalAlignment.CENTER)
                     .setWrapEnabled(false)
                     .setMaxLines(1)
                     .setOverflow(Text.Overflow.ELLIPSIZE_END)
-                    .setPadding(dp(12), dp(8))
+                    .setPaddingPx(dp(12), dp(8))
+                    .setShadowPx(dp(2), 0f, dp(1), 0x99000000)
                     .setOnClickListener(id -> updateRuntimeText()));
         }
 
@@ -224,6 +228,10 @@ public final class TextTestActivity extends AppCompatActivity {
             if (runtimeText != null) {
                 runtimeText
                         .setText("RUNTIME UPDATE " + updateCount)
+                        .setLetterSpacing(1f + updateCount % 2)
+                        .setLineSpacing(4f)
+                        .setPadding(36f, 24f)
+                        .setShadow(3f, 0f, 2f, 0x99000000)
                         .setTextColor(
                                 updateCount % 2 == 0
                                         ? 0xffffd166

@@ -106,19 +106,39 @@ public final class TextField implements Component {
         focusedBackgroundColor = builder.focusedBackgroundColor;
         strokeColor = builder.strokeColor;
         focusedStrokeColor = builder.focusedStrokeColor;
-        textSizePx = builder.textSizePx > 0f
-                ? builder.textSizePx
+        textSizePx = builder.textSize > 0f
+                ? builder.resolveDimension(
+                        hostView,
+                        builder.textSize,
+                        builder.textSizeInPixels
+                )
                 : bounds.height() * 0.42f;
-        horizontalPaddingPx = builder.horizontalPaddingPx >= 0f
-                ? builder.horizontalPaddingPx
+        horizontalPaddingPx = builder.horizontalPadding >= 0f
+                ? builder.resolveDimension(
+                        hostView,
+                        builder.horizontalPadding,
+                        builder.paddingInPixels
+                )
                 : bounds.height() * 0.18f;
-        verticalPaddingPx = builder.verticalPaddingPx >= 0f
-                ? builder.verticalPaddingPx
+        verticalPaddingPx = builder.verticalPadding >= 0f
+                ? builder.resolveDimension(
+                        hostView,
+                        builder.verticalPadding,
+                        builder.paddingInPixels
+                )
                 : bounds.height() * 0.10f;
-        cornerRadiusPx = builder.cornerRadiusPx >= 0f
-                ? builder.cornerRadiusPx
+        cornerRadiusPx = builder.cornerRadius >= 0f
+                ? builder.resolveDimension(
+                        hostView,
+                        builder.cornerRadius,
+                        builder.cornerRadiusInPixels
+                )
                 : bounds.height() * 0.18f;
-        strokeWidthPx = builder.strokeWidthPx;
+        strokeWidthPx = builder.resolveDimension(
+                hostView,
+                builder.strokeWidth,
+                builder.strokeWidthInPixels
+        );
         cursorWidth = builder.cursorWidth;
         cursorWidthInPixels = builder.cursorWidthInPixels;
         cursorWidthPx = builder.resolveCursorWidth(hostView);
@@ -960,11 +980,15 @@ public final class TextField implements Component {
         private int focusedBackgroundColor = 0x44000000;
         private int strokeColor = 0x66ffffff;
         private int focusedStrokeColor = Color.WHITE;
-        private float textSizePx = -1f;
-        private float horizontalPaddingPx = -1f;
-        private float verticalPaddingPx = -1f;
-        private float cornerRadiusPx = -1f;
-        private float strokeWidthPx = 2f;
+        private float textSize = -1f;
+        private boolean textSizeInPixels;
+        private float horizontalPadding = -1f;
+        private float verticalPadding = -1f;
+        private boolean paddingInPixels;
+        private float cornerRadius = -1f;
+        private boolean cornerRadiusInPixels;
+        private float strokeWidth = 2f;
+        private boolean strokeWidthInPixels;
         private float cursorWidth = 3f;
         private boolean cursorWidthInPixels;
         private boolean enabled = true;
@@ -1131,35 +1155,102 @@ public final class TextField implements Component {
             return this;
         }
 
-        public Builder setTextSize(float pixels) {
-            textSizePx = requireNonNegative(pixels, "Text size");
-            if (textSizePx == 0f) {
+        /**
+         * Sets text size in Figma/design-space units.
+         */
+        public Builder setTextSize(float size) {
+            textSize = requireNonNegative(size, "Text size");
+            if (textSize == 0f) {
                 throw new IllegalArgumentException(
                         "Text size must be greater than zero."
                 );
             }
+            textSizeInPixels = false;
             return this;
         }
 
-        public Builder setPadding(float horizontalPixels, float verticalPixels) {
-            horizontalPaddingPx = requireNonNegative(
+        /**
+         * Sets an exact text size in runtime pixels.
+         */
+        public Builder setTextSizePx(float pixels) {
+            textSize = requireNonNegative(pixels, "Text size");
+            if (textSize == 0f) {
+                throw new IllegalArgumentException(
+                        "Text size must be greater than zero."
+                );
+            }
+            textSizeInPixels = true;
+            return this;
+        }
+
+        /**
+         * Sets horizontal and vertical padding in Figma/design-space units.
+         */
+        public Builder setPadding(float horizontal, float vertical) {
+            horizontalPadding = requireNonNegative(
+                    horizontal,
+                    "Horizontal padding"
+            );
+            verticalPadding = requireNonNegative(
+                    vertical,
+                    "Vertical padding"
+            );
+            paddingInPixels = false;
+            return this;
+        }
+
+        /**
+         * Sets exact horizontal and vertical padding in runtime pixels.
+         */
+        public Builder setPaddingPx(
+                float horizontalPixels,
+                float verticalPixels
+        ) {
+            horizontalPadding = requireNonNegative(
                     horizontalPixels,
                     "Horizontal padding"
             );
-            verticalPaddingPx = requireNonNegative(
+            verticalPadding = requireNonNegative(
                     verticalPixels,
                     "Vertical padding"
             );
+            paddingInPixels = true;
             return this;
         }
 
-        public Builder setCornerRadius(float pixels) {
-            cornerRadiusPx = requireNonNegative(pixels, "Corner radius");
+        /**
+         * Sets corner radius in Figma/design-space units.
+         */
+        public Builder setCornerRadius(float radius) {
+            cornerRadius = requireNonNegative(radius, "Corner radius");
+            cornerRadiusInPixels = false;
             return this;
         }
 
-        public Builder setStrokeWidth(float pixels) {
-            strokeWidthPx = requireNonNegative(pixels, "Stroke width");
+        /**
+         * Sets an exact corner radius in runtime pixels.
+         */
+        public Builder setCornerRadiusPx(float pixels) {
+            cornerRadius = requireNonNegative(pixels, "Corner radius");
+            cornerRadiusInPixels = true;
+            return this;
+        }
+
+        /**
+         * Sets border width in Figma/design-space units.
+         */
+        public Builder setStrokeWidth(float width) {
+            strokeWidth = requireNonNegative(width, "Stroke width");
+            strokeWidthInPixels = false;
+            return this;
+        }
+
+        /**
+         * Sets an exact border width in runtime pixels.
+         */
+        public Builder setStrokeWidthPx(float pixels) {
+            strokeWidth = requireNonNegative(pixels, "Stroke width");
+            strokeWidthInPixels = true;
             return this;
         }
 
@@ -1226,14 +1317,26 @@ public final class TextField implements Component {
         }
 
         private float resolveCursorWidth(View hostView) {
-            if (cursorWidthInPixels) {
-                return cursorWidth;
+            return resolveDimension(
+                    hostView,
+                    cursorWidth,
+                    cursorWidthInPixels
+            );
+        }
+
+        private float resolveDimension(
+                View hostView,
+                float value,
+                boolean inPixels
+        ) {
+            if (inPixels) {
+                return value;
             }
             if (position != null) {
-                return position.toRuntimePixels(hostView, cursorWidth);
+                return position.toRuntimePixels(hostView, value);
             }
             return FigmaConfig.getDefault().toRuntime(
-                    cursorWidth,
+                    value,
                     hostView.getWidth()
             );
         }

@@ -70,8 +70,13 @@ new TextField.Builder(
 )
 ```
 
-The planned shared API replaces the two Figma floats with
-`new Size(720f, 120f)`.
+The preferred shared API uses `new Size(720f, 120f)` instead of separate width
+and height values.
+
+An explicit `RectF` remains a runtime-pixel region. Unsuffixed visual dimensions
+such as text size, padding, radius, stroke width, and cursor width still use
+Figma units. Use the matching `Px` method only when exact runtime pixels are
+required.
 
 ## Build a field
 
@@ -212,10 +217,14 @@ render normally, and API 24–25 safely retain the font's normal weight.
 | `setSelectionColor(color)` | Set selection highlight |
 | `setBackgroundColor(normal, focused)` | Set background states |
 | `setStrokeColor(normal, focused)` | Set border states |
-| `setTextSize(px)` | Set runtime text size |
-| `setPadding(horizontal, vertical)` | Set runtime padding |
-| `setCornerRadius(px)` | Set background corner radius |
-| `setStrokeWidth(px)` | Set border width |
+| `setTextSize(figmaSize)` | Set Figma-scaled text size |
+| `setTextSizePx(px)` | Set exact runtime-pixel text size |
+| `setPadding(horizontal, vertical)` | Set Figma-scaled padding |
+| `setPaddingPx(horizontal, vertical)` | Set exact runtime-pixel padding |
+| `setCornerRadius(radius)` | Set Figma-scaled background corner radius |
+| `setCornerRadiusPx(px)` | Set exact runtime-pixel corner radius |
+| `setStrokeWidth(width)` | Set Figma-scaled border width |
+| `setStrokeWidthPx(px)` | Set exact runtime-pixel border width |
 | `setCursorWidth(figmaWidth)` | Set cursor width in Figma units; scaled with the active `FigmaConfig` |
 | `setCursorWidthPx(px)` | Set exact cursor width in runtime pixels |
 | `setPassword(enabled)` | Mask displayed text |

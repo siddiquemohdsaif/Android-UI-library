@@ -110,6 +110,9 @@ management, animation scheduling, or topmost-first touch dispatch.
   region use its width-derived scale.
 - `RectF` is the direct runtime-space API for callers that already know the final
   pixel bounds.
+- Region type never changes styling units. Unsuffixed dimensional styling APIs
+  always accept Figma/design units. Matching `Px` APIs always accept exact runtime
+  pixels, including when the component region is an explicit `RectF`.
 - Both construction paths must resolve to the same internal `RectF` bounds and must
   provide identical drawing, interaction, animation, and lifecycle behavior.
 - Drawing order and touch order must be deterministic.

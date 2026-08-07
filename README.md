@@ -141,6 +141,15 @@ new Component.Builder(..., position, size);
 new Component.Builder(..., rectF);
 ```
 
+The region form does not change styling units. Unsuffixed dimensional styling
+methods always use Figma/design units, while methods ending in `Px` always use
+exact runtime pixels:
+
+```java
+.setPadding(24f, 12f)       // Figma units
+.setPaddingPx(24f, 12f)     // exact runtime pixels
+```
+
 `Position` defines horizontal/vertical anchors and Figma margins:
 
 ```java
@@ -203,8 +212,9 @@ frame width:
 FigmaConfig.setDefault(new FigmaConfig(1440f));
 ```
 
-`Position` captures the current immutable configuration, and all associated
-Figma measurements use the same width-derived scale. See
+`Position` captures the current immutable configuration. Components using an
+explicit `RectF` capture the current default configuration for their unsuffixed
+styling dimensions. All Figma measurements use the same width-derived scale. See
 [FIGMA_CONFIG.md](docs/utilities/FIGMA_CONFIG.md).
 
 ## Shared Canvas lifecycle

@@ -12,6 +12,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.View;
 
+import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.component.Component;
@@ -179,6 +180,66 @@ public final class Text implements Component {
         return updateStyle(
                 new TextStyle.Builder(style).setTextSizePx(pixels)
         );
+    }
+
+    public Text setLetterSpacing(float spacing) {
+        return updateStyle(
+                new TextStyle.Builder(style).setLetterSpacing(spacing)
+        );
+    }
+
+    public Text setLetterSpacingPx(float pixels) {
+        return updateStyle(
+                new TextStyle.Builder(style).setLetterSpacingPx(pixels)
+        );
+    }
+
+    public Text setLineSpacing(float spacing) {
+        return updateStyle(
+                new TextStyle.Builder(style).setLineSpacing(spacing)
+        );
+    }
+
+    public Text setLineSpacingPx(float pixels) {
+        return updateStyle(
+                new TextStyle.Builder(style).setLineSpacingPx(pixels)
+        );
+    }
+
+    public Text setPadding(float horizontal, float vertical) {
+        return updateStyle(
+                new TextStyle.Builder(style).setPadding(horizontal, vertical)
+        );
+    }
+
+    public Text setPaddingPx(float horizontal, float vertical) {
+        return updateStyle(
+                new TextStyle.Builder(style).setPaddingPx(
+                        horizontal,
+                        vertical
+                )
+        );
+    }
+
+    public Text setShadow(float radius, float dx, float dy, int color) {
+        return updateStyle(
+                new TextStyle.Builder(style).setShadow(radius, dx, dy, color)
+        );
+    }
+
+    public Text setShadowPx(float radius, float dx, float dy, int color) {
+        return updateStyle(
+                new TextStyle.Builder(style).setShadowPx(
+                        radius,
+                        dx,
+                        dy,
+                        color
+                )
+        );
+    }
+
+    public Text clearShadow() {
+        return updateStyle(new TextStyle.Builder(style).clearShadow());
     }
 
     public Text setFont(int fontResourceId) {
@@ -365,7 +426,9 @@ public final class Text implements Component {
         if (explicitBounds != null) {
             requireBounds(explicitBounds);
             bounds.set(explicitBounds);
-            dimensionScale = 1f;
+            dimensionScale = FigmaConfig.getDefault().getScale(
+                    hostView.getWidth()
+            );
             return;
         }
         Objects.requireNonNull(position, "Position cannot be null.");
@@ -380,8 +443,14 @@ public final class Text implements Component {
         ensureActive();
         applyPaint();
 
-        float horizontalPadding = scaleDimension(style.horizontalPadding);
-        float verticalPadding = scaleDimension(style.verticalPadding);
+        float horizontalPadding = scaleDimension(
+                style.horizontalPadding,
+                style.paddingUnit
+        );
+        float verticalPadding = scaleDimension(
+                style.verticalPadding,
+                style.paddingUnit
+        );
         contentBounds.set(bounds);
         contentBounds.inset(horizontalPadding, verticalPadding);
         if (contentBounds.width() <= 0f || contentBounds.height() <= 0f) {
@@ -412,7 +481,10 @@ public final class Text implements Component {
                 .setAlignment(toLayoutAlignment(style.alignment))
                 .setIncludePad(false)
                 .setLineSpacing(
-                        scaleDimension(style.lineSpacing),
+                        scaleDimension(
+                                style.lineSpacing,
+                                style.lineSpacingUnit
+                        ),
                         style.lineSpacingMultiplier
                 )
                 .setMaxLines(maxLines);
@@ -458,13 +530,16 @@ public final class Text implements Component {
         paint.setAlpha(Math.round(
                 Color.alpha(style.textColor) * style.alpha
         ));
-        float letterSpacingPx = scaleDimension(style.letterSpacing);
+        float letterSpacingPx = scaleDimension(
+                style.letterSpacing,
+                style.letterSpacingUnit
+        );
         paint.setLetterSpacing(letterSpacingPx / textSize);
         if (style.shadowRadius > 0f) {
             paint.setShadowLayer(
-                    scaleDimension(style.shadowRadius),
-                    scaleDimension(style.shadowDx),
-                    scaleDimension(style.shadowDy),
+                    scaleDimension(style.shadowRadius, style.shadowUnit),
+                    scaleDimension(style.shadowDx, style.shadowUnit),
+                    scaleDimension(style.shadowDy, style.shadowUnit),
                     style.shadowColor
             );
         } else {
@@ -495,11 +570,16 @@ public final class Text implements Component {
     private float scaleTextSize(TextStyle style) {
         return style.textSizeUnit == TextStyle.DimensionUnit.PIXELS
                 ? style.textSize
-                : scaleDimension(style.textSize);
+                : style.textSize * dimensionScale;
     }
 
-    private float scaleDimension(float value) {
-        return value * dimensionScale;
+    private float scaleDimension(
+            float value,
+            TextStyle.DimensionUnit unit
+    ) {
+        return unit == TextStyle.DimensionUnit.PIXELS
+                ? value
+                : value * dimensionScale;
     }
 
     private void invalidate() {
@@ -681,8 +761,18 @@ public final class Text implements Component {
             return this;
         }
 
+        public Builder setLetterSpacingPx(float pixels) {
+            styleBuilder.setLetterSpacingPx(pixels);
+            return this;
+        }
+
         public Builder setLineSpacing(float spacing) {
             styleBuilder.setLineSpacing(spacing);
+            return this;
+        }
+
+        public Builder setLineSpacingPx(float pixels) {
+            styleBuilder.setLineSpacingPx(pixels);
             return this;
         }
 
@@ -693,6 +783,11 @@ public final class Text implements Component {
 
         public Builder setPadding(float horizontal, float vertical) {
             styleBuilder.setPadding(horizontal, vertical);
+            return this;
+        }
+
+        public Builder setPaddingPx(float horizontal, float vertical) {
+            styleBuilder.setPaddingPx(horizontal, vertical);
             return this;
         }
 
@@ -730,6 +825,16 @@ public final class Text implements Component {
                 int color
         ) {
             styleBuilder.setShadow(radius, dx, dy, color);
+            return this;
+        }
+
+        public Builder setShadowPx(
+                float radius,
+                float dx,
+                float dy,
+                int color
+        ) {
+            styleBuilder.setShadowPx(radius, dx, dy, color);
             return this;
         }
 

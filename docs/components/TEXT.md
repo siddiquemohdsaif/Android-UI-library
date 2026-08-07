@@ -50,8 +50,9 @@ scale = runtime host width / 1080
 Device height does not determine the scale. It is only used when resolving a
 bottom-anchored position.
 
-With a `RectF` region, dimensional style values are runtime pixels.
-`setTextSizePx()` always uses exact runtime pixels regardless of region type.
+An explicit `RectF` remains a runtime-pixel region, but unsuffixed styling
+methods still use Figma units. Every styling method ending in `Px` uses exact
+runtime pixels regardless of region type.
 
 ## Minimal usage
 
@@ -312,20 +313,24 @@ All builder styling methods:
 | `setFont(Typeface)` | Use an existing typeface |
 | `setFontVariations(FontVariation)` | Select a named variable-font weight |
 | `clearFontVariations()` | Return to the font's default variation |
-| `setTextSize(value)` | Region-space text size |
+| `setTextSize(value)` | Figma-space text size |
 | `setTextSizePx(px)` | Exact runtime-pixel text size |
 | `setTextColor(color)` | Set ARGB text color |
 | `setAlpha(alpha)` | Set additional alpha in the `0..1` range |
-| `setLetterSpacing(value)` | Add character spacing |
-| `setLineSpacing(value)` | Add line spacing |
+| `setLetterSpacing(value)` | Add Figma-space character spacing |
+| `setLetterSpacingPx(px)` | Add exact runtime-pixel character spacing |
+| `setLineSpacing(value)` | Add Figma-space line spacing |
+| `setLineSpacingPx(px)` | Add exact runtime-pixel line spacing |
 | `setLineSpacingMultiplier(value)` | Multiply normal line spacing |
-| `setPadding(horizontal, vertical)` | Inset the content region |
+| `setPadding(horizontal, vertical)` | Inset using Figma-space values |
+| `setPaddingPx(horizontal, vertical)` | Inset using exact runtime pixels |
 | `setAlignment(value)` | Horizontal alignment |
 | `setVerticalAlignment(value)` | Vertical alignment |
 | `setOverflow(value)` | Clip or ellipsize overflow |
 | `setMaxLines(count)` | Limit rendered line count |
 | `setWrapEnabled(enabled)` | Enable wrapping; false forces one line |
-| `setShadow(radius, dx, dy, color)` | Configure text shadow |
+| `setShadow(radius, dx, dy, color)` | Configure a Figma-scaled text shadow |
+| `setShadowPx(radius, dx, dy, color)` | Configure an exact runtime-pixel text shadow |
 | `clearShadow()` | Remove text shadow |
 | `setStyle(style)` | Apply a reusable immutable style |
 | `setEnabled(enabled)` | Enable or disable click handling |
@@ -389,6 +394,15 @@ text.setTextColor(Color.GREEN);
 text.setAlpha(0.8f);
 text.setTextSize(64f);
 text.setTextSizePx(48f);
+text.setLetterSpacing(2f);
+text.setLetterSpacingPx(2f);
+text.setLineSpacing(10f);
+text.setLineSpacingPx(10f);
+text.setPadding(24f, 12f);
+text.setPaddingPx(24f, 12f);
+text.setShadow(4f, 0f, 3f, 0xaa000000);
+text.setShadowPx(4f, 0f, 3f, 0xaa000000);
+text.clearShadow();
 text.setFont(R.font.game_font);
 text.setFontAsset("fonts/game_font.ttf");
 text.setFont(typeface);

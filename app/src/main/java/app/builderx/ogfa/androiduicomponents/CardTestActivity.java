@@ -145,14 +145,14 @@ public final class CardTestActivity extends AppCompatActivity {
                     )
                             .setHint("Player name")
                             .setText("PLAYER ONE")
-                            .setTextSize(dp(20))
+                            .setTextSize(60f)
                             .setTextColor(0xff111827)
                             .setHintColor(0xff7a8494)
                             .setCursorColor(0xff6c63ff)
                             .setCursorWidth(6f)
                             .setBackgroundColor(0xfff1f5f9, 0xffffffff)
                             .setStrokeColor(0xffcbd5e1, 0xff6c63ff)
-                            .setCornerRadius(dp(14))
+                            .setCornerRadius(42f)
                             .setFont(NativeFonts.INTER)
             );
 

@@ -205,10 +205,10 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                     .setSelectionColor(0x6690e0ef)
                     .setBackgroundColor(0xff182840, 0xff203a5c)
                     .setStrokeColor(0xff54708f, 0xff90e0ef)
-                    .setTextSize(dp(22))
-                    .setPadding(dp(14), dp(6))
-                    .setCornerRadius(dp(12))
-                    .setStrokeWidth(dp(2))
+                    .setTextSize(66f)
+                    .setPadding(42f, 18f)
+                    .setCornerRadius(36f)
+                    .setStrokeWidth(6f)
                     .setOnFocusChangedListener((fieldId, focused) -> {
                         if (focused) {
                             eventMessage = "Focused: " + fieldId;

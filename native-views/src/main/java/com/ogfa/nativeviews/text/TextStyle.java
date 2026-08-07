@@ -18,7 +18,7 @@ public final class TextStyle {
     }
 
     enum DimensionUnit {
-        REGION,
+        FIGMA,
         PIXELS
     }
 
@@ -32,10 +32,13 @@ public final class TextStyle {
     final int textColor;
     final float alpha;
     final float letterSpacing;
+    final DimensionUnit letterSpacingUnit;
     final float lineSpacing;
+    final DimensionUnit lineSpacingUnit;
     final float lineSpacingMultiplier;
     final float horizontalPadding;
     final float verticalPadding;
+    final DimensionUnit paddingUnit;
     final Text.Alignment alignment;
     final Text.VerticalAlignment verticalAlignment;
     final Text.Overflow overflow;
@@ -45,6 +48,7 @@ public final class TextStyle {
     final float shadowDx;
     final float shadowDy;
     final int shadowColor;
+    final DimensionUnit shadowUnit;
 
     private TextStyle(Builder builder) {
         fontSource = builder.fontSource;
@@ -57,10 +61,13 @@ public final class TextStyle {
         textColor = builder.textColor;
         alpha = builder.alpha;
         letterSpacing = builder.letterSpacing;
+        letterSpacingUnit = builder.letterSpacingUnit;
         lineSpacing = builder.lineSpacing;
+        lineSpacingUnit = builder.lineSpacingUnit;
         lineSpacingMultiplier = builder.lineSpacingMultiplier;
         horizontalPadding = builder.horizontalPadding;
         verticalPadding = builder.verticalPadding;
+        paddingUnit = builder.paddingUnit;
         alignment = builder.alignment;
         verticalAlignment = builder.verticalAlignment;
         overflow = builder.overflow;
@@ -70,6 +77,7 @@ public final class TextStyle {
         shadowDx = builder.shadowDx;
         shadowDy = builder.shadowDy;
         shadowColor = builder.shadowColor;
+        shadowUnit = builder.shadowUnit;
     }
 
     public static final class Builder {
@@ -80,14 +88,17 @@ public final class TextStyle {
         private Typeface typeface = Typeface.DEFAULT;
         private FontVariation fontVariation;
         private float textSize = -1f;
-        private DimensionUnit textSizeUnit = DimensionUnit.REGION;
+        private DimensionUnit textSizeUnit = DimensionUnit.FIGMA;
         private int textColor = Color.WHITE;
         private float alpha = 1f;
         private float letterSpacing;
+        private DimensionUnit letterSpacingUnit = DimensionUnit.FIGMA;
         private float lineSpacing;
+        private DimensionUnit lineSpacingUnit = DimensionUnit.FIGMA;
         private float lineSpacingMultiplier = 1f;
         private float horizontalPadding;
         private float verticalPadding;
+        private DimensionUnit paddingUnit = DimensionUnit.FIGMA;
         private Text.Alignment alignment = Text.Alignment.START;
         private Text.VerticalAlignment verticalAlignment =
                 Text.VerticalAlignment.TOP;
@@ -98,6 +109,7 @@ public final class TextStyle {
         private float shadowDx;
         private float shadowDy;
         private int shadowColor = Color.TRANSPARENT;
+        private DimensionUnit shadowUnit = DimensionUnit.FIGMA;
 
         public Builder() {
         }
@@ -114,10 +126,13 @@ public final class TextStyle {
             textColor = style.textColor;
             alpha = style.alpha;
             letterSpacing = style.letterSpacing;
+            letterSpacingUnit = style.letterSpacingUnit;
             lineSpacing = style.lineSpacing;
+            lineSpacingUnit = style.lineSpacingUnit;
             lineSpacingMultiplier = style.lineSpacingMultiplier;
             horizontalPadding = style.horizontalPadding;
             verticalPadding = style.verticalPadding;
+            paddingUnit = style.paddingUnit;
             alignment = style.alignment;
             verticalAlignment = style.verticalAlignment;
             overflow = style.overflow;
@@ -127,6 +142,7 @@ public final class TextStyle {
             shadowDx = style.shadowDx;
             shadowDy = style.shadowDy;
             shadowColor = style.shadowColor;
+            shadowUnit = style.shadowUnit;
         }
 
         public Builder useDefaultFont() {
@@ -187,11 +203,11 @@ public final class TextStyle {
         }
 
         /**
-         * Uses Figma units with Position regions and runtime pixels with RectF.
+         * Uses Figma/design-space units regardless of the region type.
          */
         public Builder setTextSize(float size) {
             textSize = requirePositiveFinite(size, "Text size");
-            textSizeUnit = DimensionUnit.REGION;
+            textSizeUnit = DimensionUnit.FIGMA;
             return this;
         }
 
@@ -221,11 +237,31 @@ public final class TextStyle {
                     spacing,
                     "Letter spacing"
             );
+            letterSpacingUnit = DimensionUnit.FIGMA;
+            return this;
+        }
+
+        public Builder setLetterSpacingPx(float pixels) {
+            letterSpacing = requireNonNegativeFinite(
+                    pixels,
+                    "Letter spacing"
+            );
+            letterSpacingUnit = DimensionUnit.PIXELS;
             return this;
         }
 
         public Builder setLineSpacing(float spacing) {
             lineSpacing = requireNonNegativeFinite(spacing, "Line spacing");
+            lineSpacingUnit = DimensionUnit.FIGMA;
+            return this;
+        }
+
+        public Builder setLineSpacingPx(float pixels) {
+            lineSpacing = requireNonNegativeFinite(
+                    pixels,
+                    "Line spacing"
+            );
+            lineSpacingUnit = DimensionUnit.PIXELS;
             return this;
         }
 
@@ -246,6 +282,20 @@ public final class TextStyle {
                     vertical,
                     "Vertical padding"
             );
+            paddingUnit = DimensionUnit.FIGMA;
+            return this;
+        }
+
+        public Builder setPaddingPx(float horizontal, float vertical) {
+            horizontalPadding = requireNonNegativeFinite(
+                    horizontal,
+                    "Horizontal padding"
+            );
+            verticalPadding = requireNonNegativeFinite(
+                    vertical,
+                    "Vertical padding"
+            );
+            paddingUnit = DimensionUnit.PIXELS;
             return this;
         }
 
@@ -305,6 +355,26 @@ public final class TextStyle {
             shadowDx = dx;
             shadowDy = dy;
             shadowColor = color;
+            shadowUnit = DimensionUnit.FIGMA;
+            return this;
+        }
+
+        public Builder setShadowPx(
+                float radius,
+                float dx,
+                float dy,
+                int color
+        ) {
+            shadowRadius = requireNonNegativeFinite(radius, "Shadow radius");
+            if (!Float.isFinite(dx) || !Float.isFinite(dy)) {
+                throw new IllegalArgumentException(
+                        "Shadow offsets must be finite."
+                );
+            }
+            shadowDx = dx;
+            shadowDy = dy;
+            shadowColor = color;
+            shadowUnit = DimensionUnit.PIXELS;
             return this;
         }
 
@@ -313,6 +383,7 @@ public final class TextStyle {
             shadowDx = 0f;
             shadowDy = 0f;
             shadowColor = Color.TRANSPARENT;
+            shadowUnit = DimensionUnit.FIGMA;
             return this;
         }
 
