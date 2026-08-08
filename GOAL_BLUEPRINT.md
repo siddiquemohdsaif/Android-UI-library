@@ -570,7 +570,7 @@ A component is complete only when:
 4. It has clear runtime validation and errors.
 5. It releases all animation, bitmap, audio, and loader resources it owns.
 6. It works from the Gradle module and from the generated fat AAR.
-7. The fat AAR contains required animation dependencies but no embedded AndroidX
+7. The fat AAR contains required animation dependencies but no embedded AndroidX, OkHttp, or Okio
    classes.
 8. The parent test app compiles and runs against the copied AAR.
 9. Touch handling remains correct after movement, scaling, scrolling, or Canvas

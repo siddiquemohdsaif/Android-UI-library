@@ -10,6 +10,7 @@ constraintlayout = "2.2.2"
 core = "1.5.0"
 lottie = "6.0.0"
 gifDrawable = "1.2.28"
+okio = "1.17.4"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -22,6 +23,7 @@ constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayo
 core = { group = "androidx.core", name = "core", version.ref = "core" }
 lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottie" }
 gif-drawable = { group = "pl.droidsonroids.gif", name = "android-gif-drawable", version.ref = "gifDrawable" }
+okio = { group = "com.squareup.okio", name = "okio", version.ref = "okio" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

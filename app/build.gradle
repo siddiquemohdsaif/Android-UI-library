@@ -20,7 +20,7 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -32,6 +32,9 @@ android {
 
 dependencies {
     implementation files('libs/native-views-release.aar')
+    // Flat-file AARs cannot publish transitive dependencies. The parent app owns
+    // Okio so it can share the version already selected by its OkHttp stack.
+    implementation libs.okio
     implementation libs.appcompat
     implementation libs.material
     implementation libs.activity

@@ -52,14 +52,17 @@ dependencies {
     fatAarDependencyGraph libs.gif.drawable
 }
 
-// Resolve the remote runtime closure once, but leave AndroidX to the consuming app.
-// This prevents embedded AppCompat/Core classes and resources from conflicting with
-// the versions already selected by the parent application's Gradle dependency graph.
+// Resolve the remote runtime closure once, but leave AndroidX, OkHttp, and Okio
+// to the consuming app. OkHttp commonly supplies Okio already; embedding either
+// networking stack in this fat AAR would otherwise risk duplicate classes.
 def fatAarArtifacts = configurations.fatAarDependencyGraph
         .resolvedConfiguration
         .resolvedArtifacts
         .findAll { artifact ->
-            !artifact.moduleVersion.id.group.startsWith('androidx.')
+            def group = artifact.moduleVersion.id.group
+            !group.startsWith('androidx.')
+                    && group != 'com.squareup.okhttp3'
+                    && group != 'com.squareup.okio'
         }
         .sort { left, right ->
             left.moduleVersion.id.toString() <=> right.moduleVersion.id.toString()

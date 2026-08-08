@@ -39,14 +39,32 @@ into:
 app/libs/native-views-release.aar
 ```
 
-Add it to the consuming application's `build.gradle`:
+Add it to the consuming application's `build.gradle`.
+
+### Parent app already uses OkHttp
+
+Keep the application's existing OkHttp dependency. It supplies Okio, so do not add
+another Okio version only for Native Views:
 
 ```groovy
 dependencies {
     implementation files('libs/native-views-release.aar')
-
-    // AndroidX is owned by the parent application.
     implementation 'androidx.appcompat:appcompat:1.7.1'
+
+    // Keep the OkHttp version already selected by the parent application.
+    implementation 'com.squareup.okhttp3:okhttp:<your-version>'
+}
+```
+
+### Parent app does not use OkHttp
+
+Declare Okio explicitly because Lottie uses it to parse local/offline JSON assets:
+
+```groovy
+dependencies {
+    implementation files('libs/native-views-release.aar')
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'com.squareup.okio:okio:1.17.4'
 }
 ```
 
@@ -54,10 +72,20 @@ The fat AAR embeds:
 
 - Lottie `6.0.0`;
 - Android GIF Drawable `1.2.28`;
-- ReLinker;
-- Okio required by the embedded animation dependencies.
+- ReLinker.
 
 Do not declare Lottie or Android GIF Drawable again when consuming the fat AAR.
+AndroidX, OkHttp, and Okio are intentionally excluded to prevent conflicts with
+versions already selected by the parent application. Keep the parent's existing
+OkHttp dependency when networking is used; it supplies Okio. When the parent does
+not use OkHttp, declare only the compatible Okio dependency shown above for Lottie.
+
+A normal debug build may compile when Okio is absent because Android resolves these
+classes when the Lottie parser is reached. Do not rely on that behavior: loading a
+Lottie asset can fail at runtime, and an R8-enabled release build reports the missing
+Okio classes. The AAR includes the consumer rule required for Okio 1.x's optional
+`javax.annotation.Nullable` metadata, so this configuration supports
+`minifyEnabled true` without application-specific warning rules.
 
 ## Consume the Gradle module
 
