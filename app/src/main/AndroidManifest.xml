@@ -68,6 +68,10 @@
 
         </activity>
         <activity
+            android:name=".SwitchTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".MainActivity"
             android:exported="true">
 <!--            <intent-filter>-->

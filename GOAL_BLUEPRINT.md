@@ -56,7 +56,7 @@ com.ogfa.nativeviews
 | DynamicViewAnimator | Complete | Standalone ZLayer component using the shared monotonic playback clock |
 | LottieAnimator | Complete | Standalone cached ZLayer component; old `LottieViewAnimator` is internal |
 | GifAnimator | Complete | Standalone cached ZLayer component; old `GIFViewAnimator` is internal |
-| Switch | Not started | — |
+| Switch | Implemented | Animated track/thumb component with tap, continuous drag, shared selectable state, Figma/Px styling, ripple, feedback, documentation, and dedicated test coverage |
 | CheckBox | Not started | — |
 | RadioButton | Not started | — |
 | Progress | Not started | — |
@@ -214,11 +214,12 @@ com.ogfa.nativeviews.card
 com.ogfa.nativeviews.list
 com.ogfa.nativeviews.dialog
 com.ogfa.nativeviews.zlayer
+com.ogfa.nativeviews.selection
+com.ogfa.nativeviews.switchcomponent
 com.ogfa.nativeviews.animation.aftereffect
 com.ogfa.nativeviews.animation.dynamic
 com.ogfa.nativeviews.animation.lottie
 com.ogfa.nativeviews.animation.gif
-com.ogfa.nativeviews.switchcomponent
 com.ogfa.nativeviews.checkbox
 com.ogfa.nativeviews.radiobutton
 com.ogfa.nativeviews.progress
@@ -373,7 +374,22 @@ com.ogfa.nativeviews.progress
 - Support repeat configuration, drawing, visibility filtering, and release.
 - Use `GifAnimator` directly in root or container-owned `ZLayer`s.
 
-### Secondary components
+### Switch
+
+- Implemented both `Position + Size` and runtime `RectF` regions.
+- Implemented animated and immediate checked-state changes through the shared
+  `SelectableComponent`, `OnCheckedChangeListener`, and checked-state controller.
+- Implemented tap toggling, touch-slop-aware continuous drag, midpoint selection,
+  cancellation restoration, and `fromUser` callback semantics.
+- Implemented Figma/Px track radius, stroke, thumb padding, thumb size, and shadow.
+- Implemented state colors, disabled rendering, alpha, visibility, enabled state,
+  parent centering, optional ripple, sound, and haptic hooks.
+- Implemented fully configurable disabled checked/unchecked track and thumb colors,
+  disabled stroke, disabled alpha, and independent disabled thumb-shadow visibility.
+- Implemented runtime state/style/region APIs, validation, animation control,
+  idempotent release, `SWITCH.md`, and `SwitchTestActivity`.
+
+### Remaining secondary components
 
 `Switch`, `CheckBox`, and `RadioButton` share selectable-state infrastructure:
 
@@ -429,7 +445,7 @@ setOnCheckedChangeListener(listener)
 
 ### Phase 6 — Secondary components
 
-1. Switch
+1. Switch — complete
 2. CheckBox
 3. RadioButton
 4. Progress
