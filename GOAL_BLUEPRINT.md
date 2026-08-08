@@ -58,8 +58,8 @@ com.ogfa.nativeviews
 | GifAnimator | Complete | Standalone cached ZLayer component; old `GIFViewAnimator` is internal |
 | Switch | Implemented | Animated track/thumb component with tap, continuous drag, shared selectable state, Figma/Px styling, ripple, feedback, documentation, and dedicated test coverage |
 | CheckBox | Implemented | Two/three-state color and complete-image rendering, Figma/Px styling, controlled disabled appearance, interaction, feedback, documentation, and test coverage |
-| RadioButton | Not started | — |
-| Progress | Not started | — |
+| RadioButton | Implemented | Standalone/grouped exclusive selection, native color and complete-image rendering, Figma/Px styling, disabled appearance, feedback, documentation, and tests |
+| Progress | Implemented | Native linear/circular determinate and indeterminate rendering plus cached GIF/Lottie auto-play or follow-progress assets |
 
 | ZLayerGroup / ZLayer | Implemented foundation | Mixed-component scene, ordering, touch capture, IME, and lifecycle |
 
@@ -404,6 +404,33 @@ com.ogfa.nativeviews.progress
 - Implemented press scale, optional ripple, sound/haptic hooks, centering, visibility,
   alpha, touch cancellation, idempotent release, `CHECKBOX.md`, and device test coverage.
 
+### RadioButton
+
+- Implemented direct ZLayer ownership with standalone selection and the non-visual
+  transactional `RadioSelection` mutual-exclusion controller.
+- Implemented required selection, deterministic replacement for disabled/released
+  selections, unique registration, programmatic selection, and group/button callbacks.
+- Implemented native circle/ring/dot drawing, Figma/Px geometry, complete enabled and
+  disabled styling, animated selection, press scale, ripple, sound, and haptic hooks.
+- Implemented immutable caller-owned four-state images, cross-fade/snap transitions,
+  scaling/filtering, runtime color/image switching, validation, and safe cleanup.
+- Added `RADIO_BUTTON.md` and `RadioButtonTestActivity` for grouped color/image,
+  disabled, standalone, RectF, and lifecycle coverage.
+
+### Progress
+
+- Implemented native linear and circular determinate/indeterminate rendering with
+  directional motion, value animation, completion callbacks, colors, and playback.
+- Implemented Figma/Px thickness, corner radius, and padding with strict geometry
+  validation, centered circular rendering, disabled styling, and parent alignment.
+- Implemented immutable `ProgressAsset` GIF/Lottie sources backed by existing shared
+  caches, auto-play and follow-progress timeline seeking, repeat/speed, scaling,
+  preload/cache operations, visibility pausing, and delegate cleanup.
+- Added intrinsic-size access to GIF/Lottie animator components so asset Progress can
+  correctly provide `FIT_XY`, `FIT_CENTER`, and `CENTER_CROP` behavior.
+- Added `PROGRESS.md` and `ProgressTestActivity` covering native, GIF, Lottie,
+  disabled, callback, RectF, Figma/Px, and lifecycle behavior.
+
 ### Remaining secondary components
 
 `Switch`, `CheckBox`, and `RadioButton` share selectable-state infrastructure:
@@ -414,12 +441,7 @@ isChecked()
 setOnCheckedChangeListener(listener)
 ```
 
-`Progress` supports:
-
-- determinate and indeterminate modes;
-- linear and circular rendering;
-- progress animation;
-- configurable track and progress colors.
+All planned secondary components are implemented.
 
 ## Delivery Order
 
@@ -462,8 +484,8 @@ setOnCheckedChangeListener(listener)
 
 1. Switch — complete
 2. CheckBox — complete
-3. RadioButton
-4. Progress
+3. RadioButton — complete
+4. Progress — complete
 
 ## Testing Strategy
 

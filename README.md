@@ -88,6 +88,8 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `Dialog` | Modal dim overlay with layered Card surface, Back handling, and transitions | [DIALOG.md](docs/components/DIALOG.md) |
 | `Switch` | Color or bitmap-rendered selectable control with tap/drag interaction | [SWITCH.md](docs/components/SWITCH.md) |
 | `CheckBox` | Two/three-state color or bitmap selectable control | [CHECKBOX.md](docs/components/CHECKBOX.md) |
+| `RadioButton` | Standalone/grouped color or bitmap exclusive selection | [RADIO_BUTTON.md](docs/components/RADIO_BUTTON.md) |
+| `Progress` | Native linear/circular or cached GIF/Lottie progress indicator | [PROGRESS.md](docs/components/PROGRESS.md) |
 | `ZLayerContainer` | Bounded nested layers that compose any components as one unit | [Z_LAYER_CONTAINER.md](docs/components/Z_LAYER_CONTAINER.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -109,13 +111,6 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `DynamicViewAnimator` | Programmatic Canvas animation component | [DYNAMIC_VIEW_ANIMATOR.md](docs/components/DYNAMIC_VIEW_ANIMATOR.md) |
 | `LottieAnimator` | Cached Lottie Canvas component | [LOTTIE_ANIMATOR.md](docs/components/LOTTIE_ANIMATOR.md) |
 | `GifAnimator` | Cached GIF Canvas component | [GIF_ANIMATOR.md](docs/components/GIF_ANIMATOR.md) |
-
-### Planned secondary components
-
-```text
-RadioButton
-Progress
-```
 
 See [GOAL_BLUEPRINT.md](GOAL_BLUEPRINT.md) for the architecture, requirements, delivery
 order, and definition of done.
@@ -342,6 +337,8 @@ artifacts/
 | `SwitchTestActivity` | Figma/RectF regions, tap, drag, animation, styling, ripple, disabled state, and cleanup |
 | `SwitchImageModeTestActivity` | Complex five-image and simple three-image rendering, transitions, drag policy, disabled assets, and ownership |
 | `CheckBoxTestActivity` | Two/three-state color rendering, six-state images, Figma/Px regions, disabled appearance, callbacks, and cleanup |
+| `RadioButtonTestActivity` | Required color/image groups, mutual exclusion, standalone/disabled states, Figma/Px geometry, and cleanup |
+| `ProgressTestActivity` | Linear/circular determinate/indeterminate rendering, value animation, GIF auto-play, Lottie follow-progress, disabled/Px state, and cleanup |
 | `AnimatorComponentsTestActivity` | GIF, Lottie, dynamic and After Effects as direct ZLayer components |
 | `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 

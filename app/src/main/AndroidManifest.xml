@@ -80,6 +80,14 @@
             android:exported="true"
             android:screenOrientation="portrait" />
         <activity
+            android:name=".RadioButtonTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".ProgressTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".MainActivity"
             android:exported="true">
 <!--            <intent-filter>-->

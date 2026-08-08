@@ -83,6 +83,18 @@ public class GIFComposition {
         return duration;
     }
 
+    public int getWidth() {
+        if (gifDrawable != null) return gifDrawable.getIntrinsicWidth();
+        Bitmap first = frames == null ? null : frames.get(0);
+        return first == null ? 0 : first.getWidth();
+    }
+
+    public int getHeight() {
+        if (gifDrawable != null) return gifDrawable.getIntrinsicHeight();
+        Bitmap first = frames == null ? null : frames.get(0);
+        return first == null ? 0 : first.getHeight();
+    }
+
     private void initializeFrames() {
         frames = new HashMap<>();
         gifDrawable.start();

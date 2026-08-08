@@ -25,6 +25,8 @@ public final class LottieAnimator extends BaseAnimatorComponent {
     }
 
     @Override protected long getDurationMillis() { return Math.max(1L, (long) composition.getDuration()); }
+    public int getIntrinsicWidth() { return drawable.getIntrinsicWidth(); }
+    public int getIntrinsicHeight() { return drawable.getIntrinsicHeight(); }
     @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) {
         drawable.setProgress(progress);
         int intrinsicWidth = drawable.getIntrinsicWidth();

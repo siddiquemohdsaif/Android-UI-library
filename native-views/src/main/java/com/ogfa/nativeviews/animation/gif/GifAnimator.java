@@ -22,6 +22,8 @@ public final class GifAnimator extends BaseAnimatorComponent {
     }
 
     @Override protected long getDurationMillis() { return composition.getDuration(); }
+    public int getIntrinsicWidth() { return composition.getWidth(); }
+    public int getIntrinsicHeight() { return composition.getHeight(); }
     @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) {
         composition.draw(canvas, bounds, Math.round(progress * composition.getDuration()), paint);
     }
