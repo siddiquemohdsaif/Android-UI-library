@@ -21,15 +21,23 @@ import com.ogfa.nativeviews.component.ComponentHost;
 import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
+import com.ogfa.nativeviews.image.Image;
 import com.ogfa.nativeviews.selection.OnCheckedChangeListener;
 import com.ogfa.nativeviews.selection.SelectableComponent;
 import com.ogfa.nativeviews.selection.internal.CheckedStateController;
+import com.ogfa.nativeviews.switchcomponent.internal.ColorSwitchRenderer;
+import com.ogfa.nativeviews.switchcomponent.internal.ComplexImageSwitchRenderer;
+import com.ogfa.nativeviews.switchcomponent.internal.SimpleImageSwitchRenderer;
+import com.ogfa.nativeviews.switchcomponent.internal.SwitchRenderState;
+import com.ogfa.nativeviews.switchcomponent.internal.SwitchRenderer;
 
 import java.util.Objects;
 
 /** Native Canvas switch with tap, drag, animation, and Figma-aware styling. */
 public final class Switch implements SelectableComponent {
     public enum Interpolator { LINEAR, EASE_IN, EASE_OUT, EASE_IN_OUT }
+    public enum RenderMode { COLOR, COMPLEX_IMAGE, SIMPLE_IMAGE }
+    public enum ImageTransition { CROSS_FADE, SNAP }
 
     private static final float DEFAULT_THUMB_PADDING = 4f;
     private static final long DEFAULT_ANIMATION_DURATION = 180L;
@@ -41,11 +49,10 @@ public final class Switch implements SelectableComponent {
     private final RectF baseBounds = new RectF();
     private final RectF bounds = new RectF();
     private final RectF trackBounds = new RectF();
-    private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF thumbBounds = new RectF();
     private final Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final SwitchRenderState renderState = new SwitchRenderState();
     private final CheckedStateController state;
     private final int touchSlop;
 
@@ -95,9 +102,20 @@ public final class Switch implements SelectableComponent {
     private Runnable soundAction;
     private Runnable hapticAction;
     private Interpolator animationInterpolator;
+    private RenderMode renderMode;
+    private ImageTransition imageTransition;
+    private SwitchImages switchImages;
+    private SwitchRenderer renderer;
+    private Image.ScaleType trackImageScaleType;
+    private Image.ScaleType thumbImageScaleType;
+    private Image.ScaleType switchImageScaleType;
+    private boolean imageFiltering;
+    private boolean dragEnabled;
+    private boolean disabledAlphaExplicit;
 
     private boolean touchCaptured;
     private boolean dragging;
+    private boolean tapCancelled;
     private float downX;
     private boolean downChecked;
     private boolean rippleEnabled;
@@ -147,6 +165,15 @@ public final class Switch implements SelectableComponent {
         soundAction = builder.soundAction;
         hapticAction = builder.hapticAction;
         animationInterpolator = builder.animationInterpolator;
+        renderMode = builder.renderMode;
+        imageTransition = builder.imageTransition;
+        switchImages = builder.switchImages;
+        trackImageScaleType = builder.trackImageScaleType;
+        thumbImageScaleType = builder.thumbImageScaleType;
+        switchImageScaleType = builder.switchImageScaleType;
+        imageFiltering = builder.imageFiltering;
+        dragEnabled = builder.dragEnabled;
+        disabledAlphaExplicit = builder.disabledAlphaExplicit;
         rippleEnabled = builder.rippleEnabled;
         rippleColor = builder.rippleColor;
         rippleDuration = builder.rippleDuration;
@@ -169,6 +196,7 @@ public final class Switch implements SelectableComponent {
                 }
         );
         progress = state.getProgress();
+        rebuildRenderer();
         rebuildGeometry();
     }
 
@@ -192,6 +220,14 @@ public final class Switch implements SelectableComponent {
     public int getDisabledUncheckedThumbColor() { return disabledUncheckedThumbColor; }
     public int getDisabledStrokeColor() { return disabledStrokeColor; }
     public boolean isDisabledThumbShadowEnabled() { return disabledThumbShadowEnabled; }
+    public RenderMode getRenderMode() { return renderMode; }
+    public SwitchImages getSwitchImages() { return switchImages; }
+    public ImageTransition getImageTransition() { return imageTransition; }
+    public Image.ScaleType getTrackImageScaleType() { return trackImageScaleType; }
+    public Image.ScaleType getThumbImageScaleType() { return thumbImageScaleType; }
+    public Image.ScaleType getSwitchImageScaleType() { return switchImageScaleType; }
+    public boolean isImageFilteringEnabled() { return imageFiltering; }
+    public boolean isDragEnabled() { return dragEnabled; }
 
     @Override public Switch setChecked(boolean value) { ensureActive(); state.setChecked(value, true, false); return this; }
     @Override public Switch setCheckedImmediately(boolean value) { ensureActive(); state.setChecked(value, false, false); return this; }
@@ -214,33 +250,89 @@ public final class Switch implements SelectableComponent {
     public Switch setVisible(boolean value) { ensureActive(); visible = value; if (!value) cancelTouch(); invalidate(); return this; }
     public Switch setEnabled(boolean value) { ensureActive(); enabled = value; if (!value) cancelTouch(); invalidate(); return this; }
 
-    public Switch setCheckedTrackColor(int value) { checkedTrackColor = value; invalidate(); return this; }
-    public Switch setUncheckedTrackColor(int value) { uncheckedTrackColor = value; invalidate(); return this; }
-    public Switch setDisabledTrackColor(int value) { disabledCheckedTrackColor = value; disabledUncheckedTrackColor = value; invalidate(); return this; }
-    public Switch setDisabledCheckedTrackColor(int value) { disabledCheckedTrackColor = value; invalidate(); return this; }
-    public Switch setDisabledUncheckedTrackColor(int value) { disabledUncheckedTrackColor = value; invalidate(); return this; }
-    public Switch setThumbColor(int value) { thumbColor = value; invalidate(); return this; }
-    public Switch setDisabledThumbColor(int value) { disabledCheckedThumbColor = value; disabledUncheckedThumbColor = value; invalidate(); return this; }
-    public Switch setDisabledCheckedThumbColor(int value) { disabledCheckedThumbColor = value; invalidate(); return this; }
-    public Switch setDisabledUncheckedThumbColor(int value) { disabledUncheckedThumbColor = value; invalidate(); return this; }
-    public Switch setDisabledStrokeColor(int value) { disabledStrokeColor = value; disabledStrokeColorExplicit = true; invalidate(); return this; }
-    public Switch setDisabledAlpha(float value) { disabledAlpha = requireAlpha(value); invalidate(); return this; }
+    public Switch setCheckedTrackColor(int value) { requireColorMode(); checkedTrackColor = value; invalidate(); return this; }
+    public Switch setUncheckedTrackColor(int value) { requireColorMode(); uncheckedTrackColor = value; invalidate(); return this; }
+    public Switch setDisabledTrackColor(int value) { requireColorMode(); disabledCheckedTrackColor = value; disabledUncheckedTrackColor = value; invalidate(); return this; }
+    public Switch setDisabledCheckedTrackColor(int value) { requireColorMode(); disabledCheckedTrackColor = value; invalidate(); return this; }
+    public Switch setDisabledUncheckedTrackColor(int value) { requireColorMode(); disabledUncheckedTrackColor = value; invalidate(); return this; }
+    public Switch setThumbColor(int value) { requireColorMode(); thumbColor = value; invalidate(); return this; }
+    public Switch setDisabledThumbColor(int value) { requireColorMode(); disabledCheckedThumbColor = value; disabledUncheckedThumbColor = value; invalidate(); return this; }
+    public Switch setDisabledCheckedThumbColor(int value) { requireColorMode(); disabledCheckedThumbColor = value; invalidate(); return this; }
+    public Switch setDisabledUncheckedThumbColor(int value) { requireColorMode(); disabledUncheckedThumbColor = value; invalidate(); return this; }
+    public Switch setDisabledStrokeColor(int value) { requireColorMode(); disabledStrokeColor = value; disabledStrokeColorExplicit = true; invalidate(); return this; }
+    public Switch setDisabledAlpha(float value) { disabledAlpha = requireAlpha(value); disabledAlphaExplicit = true; invalidate(); return this; }
 
-    public Switch setTrackCornerRadius(float value) { cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = false; rebuildGeometry(); invalidate(); return this; }
-    public Switch setTrackCornerRadiusPx(float value) { cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = true; rebuildGeometry(); invalidate(); return this; }
-    public Switch setTrackCornerRadiusAuto() { cornerRadiusAuto = true; rebuildGeometry(); invalidate(); return this; }
-    public Switch setThumbPadding(float value) { thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = false; rebuildGeometry(); invalidate(); return this; }
-    public Switch setThumbPaddingPx(float value) { thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = true; rebuildGeometry(); invalidate(); return this; }
-    public Switch setThumbSize(float value) { thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = false; rebuildGeometry(); invalidate(); return this; }
-    public Switch setThumbSizePx(float value) { thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = true; rebuildGeometry(); invalidate(); return this; }
-    public Switch setThumbSizeAuto() { thumbSizeAuto = true; rebuildGeometry(); invalidate(); return this; }
-    public Switch setTrackStroke(float width, int color) { strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = false; strokeEnabled = width > 0f; rebuildGeometry(); invalidate(); return this; }
-    public Switch setTrackStrokePx(float width, int color) { strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = true; strokeEnabled = width > 0f; rebuildGeometry(); invalidate(); return this; }
-    public Switch setTrackStrokeEnabled(boolean value) { strokeEnabled = value; invalidate(); return this; }
-    public Switch setThumbShadow(DropShadow value) { thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = false; invalidate(); return this; }
-    public Switch setThumbShadowPx(DropShadow value) { thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = true; invalidate(); return this; }
-    public Switch setThumbShadowEnabled(boolean value) { thumbShadowEnabled = value; invalidate(); return this; }
-    public Switch setDisabledThumbShadowEnabled(boolean value) { disabledThumbShadowEnabled = value; invalidate(); return this; }
+    public Switch setTrackCornerRadius(float value) { requireColorMode(); cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = false; rebuildGeometry(); invalidate(); return this; }
+    public Switch setTrackCornerRadiusPx(float value) { requireColorMode(); cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = true; rebuildGeometry(); invalidate(); return this; }
+    public Switch setTrackCornerRadiusAuto() { requireColorMode(); cornerRadiusAuto = true; rebuildGeometry(); invalidate(); return this; }
+    public Switch setThumbPadding(float value) { requireSeparateThumbMode(); thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = false; rebuildGeometry(); invalidate(); return this; }
+    public Switch setThumbPaddingPx(float value) { requireSeparateThumbMode(); thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = true; rebuildGeometry(); invalidate(); return this; }
+    public Switch setThumbSize(float value) { requireSeparateThumbMode(); thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = false; rebuildGeometry(); invalidate(); return this; }
+    public Switch setThumbSizePx(float value) { requireSeparateThumbMode(); thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = true; rebuildGeometry(); invalidate(); return this; }
+    public Switch setThumbSizeAuto() { requireSeparateThumbMode(); thumbSizeAuto = true; rebuildGeometry(); invalidate(); return this; }
+    public Switch setTrackStroke(float width, int color) { requireColorMode(); strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = false; strokeEnabled = width > 0f; rebuildGeometry(); invalidate(); return this; }
+    public Switch setTrackStrokePx(float width, int color) { requireColorMode(); strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = true; strokeEnabled = width > 0f; rebuildGeometry(); invalidate(); return this; }
+    public Switch setTrackStrokeEnabled(boolean value) { requireColorMode(); strokeEnabled = value; invalidate(); return this; }
+    public Switch setThumbShadow(DropShadow value) { requireSeparateThumbMode(); thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = false; invalidate(); return this; }
+    public Switch setThumbShadowPx(DropShadow value) { requireSeparateThumbMode(); thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = true; invalidate(); return this; }
+    public Switch setThumbShadowEnabled(boolean value) { requireSeparateThumbMode(); thumbShadowEnabled = value; invalidate(); return this; }
+    public Switch setDisabledThumbShadowEnabled(boolean value) { requireSeparateThumbMode(); disabledThumbShadowEnabled = value; invalidate(); return this; }
+
+    public Switch setSwitchImages(SwitchImages value) {
+        ensureActive();
+        cancelTouch();
+        state.cancelAnimation();
+        switchImages = Objects.requireNonNull(value, "Switch images cannot be null.");
+        switchImages.validateActive();
+        renderMode = switchImages.getMode() == SwitchImages.Mode.COMPLEX
+                ? RenderMode.COMPLEX_IMAGE : RenderMode.SIMPLE_IMAGE;
+        if (!disabledAlphaExplicit) disabledAlpha = 1f;
+        rebuildRenderer();
+        dragEnabled = renderer.supportsDrag();
+        rebuildGeometry();
+        invalidate();
+        return this;
+    }
+
+    public Switch useColorRendering() {
+        ensureActive(); cancelTouch(); state.cancelAnimation();
+        switchImages = null; renderMode = RenderMode.COLOR;
+        if (!disabledAlphaExplicit) disabledAlpha = DEFAULT_DISABLED_ALPHA;
+        dragEnabled = true;
+        rebuildRenderer(); rebuildGeometry(); invalidate(); return this;
+    }
+
+    public Switch setTrackImageScaleType(Image.ScaleType value) {
+        requireMode(RenderMode.COMPLEX_IMAGE, "Track image scale type");
+        trackImageScaleType = Objects.requireNonNull(value);
+        ((ComplexImageSwitchRenderer) renderer).setTrackScaleType(value); invalidate(); return this;
+    }
+    public Switch setThumbImageScaleType(Image.ScaleType value) {
+        requireMode(RenderMode.COMPLEX_IMAGE, "Thumb image scale type");
+        thumbImageScaleType = Objects.requireNonNull(value);
+        ((ComplexImageSwitchRenderer) renderer).setThumbScaleType(value); invalidate(); return this;
+    }
+    public Switch setSwitchImageScaleType(Image.ScaleType value) {
+        requireMode(RenderMode.SIMPLE_IMAGE, "Switch image scale type");
+        switchImageScaleType = Objects.requireNonNull(value);
+        ((SimpleImageSwitchRenderer) renderer).setScaleType(value); invalidate(); return this;
+    }
+    public Switch setImageTransition(ImageTransition value) {
+        requireMode(RenderMode.SIMPLE_IMAGE, "Image transition");
+        imageTransition = Objects.requireNonNull(value);
+        ((SimpleImageSwitchRenderer) renderer).setTransition(value); invalidate(); return this;
+    }
+    public Switch setImageFiltering(boolean value) {
+        if (renderMode == RenderMode.COLOR) throw new IllegalStateException("Image filtering is unavailable in COLOR rendering mode.");
+        imageFiltering = value; renderer.setFilterBitmap(value); invalidate(); return this;
+    }
+    public Switch setDragEnabled(boolean value) {
+        ensureActive();
+        if (value && !renderer.supportsDrag()) {
+            throw new IllegalStateException("Simple image mode cannot provide continuous thumb dragging. Use complex image or color mode.");
+        }
+        dragEnabled = value; return this;
+    }
 
     public Switch setAnimationDuration(long value) { state.setDuration(value); return this; }
     public Switch setAnimationInterpolator(Interpolator value) { animationInterpolator = Objects.requireNonNull(value); state.setInterpolator(toInterpolator(value)); return this; }
@@ -259,34 +351,21 @@ public final class Switch implements SelectableComponent {
         int save = effectiveAlpha < 1f
                 ? canvas.saveLayerAlpha(bounds, Math.round(255f * effectiveAlpha))
                 : canvas.save();
-        float radius = resolvedCornerRadius;
-        trackPaint.setColor(enabled
-                ? blend(uncheckedTrackColor, checkedTrackColor, progress)
-                : blend(disabledUncheckedTrackColor, disabledCheckedTrackColor, progress));
-        canvas.drawRoundRect(trackBounds, radius, radius, trackPaint);
-        if (strokeEnabled && resolvedStrokeWidth > 0f) {
-            strokePaint.setStyle(Paint.Style.STROKE);
-            strokePaint.setStrokeWidth(resolvedStrokeWidth);
-            strokePaint.setColor(enabled ? strokeColor : disabledStrokeColor);
-            RectF strokeBounds = new RectF(trackBounds);
-            strokeBounds.inset(resolvedStrokeWidth / 2f, resolvedStrokeWidth / 2f);
-            canvas.drawRoundRect(strokeBounds, Math.max(0f, radius - resolvedStrokeWidth / 2f), Math.max(0f, radius - resolvedStrokeWidth / 2f), strokePaint);
-        }
+        populateRenderState();
+        renderer.drawTrack(canvas, renderState);
         int clip = canvas.save();
         canvas.clipRect(trackBounds);
         drawRipple(canvas);
         canvas.restoreToCount(clip);
-        float thumbX = minThumbCenterX + (maxThumbCenterX - minThumbCenterX) * progress;
-        float thumbY = trackBounds.centerY();
-        float thumbRadius = resolvedThumbSize / 2f;
-        if (thumbShadowEnabled && (enabled || disabledThumbShadowEnabled)
+        float thumbX = thumbBounds.centerX();
+        float thumbY = thumbBounds.centerY();
+        float thumbRadius = thumbBounds.width() / 2f;
+        if (renderer.usesSeparateThumb()
+                && thumbShadowEnabled && (enabled || disabledThumbShadowEnabled)
                 && thumbShadow.getColor() != Color.TRANSPARENT) {
             drawThumbShadow(canvas, thumbX, thumbY, thumbRadius);
         }
-        thumbPaint.setColor(enabled
-                ? thumbColor
-                : blend(disabledUncheckedThumbColor, disabledCheckedThumbColor, progress));
-        canvas.drawCircle(thumbX, thumbY, thumbRadius, thumbPaint);
+        renderer.drawThumb(canvas, renderState);
         canvas.restoreToCount(save);
     }
 
@@ -295,11 +374,16 @@ public final class Switch implements SelectableComponent {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 if (!acceptsTouch(event.getX(), event.getY())) return false;
-                touchCaptured = true; dragging = false; downX = event.getX(); downChecked = state.isChecked();
+                touchCaptured = true; dragging = false; tapCancelled = false;
+                downX = event.getX(); downChecked = state.isChecked();
                 startRipple(event.getX(), event.getY()); return true;
             case MotionEvent.ACTION_MOVE:
                 if (!touchCaptured) return false;
-                if (!dragging && Math.abs(event.getX() - downX) > touchSlop) dragging = true;
+                if (!dragging && dragEnabled && renderer.supportsDrag()
+                        && Math.abs(event.getX() - downX) > touchSlop) dragging = true;
+                if (!dragEnabled && Math.abs(event.getX() - downX) > touchSlop) {
+                    tapCancelled = true;
+                }
                 if (dragging) {
                     float travel = maxThumbCenterX - minThumbCenterX;
                     state.setDragProgress(travel <= 0f ? 0f : (event.getX() - minThumbCenterX) / travel);
@@ -309,13 +393,13 @@ public final class Switch implements SelectableComponent {
                 if (!touchCaptured) return false;
                 touchCaptured = false;
                 if (dragging) state.commitDrag(progress >= 0.5f, true);
-                else if (bounds.contains(event.getX(), event.getY())) state.setChecked(!downChecked, true, true);
+                else if (!tapCancelled && bounds.contains(event.getX(), event.getY())) state.setChecked(!downChecked, true, true);
                 else state.setChecked(downChecked, true, false);
-                dragging = false; finishRipple(); return true;
+                dragging = false; tapCancelled = false; finishRipple(); return true;
             case MotionEvent.ACTION_CANCEL:
                 boolean handled = touchCaptured;
                 if (touchCaptured) state.setChecked(downChecked, true, false);
-                touchCaptured = false; dragging = false; cancelRipple(); return handled;
+                touchCaptured = false; dragging = false; tapCancelled = false; cancelRipple(); return handled;
             default: return touchCaptured;
         }
     }
@@ -329,7 +413,7 @@ public final class Switch implements SelectableComponent {
 
     @Override public void release() {
         if (released) return;
-        cancelTouch(); cancelRipple(); state.release();
+        cancelTouch(); cancelRipple(); state.release(); renderer.release();
         checkedChangeListener = null; soundAction = null; hapticAction = null; owner = null; released = true;
     }
 
@@ -365,6 +449,52 @@ public final class Switch implements SelectableComponent {
         float thumbRadius = resolvedThumbSize / 2f;
         minThumbCenterX = bounds.left + resolvedThumbPadding + thumbRadius;
         maxThumbCenterX = bounds.right - resolvedThumbPadding - thumbRadius;
+        updateThumbBounds();
+    }
+
+    private void updateThumbBounds() {
+        float centerX = minThumbCenterX + (maxThumbCenterX - minThumbCenterX) * progress;
+        float centerY = trackBounds.centerY();
+        float radius = resolvedThumbSize / 2f;
+        thumbBounds.set(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+    }
+
+    private void populateRenderState() {
+        updateThumbBounds();
+        renderState.trackBounds.set(trackBounds);
+        renderState.thumbBounds.set(thumbBounds);
+        renderState.progress = progress;
+        renderState.enabled = enabled;
+        renderState.cornerRadius = resolvedCornerRadius;
+        renderState.strokeWidth = resolvedStrokeWidth;
+        renderState.strokeEnabled = strokeEnabled;
+        renderState.checkedTrackColor = checkedTrackColor;
+        renderState.uncheckedTrackColor = uncheckedTrackColor;
+        renderState.disabledCheckedTrackColor = disabledCheckedTrackColor;
+        renderState.disabledUncheckedTrackColor = disabledUncheckedTrackColor;
+        renderState.thumbColor = thumbColor;
+        renderState.disabledCheckedThumbColor = disabledCheckedThumbColor;
+        renderState.disabledUncheckedThumbColor = disabledUncheckedThumbColor;
+        renderState.strokeColor = strokeColor;
+        renderState.disabledStrokeColor = disabledStrokeColor;
+    }
+
+    private void rebuildRenderer() {
+        if (renderer != null) renderer.release();
+        switch (renderMode) {
+            case COMPLEX_IMAGE:
+                switchImages.validateActive();
+                renderer = new ComplexImageSwitchRenderer(
+                        switchImages, trackImageScaleType, thumbImageScaleType, imageFiltering);
+                break;
+            case SIMPLE_IMAGE:
+                switchImages.validateActive();
+                renderer = new SimpleImageSwitchRenderer(
+                        switchImages, switchImageScaleType, imageTransition, imageFiltering);
+                break;
+            default:
+                renderer = new ColorSwitchRenderer();
+        }
     }
 
     private void drawThumbShadow(Canvas canvas, float x, float y, float radius) {
@@ -400,13 +530,32 @@ public final class Switch implements SelectableComponent {
         canvas.drawCircle(rippleX, rippleY, max * rippleProgress, ripplePaint);
     }
     private void cancelRipple() { if (rippleAnimator != null) rippleAnimator.cancel(); rippleAnimator = null; rippleProgress = 0f; }
-    private void cancelTouch() { if (touchCaptured) state.setChecked(downChecked, true, false); touchCaptured = false; dragging = false; cancelRipple(); }
+    private void cancelTouch() { if (touchCaptured) state.setChecked(downChecked, true, false); touchCaptured = false; dragging = false; tapCancelled = false; cancelRipple(); }
     private boolean acceptsTouch(float x, float y) { return visible && enabled && !released && bounds.contains(x, y); }
     private void runFeedback() { if (soundAction != null) soundAction.run(); if (hapticAction != null) hapticAction.run(); }
     private float resolve(float value, boolean pixels) { return pixels ? value : value * dimensionScale; }
     private void invalidate() { if (owner != null) owner.invalidateComponent(); }
     private void invalidateOnAnimation() { if (owner != null) owner.postInvalidateComponentOnAnimation(); }
     private void ensureActive() { if (released) throw new IllegalStateException("Switch has been released: " + id); }
+
+    private void requireColorMode() {
+        ensureActive();
+        if (renderMode != RenderMode.COLOR) {
+            throw new IllegalStateException("This styling API is only available in COLOR rendering mode.");
+        }
+    }
+    private void requireSeparateThumbMode() {
+        ensureActive();
+        if (renderMode == RenderMode.SIMPLE_IMAGE) {
+            throw new IllegalStateException("Simple image mode has no separately configurable thumb.");
+        }
+    }
+    private void requireMode(RenderMode expected, String feature) {
+        ensureActive();
+        if (renderMode != expected) {
+            throw new IllegalStateException(feature + " requires " + expected + " rendering mode.");
+        }
+    }
 
     private static TimeInterpolator toInterpolator(Interpolator value) {
         switch (Objects.requireNonNull(value)) {
@@ -415,13 +564,6 @@ public final class Switch implements SelectableComponent {
             case EASE_OUT: return new DecelerateInterpolator();
             default: return new AccelerateDecelerateInterpolator();
         }
-    }
-    private static int blend(int start, int end, float fraction) {
-        int a = Math.round(Color.alpha(start) + (Color.alpha(end) - Color.alpha(start)) * fraction);
-        int r = Math.round(Color.red(start) + (Color.red(end) - Color.red(start)) * fraction);
-        int g = Math.round(Color.green(start) + (Color.green(end) - Color.green(start)) * fraction);
-        int b = Math.round(Color.blue(start) + (Color.blue(end) - Color.blue(start)) * fraction);
-        return Color.argb(a, r, g, b);
     }
     private static String requireId(String value) { if (value == null || value.trim().isEmpty()) throw new IllegalArgumentException("Switch ID cannot be blank."); return value.trim(); }
     private static void requireBounds(RectF value) { if (value.width() <= 0f || value.height() <= 0f) throw new IllegalArgumentException("Switch bounds must be positive."); }
@@ -473,6 +615,15 @@ public final class Switch implements SelectableComponent {
         private boolean enabled = true;
         private boolean horizontalCentered;
         private boolean verticalCentered;
+        private RenderMode renderMode = RenderMode.COLOR;
+        private ImageTransition imageTransition = ImageTransition.CROSS_FADE;
+        private SwitchImages switchImages;
+        private Image.ScaleType trackImageScaleType = Image.ScaleType.FIT_XY;
+        private Image.ScaleType thumbImageScaleType = Image.ScaleType.FIT_CENTER;
+        private Image.ScaleType switchImageScaleType = Image.ScaleType.FIT_XY;
+        private boolean imageFiltering = true;
+        private boolean dragEnabled = true;
+        private boolean disabledAlphaExplicit;
         private OnCheckedChangeListener checkedChangeListener;
         private Runnable soundAction;
         private Runnable hapticAction;
@@ -485,38 +636,80 @@ public final class Switch implements SelectableComponent {
             this.context = Objects.requireNonNull(context, "Context cannot be null."); this.id = requireId(id);
             explicitBounds = new RectF(Objects.requireNonNull(bounds, "Bounds cannot be null.")); requireBounds(explicitBounds);
         }
+        public Builder(
+                Context context,
+                String id,
+                SwitchImages images,
+                Position position,
+                Size size
+        ) {
+            this(context, id, position, size);
+            configureImages(images);
+        }
+        public Builder(Context context, String id, SwitchImages images, RectF bounds) {
+            this(context, id, bounds);
+            configureImages(images);
+        }
         public Builder setChecked(boolean value) { checked = value; return this; }
-        public Builder setCheckedTrackColor(int value) { checkedTrackColor = value; return this; }
-        public Builder setUncheckedTrackColor(int value) { uncheckedTrackColor = value; return this; }
-        public Builder setDisabledTrackColor(int value) { disabledCheckedTrackColor = value; disabledUncheckedTrackColor = value; return this; }
-        public Builder setDisabledCheckedTrackColor(int value) { disabledCheckedTrackColor = value; return this; }
-        public Builder setDisabledUncheckedTrackColor(int value) { disabledUncheckedTrackColor = value; return this; }
-        public Builder setThumbColor(int value) { thumbColor = value; return this; }
-        public Builder setDisabledThumbColor(int value) { disabledCheckedThumbColor = value; disabledUncheckedThumbColor = value; return this; }
-        public Builder setDisabledCheckedThumbColor(int value) { disabledCheckedThumbColor = value; return this; }
-        public Builder setDisabledUncheckedThumbColor(int value) { disabledUncheckedThumbColor = value; return this; }
-        public Builder setDisabledStrokeColor(int value) { disabledStrokeColor = value; disabledStrokeColorExplicit = true; return this; }
-        public Builder setDisabledAlpha(float value) { disabledAlpha = requireAlpha(value); return this; }
-        public Builder setTrackCornerRadius(float value) { cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = false; return this; }
-        public Builder setTrackCornerRadiusPx(float value) { cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = true; return this; }
-        public Builder setTrackCornerRadiusAuto() { cornerRadiusAuto = true; return this; }
-        public Builder setThumbPadding(float value) { thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = false; return this; }
-        public Builder setThumbPaddingPx(float value) { thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = true; return this; }
-        public Builder setThumbSize(float value) { thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = false; return this; }
-        public Builder setThumbSizePx(float value) { thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = true; return this; }
-        public Builder setThumbSizeAuto() { thumbSizeAuto = true; return this; }
-        public Builder setTrackStroke(float width, int color) { strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = false; strokeEnabled = width > 0f; return this; }
-        public Builder setTrackStrokePx(float width, int color) { strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = true; strokeEnabled = width > 0f; return this; }
-        public Builder setTrackStrokeEnabled(boolean value) { strokeEnabled = value; return this; }
-        public Builder setThumbShadow(DropShadow value) { thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = false; return this; }
-        public Builder setThumbShadowPx(DropShadow value) { thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = true; return this; }
-        public Builder setThumbShadowEnabled(boolean value) { thumbShadowEnabled = value; return this; }
-        public Builder setDisabledThumbShadowEnabled(boolean value) { disabledThumbShadowEnabled = value; return this; }
+        public Builder setCheckedTrackColor(int value) { requireBuilderColorMode(); checkedTrackColor = value; return this; }
+        public Builder setUncheckedTrackColor(int value) { requireBuilderColorMode(); uncheckedTrackColor = value; return this; }
+        public Builder setDisabledTrackColor(int value) { requireBuilderColorMode(); disabledCheckedTrackColor = value; disabledUncheckedTrackColor = value; return this; }
+        public Builder setDisabledCheckedTrackColor(int value) { requireBuilderColorMode(); disabledCheckedTrackColor = value; return this; }
+        public Builder setDisabledUncheckedTrackColor(int value) { requireBuilderColorMode(); disabledUncheckedTrackColor = value; return this; }
+        public Builder setThumbColor(int value) { requireBuilderColorMode(); thumbColor = value; return this; }
+        public Builder setDisabledThumbColor(int value) { requireBuilderColorMode(); disabledCheckedThumbColor = value; disabledUncheckedThumbColor = value; return this; }
+        public Builder setDisabledCheckedThumbColor(int value) { requireBuilderColorMode(); disabledCheckedThumbColor = value; return this; }
+        public Builder setDisabledUncheckedThumbColor(int value) { requireBuilderColorMode(); disabledUncheckedThumbColor = value; return this; }
+        public Builder setDisabledStrokeColor(int value) { requireBuilderColorMode(); disabledStrokeColor = value; disabledStrokeColorExplicit = true; return this; }
+        public Builder setDisabledAlpha(float value) { disabledAlpha = requireAlpha(value); disabledAlphaExplicit = true; return this; }
+        public Builder setTrackCornerRadius(float value) { requireBuilderColorMode(); cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = false; return this; }
+        public Builder setTrackCornerRadiusPx(float value) { requireBuilderColorMode(); cornerRadius = requireNonNegative(value, "Corner radius"); cornerRadiusAuto = false; cornerRadiusInPixels = true; return this; }
+        public Builder setTrackCornerRadiusAuto() { requireBuilderColorMode(); cornerRadiusAuto = true; return this; }
+        public Builder setThumbPadding(float value) { requireBuilderSeparateThumb(); thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = false; return this; }
+        public Builder setThumbPaddingPx(float value) { requireBuilderSeparateThumb(); thumbPadding = requireNonNegative(value, "Thumb padding"); thumbPaddingInPixels = true; return this; }
+        public Builder setThumbSize(float value) { requireBuilderSeparateThumb(); thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = false; return this; }
+        public Builder setThumbSizePx(float value) { requireBuilderSeparateThumb(); thumbSize = requirePositive(value, "Thumb size"); thumbSizeAuto = false; thumbSizeInPixels = true; return this; }
+        public Builder setThumbSizeAuto() { requireBuilderSeparateThumb(); thumbSizeAuto = true; return this; }
+        public Builder setTrackStroke(float width, int color) { requireBuilderColorMode(); strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = false; strokeEnabled = width > 0f; return this; }
+        public Builder setTrackStrokePx(float width, int color) { requireBuilderColorMode(); strokeWidth = requireNonNegative(width, "Stroke width"); strokeColor = color; if (!disabledStrokeColorExplicit) disabledStrokeColor = color; strokeWidthInPixels = true; strokeEnabled = width > 0f; return this; }
+        public Builder setTrackStrokeEnabled(boolean value) { requireBuilderColorMode(); strokeEnabled = value; return this; }
+        public Builder setThumbShadow(DropShadow value) { requireBuilderSeparateThumb(); thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = false; return this; }
+        public Builder setThumbShadowPx(DropShadow value) { requireBuilderSeparateThumb(); thumbShadow = Objects.requireNonNull(value); thumbShadowInPixels = true; return this; }
+        public Builder setThumbShadowEnabled(boolean value) { requireBuilderSeparateThumb(); thumbShadowEnabled = value; return this; }
+        public Builder setDisabledThumbShadowEnabled(boolean value) { requireBuilderSeparateThumb(); disabledThumbShadowEnabled = value; return this; }
         public Builder setAnimationDuration(long value) { animationDuration = requireDuration(value, "Animation duration"); return this; }
         public Builder setAnimationInterpolator(Interpolator value) { animationInterpolator = Objects.requireNonNull(value); return this; }
         public Builder setRippleEnabled(boolean value) { rippleEnabled = value; return this; }
         public Builder setRippleColor(int value) { rippleColor = value; return this; }
         public Builder setRippleDuration(long value) { rippleDuration = requireDuration(value, "Ripple duration"); return this; }
+        public Builder setTrackImageScaleType(Image.ScaleType value) {
+            requireBuilderMode(RenderMode.COMPLEX_IMAGE, "Track image scale type");
+            trackImageScaleType = Objects.requireNonNull(value); return this;
+        }
+        public Builder setThumbImageScaleType(Image.ScaleType value) {
+            requireBuilderMode(RenderMode.COMPLEX_IMAGE, "Thumb image scale type");
+            thumbImageScaleType = Objects.requireNonNull(value); return this;
+        }
+        public Builder setSwitchImageScaleType(Image.ScaleType value) {
+            requireBuilderMode(RenderMode.SIMPLE_IMAGE, "Switch image scale type");
+            switchImageScaleType = Objects.requireNonNull(value); return this;
+        }
+        public Builder setImageTransition(ImageTransition value) {
+            requireBuilderMode(RenderMode.SIMPLE_IMAGE, "Image transition");
+            imageTransition = Objects.requireNonNull(value); return this;
+        }
+        public Builder setImageFiltering(boolean value) {
+            if (renderMode == RenderMode.COLOR) {
+                throw new IllegalStateException("Image filtering is unavailable in COLOR rendering mode.");
+            }
+            imageFiltering = value; return this;
+        }
+        public Builder setDragEnabled(boolean value) {
+            if (value && renderMode == RenderMode.SIMPLE_IMAGE) {
+                throw new IllegalStateException("Simple image mode cannot provide continuous thumb dragging. Use complex image or color mode.");
+            }
+            dragEnabled = value; return this;
+        }
         public Builder setSoundAction(Runnable value) { soundAction = value; return this; }
         public Builder setHapticAction(Runnable value) { hapticAction = value; return this; }
         public Builder setAlpha(float value) { alpha = requireAlpha(value); return this; }
@@ -526,5 +719,29 @@ public final class Switch implements SelectableComponent {
         public Builder verticalCenter(boolean value) { verticalCentered = value; return this; }
         public Builder setOnCheckedChangeListener(OnCheckedChangeListener value) { checkedChangeListener = value; return this; }
         @Override public Switch build(View hostView) { return new Switch(this, hostView); }
+
+        private void configureImages(SwitchImages value) {
+            switchImages = Objects.requireNonNull(value, "Switch images cannot be null.");
+            switchImages.validateActive();
+            renderMode = switchImages.getMode() == SwitchImages.Mode.COMPLEX
+                    ? RenderMode.COMPLEX_IMAGE : RenderMode.SIMPLE_IMAGE;
+            disabledAlpha = 1f;
+            dragEnabled = renderMode == RenderMode.COMPLEX_IMAGE;
+        }
+        private void requireBuilderColorMode() {
+            if (renderMode != RenderMode.COLOR) {
+                throw new IllegalStateException("This styling API is only available in COLOR rendering mode.");
+            }
+        }
+        private void requireBuilderSeparateThumb() {
+            if (renderMode == RenderMode.SIMPLE_IMAGE) {
+                throw new IllegalStateException("Simple image mode has no separately configurable thumb.");
+            }
+        }
+        private void requireBuilderMode(RenderMode expected, String feature) {
+            if (renderMode != expected) {
+                throw new IllegalStateException(feature + " requires " + expected + " rendering mode.");
+            }
+        }
     }
 }

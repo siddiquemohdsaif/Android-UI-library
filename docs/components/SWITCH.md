@@ -4,6 +4,9 @@
 supports tapping, continuous thumb dragging, programmatic state changes, and direct use
 in `ZLayer`, `Card`, `Dialog`, `ComponentList`, or `ZLayerContainer`.
 
+It supports three rendering modes: native color drawing, complex images with separate
+track/thumb assets, and simple complete-state images.
+
 ```java
 import com.ogfa.nativeviews.switchcomponent.Switch;
 ```
@@ -36,6 +39,110 @@ Switch sound = layer.add(new Switch.Builder(
 
 `Position + Size` uses Figma space. `RectF` uses runtime pixels. Unsuffixed visual
 measurements always remain Figma values; matching `Px` methods use exact runtime pixels.
+
+## Complex image rendering
+
+Complex mode requires five caller-owned bitmaps and preserves continuous thumb dragging:
+
+```java
+SwitchImages images = SwitchImages.complex(
+        trackOn,
+        trackOff,
+        trackDisabled,
+        thumbEnabled,
+        thumbDisabled
+);
+
+Switch textured = layer.add(new Switch.Builder(
+        context,
+        "textured",
+        images,
+        position,
+        new Size(220f, 112f)
+)
+        .setThumbPadding(6f)
+        .setTrackImageScaleType(Image.ScaleType.FIT_XY)
+        .setThumbImageScaleType(Image.ScaleType.FIT_CENTER)
+        .setImageFiltering(true));
+```
+
+At exact 0% or 100%, the renderer draws the complete unchecked or checked track.
+Between those endpoints, the unchecked track is drawn first and the checked track is
+clipped precisely at `thumbBounds.centerX()`. Both textures remain opaque and meet
+under the moving thumb without exposing a gap. When disabled, the renderer
+uses `trackDisabled` and `thumbDisabled`; the thumb position continues to communicate
+the stable checked state.
+
+## Simple image rendering
+
+Simple mode requires three complete switch images:
+
+```java
+SwitchImages images = SwitchImages.simple(
+        switchOn,
+        switchOff,
+        switchDisabled
+);
+
+Switch textured = layer.add(new Switch.Builder(
+        context,
+        "simple_textured",
+        images,
+        position,
+        new Size(220f, 112f)
+)
+        .setImageTransition(Switch.ImageTransition.CROSS_FADE)
+        .setSwitchImageScaleType(Image.ScaleType.FIT_XY));
+```
+
+Transitions:
+
+```java
+Switch.ImageTransition.CROSS_FADE
+Switch.ImageTransition.SNAP
+```
+
+Simple mode is tap-only because its thumb is embedded in the complete bitmap. Enabling
+dragging throws a clear exception instead of rendering two overlapping cross-faded
+thumbs:
+
+```java
+simple.setDragEnabled(true); // throws IllegalStateException
+```
+
+## Image ownership and runtime modes
+
+The library validates all required images for null, recycling, and dimensions. It never
+recycles caller-owned bitmaps. Recycling an active source in caller code produces a clear
+rendering exception.
+
+```java
+textured.getRenderMode();
+textured.getSwitchImages();
+textured.isDragEnabled();
+textured.isImageFilteringEnabled();
+
+textured.setSwitchImages(otherImages);
+textured.useColorRendering();
+
+textured.setTrackImageScaleType(Image.ScaleType.FIT_XY);   // complex
+textured.setThumbImageScaleType(Image.ScaleType.FIT_CENTER); // complex
+textured.setSwitchImageScaleType(Image.ScaleType.FIT_XY);  // simple
+textured.setImageFiltering(true);
+textured.setImageTransition(Switch.ImageTransition.SNAP);   // simple
+textured.setDragEnabled(false);
+```
+
+Changing rendering mode cancels the current gesture and animation, preserves the stable
+checked value, validates the new sources, and rebuilds rendering geometry. Complex and
+color modes default to drag enabled; simple mode defaults to drag disabled.
+
+Image modes default to `disabledAlpha = 1f` because their disabled assets already contain
+the intended appearance. An explicit `setDisabledAlpha()` always wins.
+
+Color-only APIs throw while an image renderer is active. Thumb geometry and shadow APIs
+remain available in complex mode, but throw in simple mode because it has no separate
+thumb. This prevents silently ignored configuration.
 
 ## State
 
@@ -215,4 +322,4 @@ invalid alpha, excessive thumb dimensions, and use after release. The owning
 Release cancels state and ripple animators, restores touch state, removes callbacks,
 and is idempotent.
 
-Dedicated coverage: `SwitchTestActivity`.
+Dedicated coverage: `SwitchTestActivity` and `SwitchImageModeTestActivity`.

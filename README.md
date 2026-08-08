@@ -86,7 +86,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `Card` | Rounded color/image container with nested ZLayer and outside shadow | [CARD.md](docs/components/CARD.md) |
 | `ComponentList` | Virtualized vertical/horizontal list with reusable layered items | [COMPONENT_LIST.md](docs/components/COMPONENT_LIST.md) |
 | `Dialog` | Modal dim overlay with layered Card surface, Back handling, and transitions | [DIALOG.md](docs/components/DIALOG.md) |
-| `Switch` | Animated selectable track/thumb with tap and drag interaction | [SWITCH.md](docs/components/SWITCH.md) |
+| `Switch` | Color or bitmap-rendered selectable control with tap/drag interaction | [SWITCH.md](docs/components/SWITCH.md) |
 | `ZLayerContainer` | Bounded nested layers that compose any components as one unit | [Z_LAYER_CONTAINER.md](docs/components/Z_LAYER_CONTAINER.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -340,6 +340,7 @@ artifacts/
 | `ImageTestActivity` | Both region paths, all scale types, bitmap replacement, runtime API, alpha, click, cleanup |
 | `ZLayerContainerTestActivity` | Arbitrary nested components, child touch priority, parent interaction, movement, and cleanup |
 | `SwitchTestActivity` | Figma/RectF regions, tap, drag, animation, styling, ripple, disabled state, and cleanup |
+| `SwitchImageModeTestActivity` | Complex five-image and simple three-image rendering, transitions, drag policy, disabled assets, and ownership |
 | `AnimatorComponentsTestActivity` | GIF, Lottie, dynamic and After Effects as direct ZLayer components |
 | `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 

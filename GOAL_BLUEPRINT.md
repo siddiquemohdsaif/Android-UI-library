@@ -386,6 +386,9 @@ com.ogfa.nativeviews.progress
   parent centering, optional ripple, sound, and haptic hooks.
 - Implemented fully configurable disabled checked/unchecked track and thumb colors,
   disabled stroke, disabled alpha, and independent disabled thumb-shadow visibility.
+- Implemented immutable caller-owned `SwitchImages`, complex five-image rendering with
+  a thumb-center-clipped ON/OFF track and moving thumb, simple three-image rendering with snap/cross-fade, image scale/filter
+  controls, strict mode validation, runtime renderer switching, and dedicated device test.
 - Implemented runtime state/style/region APIs, validation, animation control,
   idempotent release, `SWITCH.md`, and `SwitchTestActivity`.
 
@@ -468,6 +471,7 @@ DynamicViewAnimatorTestActivity
 LottieAnimatorTestActivity
 GifAnimatorTestActivity
 SwitchTestActivity
+SwitchImageModeTestActivity
 CheckBoxTestActivity
 RadioButtonTestActivity
 ProgressTestActivity
