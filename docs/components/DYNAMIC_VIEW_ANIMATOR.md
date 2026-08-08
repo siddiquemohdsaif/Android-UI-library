@@ -34,5 +34,5 @@ DynamicViewAnimator pulse = layer.add(
 be positive.
 
 All playback, callbacks, layout, centering, visibility, alpha, clipping, and click methods
-are identical to [GifAnimator](GIF_ANIMATOR.md#shared-animator-api). `DynamicLayer` delegates
-to the same component for use inside `CustomAnimatorComponent`.
+are identical to [GifAnimator](GIF_ANIMATOR.md#shared-animator-api). Add
+`DynamicViewAnimator` directly to a root or container-owned `ZLayer`.

@@ -35,5 +35,5 @@ The default external-image resolver checks the animation directory, root asset n
 
 All playback, callbacks, layout, centering, visibility, alpha, clipping, and click methods
 are identical to those documented in [GifAnimator](GIF_ANIMATOR.md#shared-animator-api).
-`LottieLayer` uses this same component internally and retains playback while its parent
+`LottieAnimator` can be added directly to a container-owned `ZLayer` and retains playback while its parent
 moves.

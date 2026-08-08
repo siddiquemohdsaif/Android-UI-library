@@ -1,7 +1,7 @@
 # ZLayerGroup and ZLayer
 
-`ZLayerGroup` is the single Canvas scene owner. It replaces `TextGroup`,
-`TextFieldGroup`, and `CustomAnimatorComponentGroup`.
+`ZLayerGroup` is the single Canvas scene owner. It replaces separate groups for each
+component type.
 
 ```text
 ZLayerGroup
@@ -18,8 +18,8 @@ private final ZLayer dialog = ui.addLayer("dialog");
 
 Text title = content.add(new Text.Builder(...));
 TextField field = content.add(new TextField.Builder(...));
-CustomAnimatorComponent reward =
-        content.add(new CustomAnimatorComponent.Builder(...));
+ZLayerContainer reward =
+        content.add(new ZLayerContainer.Builder(...));
 ```
 
 Builders implement `ComponentFactory<T>`. Component IDs are globally unique.
@@ -143,8 +143,9 @@ public interface Component {
 }
 ```
 
-`Text`, `TextField`, and `CustomAnimatorComponent` implement it. Every future visual
-component must implement `Component`/`ComponentFactory` and support
+`Text`, `TextField`, `Image`, `Button`, `Card`, all animator components, and
+`ZLayerContainer` implement it. Every future visual component must implement
+`Component`/`ComponentFactory` and support
 `Position + Size` and `RectF`.
 
 ## State and lifecycle
@@ -175,8 +176,7 @@ ui.release();
 ui.close();
 ```
 
-There are no compatibility wrappers. `TextGroup`, `TextFieldGroup`, and
-`CustomAnimatorComponentGroup` were deleted.
+There are no compatibility wrappers. Type-specific component groups were deleted.
 
 ## Test activity
 
@@ -184,6 +184,6 @@ There are no compatibility wrappers. `TextGroup`, `TextFieldGroup`, and
 app.builderx.ogfa.androiduicomponents.ZLayerTestActivity
 ```
 
-It combines `Text`, `TextField`, and `CustomAnimatorComponent` in one scene and
+It combines multiple component types in one scene and
 verifies unique IDs, typed lookup, layer/component ordering, cross-layer movement,
 pass-through effects, modal blocking, callbacks, shared IME, and cleanup.

@@ -20,13 +20,6 @@ public final class DynamicViewAnimator extends BaseAnimatorComponent {
         requireDuration(dynamicView);
     }
 
-    /** Detached constructor used by DynamicLayer. */
-    public DynamicViewAnimator(String id, CustomDynamicView view, int repeatCount, RectF bounds) {
-        super(id, bounds, true, repeatCount);
-        dynamicView = Objects.requireNonNull(view, "Dynamic view cannot be null.");
-        requireDuration(dynamicView);
-    }
-
     @Override protected long getDurationMillis() { return dynamicView.getDurationMillis(); }
     @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) { dynamicView.onDraw(canvas, progress, bounds); }
     @Override protected void onRepeat() { dynamicView.onReset(); }

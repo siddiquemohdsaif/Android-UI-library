@@ -183,8 +183,8 @@ final class GIFViewAnimator {
         if (composition == null) {
             throw new IllegalStateException(
                     "GIF '" + animationName + "' is not preloaded. Call "
-                            + "GIFViewAnimator.preloadAnimations(context, \"" + id
-                            + "\") or use GifLayer.create(context, name, rectF)."
+                            + "GifAnimator.preload(context, \"" + id
+                            + "\") or build GifAnimator with a Context."
             );
         }
         return composition;

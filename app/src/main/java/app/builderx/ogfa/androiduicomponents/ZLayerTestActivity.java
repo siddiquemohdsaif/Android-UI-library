@@ -17,7 +17,7 @@ import android.view.inputmethod.InputConnection;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.ogfa.nativeviews.animator.component.CustomAnimatorComponent;
+import com.ogfa.nativeviews.button.Button;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.font.NativeFonts;
@@ -195,16 +195,15 @@ public final class ZLayerTestActivity extends AppCompatActivity {
                     getWidth() - dp(70),
                     dp(420)
             );
-            content.add(new CustomAnimatorComponent.Builder(
+            content.add(new Button.Builder(
                     getContext(),
                     BUTTON_ID,
                     createButtonBitmap(800, 180),
                     buttonBounds
             )
-                    .setClickListener(id -> showDialog())
+                    .setOnClickListener(id -> showDialog())
                     .setPressedScale(0.94f)
-                    .setSoundAction(() -> {
-                    }));
+            );
 
             effects.add(new Text.Builder(
                     getContext(),

@@ -86,7 +86,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `Card` | Rounded color/image container with nested ZLayer and outside shadow | [CARD.md](docs/components/CARD.md) |
 | `ComponentList` | Virtualized vertical/horizontal list with reusable layered items | [COMPONENT_LIST.md](docs/components/COMPONENT_LIST.md) |
 | `Dialog` | Modal dim overlay with layered Card surface, Back handling, and transitions | [DIALOG.md](docs/components/DIALOG.md) |
-| `CustomAnimatorComponent` | Generic five-layer animated Canvas element | [CUSTOM_ANIMATOR_COMPONENT.md](docs/components/CUSTOM_ANIMATOR_COMPONENT.md) |
+| `ZLayerContainer` | Bounded nested layers that compose any components as one unit | [Z_LAYER_CONTAINER.md](docs/components/Z_LAYER_CONTAINER.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
 ### Supporting utilities
@@ -97,13 +97,9 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | Bitmap text utilities | Bitmap-font and Android-font bitmap generation/composition | [TEXT_BITMAP_UTILITIES.md](docs/utilities/TEXT_BITMAP_UTILITIES.md) |
 | `Position` and `Size` | Figma-to-runtime region conversion | Covered by each component guide |
 | `FigmaConfig` | App-wide Figma reference width and conversion scale | [FIGMA_CONFIG.md](docs/utilities/FIGMA_CONFIG.md) |
-| `NativeViewsSoundPlayer` | Bundled component-click sound | Covered by `CustomAnimatorComponent` |
+| `NativeViewsSoundPlayer` | Bundled component-click sound | Used by interactive components |
 
-### Existing APIs awaiting final hardening
-
-These classes exist in the SDK, but their final public names or contracts are still on
-the roadmap. Their dedicated component guides will be added when hardening is
-complete:
+### Animator components
 
 | Roadmap component | Current implementation |
 |---|---|
@@ -342,7 +338,7 @@ artifacts/
 | `TextTestActivity` | Both region paths, all bundled font resources, alignment, wrapping, ellipsis, style, runtime update, click cancellation |
 | `TextFieldTestActivity` | IME, focus, cursor taps/dragging, selection, three screen positions, keyboard avoidance |
 | `ImageTestActivity` | Both region paths, all scale types, bitmap replacement, runtime API, alpha, click, cleanup |
-| `CustomAnimatorComponentTestActivity` | Bitmap, Lottie, GIF, dynamic and After Effects layers, touch, movement, cleanup |
+| `ZLayerContainerTestActivity` | Arbitrary nested components, child touch priority, parent interaction, movement, and cleanup |
 | `AnimatorComponentsTestActivity` | GIF, Lottie, dynamic and After Effects as direct ZLayer components |
 | `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 

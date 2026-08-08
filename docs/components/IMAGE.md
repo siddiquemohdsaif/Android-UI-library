@@ -1,8 +1,7 @@
 # Image
 
-`Image` is a standalone Canvas bitmap component. It is independent from
-`CustomAnimatorComponent` and its `BitmapLayer`; use `Image` when a bitmap only
-needs normal rendering, z-order, runtime updates, and optional click behavior.
+`Image` is a standalone Canvas bitmap component. Use it when a bitmap needs normal
+rendering, z-order, runtime updates, and optional click behavior.
 
 ```java
 import com.ogfa.nativeviews.image.Image;

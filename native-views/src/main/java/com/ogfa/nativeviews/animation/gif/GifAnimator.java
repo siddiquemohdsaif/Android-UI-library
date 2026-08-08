@@ -21,17 +21,6 @@ public final class GifAnimator extends BaseAnimatorComponent {
         composition = GIFViewAnimator.getOrLoad(builder.getContext(), builder.assetName);
     }
 
-    /** Detached constructor used by CustomAnimatorComponent's GifLayer adapter. */
-    public GifAnimator(Context context, String id, String assetName, RectF bounds, int repeatCount) {
-        super(id, bounds, true, repeatCount);
-        composition = GIFViewAnimator.getOrLoad(context, assetName);
-    }
-
-    public GifAnimator(String id, GIFComposition composition, RectF bounds, int repeatCount) {
-        super(id, bounds, true, repeatCount);
-        this.composition = Objects.requireNonNull(composition, "GIF composition cannot be null.");
-    }
-
     @Override protected long getDurationMillis() { return composition.getDuration(); }
     @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) {
         composition.draw(canvas, bounds, Math.round(progress * composition.getDuration()), paint);

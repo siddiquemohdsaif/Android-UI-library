@@ -23,11 +23,10 @@ com.ogfa.nativeviews
 5. Card
 6. List
 7. Dialog
-8. CustomAnimatorComponent
-9. AfterEffectAnimator
-10. DynamicViewAnimator
-11. LottieAnimator
-12. GifAnimator
+8. AfterEffectAnimator
+9. DynamicViewAnimator
+10. LottieAnimator
+11. GifAnimator
 
 ### Secondary components
 
@@ -39,6 +38,7 @@ com.ogfa.nativeviews
 ### Canvas ViewGroup
 
 1. ZLayerGroup / ZLayer
+2. ZLayerContainer
 
 ## Current Status
 
@@ -51,7 +51,7 @@ com.ogfa.nativeviews
 | Card | Implemented | Rounded color/image background, outside drop shadow, and one nested mixed-component ZLayer |
 | List | Implemented | `ComponentList` provides virtualized vertical/horizontal scrolling, reusable layered items, stable IDs, child touch arbitration, fling, Figma spacing/padding, and dedicated documentation/test coverage. |
 | Dialog | Implemented | Modal dim overlay, Card-backed layered content, local Figma scope, outside/Back policies, show/dismiss lifecycle, transitions, callbacks, translation, and dedicated documentation/test coverage. |
-| CustomAnimatorComponent | Complete | Explicit regions, relative five-layer composition, bounds policies, interaction, movement, and ZLayer ownership implemented |
+| ZLayerContainer | Complete | Generic bounded composition using nested ZLayers and arbitrary Component children |
 | AfterEffectAnimator | Complete | Standalone ZLayer component and reusable immutable composition |
 | DynamicViewAnimator | Complete | Standalone ZLayer component using the shared monotonic playback clock |
 | LottieAnimator | Complete | Standalone cached ZLayer component; old `LottieViewAnimator` is internal |
@@ -147,137 +147,60 @@ new Component.Builder(..., position, size);
 new Component.Builder(..., rectF);
 ```
 
-## `CustomAnimatorComponent` Restructure
+## Generic Nested Composition
 
-### Original problem
+The former `CustomAnimatorComponent` duplicated component APIs through five specialized
+layer adapters. It has been removed. Composition is now handled by
+`ZLayerContainer`, a normal bounded `Component` that owns nested `ZLayer`s.
 
-The former `AnimatedButton` was not only a button. It was a general layered, interactive,
-animatable Canvas element that can contain five different layer types:
+Any component can be a child:
 
-1. `BitmapLayer`
-2. `GifLayer`
-3. `LottieLayer`
-4. `DynamicLayer`
-5. `AfterEffectLayer`
-
-Its former name made the generic layer system look button-specific. It also mixed
-component composition with button interaction, press animation, click handling, sound,
-movement, bounds calculation, drawing, and cleanup.
-
-### Approved and implemented names
-
-```text
-AnimatedButton       -> CustomAnimatorComponent
-AnimatedButtonGroup  -> removed; use ZLayerGroup + ZLayer
-ViewLayer            -> ComponentLayer
-
-BitmapView           -> BitmapLayer
-GIFView              -> GifLayer
-LottieView           -> LottieLayer
-DynamicView          -> DynamicLayer
-AfterEffectView      -> AfterEffectLayer
-```
-
-Target package:
-
-```text
-com.ogfa.nativeviews.animator.component
-com.ogfa.nativeviews.animator.component.layer
-```
-
-### Target responsibility
-
-`CustomAnimatorComponent` owns:
-
-- ordered layers;
-- component bounds;
-- drawing;
-- top-level visibility;
-- animation-frame invalidation;
-- position animation;
-- synchronized layer and touch-bound movement;
-- optional interaction configuration;
-- layer resource cleanup.
-
-It must not assume that every instance is visually or semantically a button.
-
-### Interaction configuration
-
-Button-like behavior becomes optional configuration:
+1. `Image`
+2. `Text`
+3. `TextField`
+4. `Button`
+5. `Card`
+6. `ComponentList`
+7. `GifAnimator`
+8. `LottieAnimator`
+9. `DynamicViewAnimator`
+10. `AfterEffectAnimator`
+11. another `ZLayerContainer`
 
 ```java
-new CustomAnimatorComponent.Builder(context, id, layers, bounds)
-        .setOnClickListener(listener)
-        .setOnLongClickListener(listener)
-        .setPressedScale(0.92f)
-        .setPressAnimationDuration(100L)
-        .setSoundAction(soundAction)
-        .build(hostView);
+ZLayerContainer panel = scene.add(
+        new ZLayerContainer.Builder(context, "panel", position, size)
+                .setClipToBounds(true)
+                .setOnClickListener(id -> openPanel())
+);
+
+ZLayer background = panel.getContentLayer();
+ZLayer animation = panel.addLayer("animation");
+ZLayer foreground = panel.addLayer("foreground");
+
+background.add(new Image.Builder(
+        context, "background", bitmap, panel.getLocalBounds()));
+animation.add(new GifAnimator.Builder(
+        context, "sparkles", "sparkles",
+        panel.figmaRect(20f, 20f, 120f, 120f)));
+foreground.add(new Button.Builder(
+        context, "claim", color, "CLAIM",
+        panel.figmaRect(180f, 130f, 240f, 70f)));
 ```
 
-If no interaction listener is supplied, the component is display-only.
+The container owns ordering, local coordinates, clipping, nested touch dispatch,
+optional surface interaction, movement, invalidation, nested IME registration, and
+idempotent cleanup. Each child retains its own rendering, playback, and resource API.
 
-The future primary `Button` component should use this interaction model internally but
-provide a simpler API for common bitmap, text, icon, background, and click use cases.
+Migration mapping:
 
-### Layer contract
-
-```java
-public interface ComponentLayer {
-    String getId();
-    LayerRegion getRegion();
-    RectF getBounds();
-    ComponentLayer setRegion(LayerRegion region);
-    void draw(Canvas canvas);
-    boolean isVisible();
-    ComponentLayer setVisible(boolean visible);
-    float getAlpha();
-    ComponentLayer setAlpha(float alpha);
-    boolean needsNextFrame();
-    void release();
-}
-```
-
-`BaseComponentLayer` provides the common ID, visibility, alpha, relative-region resolution,
-draw isolation, and idempotent cleanup implementation.
-
-### Bounds policy
-
-Replace implicit bitmap-only bounds discovery with an explicit policy:
-
-```java
-BoundsPolicy.DECLARED_REGION
-BoundsPolicy.LAYER_UNION
-BoundsPolicy.LARGEST_LAYER
-BoundsPolicy.CUSTOM
-```
-
-Default:
-
-```text
-The declared `RectF` or `Position + Size` region is always required and is the default
-interaction policy. Layer union, largest layer, and custom resolution are opt-in.
-```
-
-This removes the current requirement that a position-based component must contain a
-`BitmapLayer`.
-
-### Migration mapping
-
-| Current API | Target API |
+| Removed specialized type | Ordinary component |
 |---|---|
-| `AnimatedButton` | `CustomAnimatorComponent` |
-| `AnimatedButtonGroup` | Removed; use `ZLayerGroup` + `ZLayer` |
-| `ViewLayer` | `ComponentLayer` |
-| `BitmapView.get(...)` | `BitmapLayer.create(...)` |
-| `GIFView.get(...)` | `GifLayer.create(...)` |
-| `LottieView.get(...)` | `LottieLayer.create(...)` |
-| `DynamicView.get(...)` | `DynamicLayer.create(...)` |
-| `AfterEffectView.get(...)` | `AfterEffectLayer.create(...)` |
-| `setShrink(...)` | `setPressedScale(...)` |
-| `setProxySoundPlay(...)` | `setSoundAction(...)` |
-| `Draw(...)` | `draw(...)` |
-| `HandleTouch(...)` | `onTouchEvent(...)` |
+| `BitmapLayer` | `Image` |
+| `GifLayer` | `GifAnimator` |
+| `LottieLayer` | `LottieAnimator` |
+| `DynamicLayer` | `DynamicViewAnimator` |
+| `AfterEffectLayer` | `AfterEffectAnimator` |
 
 ## Target Packages
 
@@ -290,8 +213,7 @@ com.ogfa.nativeviews.image
 com.ogfa.nativeviews.card
 com.ogfa.nativeviews.list
 com.ogfa.nativeviews.dialog
-com.ogfa.nativeviews.animator.component
-com.ogfa.nativeviews.animator.component.layer
+com.ogfa.nativeviews.zlayer
 com.ogfa.nativeviews.animation.aftereffect
 com.ogfa.nativeviews.animation.dynamic
 com.ogfa.nativeviews.animation.lottie
@@ -410,13 +332,13 @@ com.ogfa.nativeviews.progress
 - Implemented nested component/IME lifecycle cleanup and `HOST_RELEASED` reporting.
 - Covered by `DialogTestActivity` and `docs/components/DIALOG.md`.
 
-### CustomAnimatorComponent
+### ZLayerContainer
 
-- Five supported layer families.
-- Pluggable bounds policy.
-- Display-only or interactive behavior.
-- Press, movement, and custom animations.
-- One group for drawing, touch dispatch, invalidation, and release.
+- Arbitrary nested `Component` children, not a fixed set of layer adapters.
+- Local Figma-space and runtime-pixel rectangle helpers.
+- Nested layer/component ordering and lookup.
+- Optional clipping, surface interaction, press feedback, and region movement.
+- One root group for drawing, touch dispatch, IME, invalidation, and release.
 
 ### AfterEffectAnimator
 
@@ -449,8 +371,7 @@ com.ogfa.nativeviews.progress
 - Use cache-first loading with asset fallback.
 - Fail clearly for missing or invalid GIF assets.
 - Support repeat configuration, drawing, visibility filtering, and release.
-- Keep `GifLayer` focused on component integration while `GifAnimator` owns loading
-  and playback.
+- Use `GifAnimator` directly in root or container-owned `ZLayer`s.
 
 ### Secondary components
 
@@ -478,15 +399,14 @@ setOnCheckedChangeListener(listener)
 3. Normalize public naming and method casing.
 4. Add reusable Canvas viewport translation for IME avoidance.
 
-### Phase 2 — Animator component restructure (complete)
+### Phase 2 — Generic nested composition (complete)
 
-1. Rename the five view types to layers.
-2. Introduce `ComponentLayer`.
-3. Extract generic composition from `CustomAnimatorComponent`.
-4. Create `CustomAnimatorComponent` and integrate it directly with `ZLayer`.
-5. Add explicit bounds policies.
+1. Make every animator family a standalone `Component`.
+2. Add `ZLayerContainer` with nested `ZLayer` ownership and local coordinates.
+3. Support arbitrary visual, input, and animator children.
+4. Preserve touch capture, IME registration, invalidation, and cleanup.
+5. Remove the fixed five-layer adapters and `CustomAnimatorComponent` API.
 6. Migrate tests and documentation.
-7. Remove the old `CustomAnimatorComponent` API after migration.
 
 ### Phase 3 — Core visual components
 
@@ -526,7 +446,7 @@ ImageTestActivity
 CardTestActivity
 ComponentListTestActivity
 DialogTestActivity
-CustomAnimatorComponentTestActivity
+ZLayerContainerTestActivity
 AfterEffectAnimatorTestActivity
 DynamicViewAnimatorTestActivity
 LottieAnimatorTestActivity

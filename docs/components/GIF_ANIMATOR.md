@@ -28,7 +28,7 @@ GifAnimator.shutdown();
 ```
 
 Runtime playback and layout use the [shared animator API](#shared-animator-api). For a layer
-inside `CustomAnimatorComponent`, use `GifLayer`; it delegates to the same playback class.
+inside a composition, add `GifAnimator` directly to a `ZLayerContainer` layer.
 
 ## Shared animator API
 

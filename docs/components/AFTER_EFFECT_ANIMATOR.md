@@ -37,5 +37,4 @@ to each animator instance, removing the former global mutable renderer state. Al
 callbacks, layout, centering, visibility, alpha, clipping, and click methods match
 [GifAnimator](GIF_ANIMATOR.md#shared-animator-api).
 
-`AfterEffectLayer` delegates to this same component when used inside
-`CustomAnimatorComponent`.
+Add `AfterEffectAnimator` directly to a root or container-owned `ZLayer`.

@@ -27,16 +27,6 @@ public final class AfterEffectAnimator extends BaseAnimatorComponent {
         composition = builder.composition;
     }
 
-    /** Detached constructor retained for layer composition. */
-    public AfterEffectAnimator(AnimationWindow window, ArrayList<Layer> layers, long duration) {
-        this(window, layers, duration, false);
-    }
-    public AfterEffectAnimator(AnimationWindow window, ArrayList<Layer> layers, long duration, boolean loop) {
-        super("after_effect_playback", new RectF(window.left, window.top,
-                window.left + window.width, window.top + window.height), true, loop ? INFINITE : 0);
-        composition = new AfterEffectComposition.Builder(window, duration).addLayers(layers).build();
-    }
-
     @Override protected long getDurationMillis() { return composition.getDurationMillis(); }
     @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) {
         AnimationWindow window = composition.getWindow();

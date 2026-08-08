@@ -208,8 +208,8 @@ ImageWriter.LineType.END
 
 ## Make generated text interactive
 
-Generated text is an ordinary bitmap. It can become a layer in
-`CustomAnimatorComponent`:
+Generated text is an ordinary bitmap. Use `Image` for display-only output or `Button`
+when the generated bitmap should be interactive:
 
 ```java
 Bitmap textBitmap =
@@ -220,14 +220,15 @@ Bitmap textBitmap =
                 4
         );
 
-components.add(
-        new CustomAnimatorComponent.Builder(
+layer.add(
+        new Button.Builder(
                 getContext(),
                 "profile_name",
                 textBitmap,
-                position
+                position,
+                new Size(420f, 90f)
         )
-                .setClickListener(id -> openProfile())
+                .setOnClickListener(id -> openProfile())
                 .setPressedScale(0.92f)
 );
 ```

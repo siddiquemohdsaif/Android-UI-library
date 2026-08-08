@@ -24,13 +24,6 @@ public final class LottieAnimator extends BaseAnimatorComponent {
                 asset -> builder.imageResolver.resolve(asset.getFileName()));
     }
 
-    /** Detached constructor used by LottieLayer. */
-    public LottieAnimator(Context context, String id, String name, RectF bounds, int repeatCount) {
-        super(id, bounds, true, repeatCount);
-        composition = LottieViewAnimator.getOrLoad(context, name);
-        drawable = LottieViewAnimator.createDrawableForComponent(context, composition);
-    }
-
     @Override protected long getDurationMillis() { return Math.max(1L, (long) composition.getDuration()); }
     @Override protected void renderFrame(Canvas canvas, float progress, RectF bounds) {
         drawable.setProgress(progress);
