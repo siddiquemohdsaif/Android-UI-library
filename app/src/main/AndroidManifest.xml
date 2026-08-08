@@ -76,6 +76,10 @@
             android:exported="true"
             android:screenOrientation="portrait" />
         <activity
+            android:name=".CheckBoxTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".MainActivity"
             android:exported="true">
 <!--            <intent-filter>-->

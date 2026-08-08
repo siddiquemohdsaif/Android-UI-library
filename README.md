@@ -87,6 +87,7 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 | `ComponentList` | Virtualized vertical/horizontal list with reusable layered items | [COMPONENT_LIST.md](docs/components/COMPONENT_LIST.md) |
 | `Dialog` | Modal dim overlay with layered Card surface, Back handling, and transitions | [DIALOG.md](docs/components/DIALOG.md) |
 | `Switch` | Color or bitmap-rendered selectable control with tap/drag interaction | [SWITCH.md](docs/components/SWITCH.md) |
+| `CheckBox` | Two/three-state color or bitmap selectable control | [CHECKBOX.md](docs/components/CHECKBOX.md) |
 | `ZLayerContainer` | Bounded nested layers that compose any components as one unit | [Z_LAYER_CONTAINER.md](docs/components/Z_LAYER_CONTAINER.md) |
 | `ZLayerGroup` / `ZLayer` | Mixed-component scene, z-order, touch, and IME owner | [Z_LAYER.md](docs/components/Z_LAYER.md) |
 
@@ -112,7 +113,6 @@ Use `native-views-fat` only to build the portable all-in-one AAR.
 ### Planned secondary components
 
 ```text
-CheckBox
 RadioButton
 Progress
 ```
@@ -341,6 +341,7 @@ artifacts/
 | `ZLayerContainerTestActivity` | Arbitrary nested components, child touch priority, parent interaction, movement, and cleanup |
 | `SwitchTestActivity` | Figma/RectF regions, tap, drag, animation, styling, ripple, disabled state, and cleanup |
 | `SwitchImageModeTestActivity` | Complex five-image and simple three-image rendering, transitions, drag policy, disabled assets, and ownership |
+| `CheckBoxTestActivity` | Two/three-state color rendering, six-state images, Figma/Px regions, disabled appearance, callbacks, and cleanup |
 | `AnimatorComponentsTestActivity` | GIF, Lottie, dynamic and After Effects as direct ZLayer components |
 | `ZLayerTestActivity` | Mixed components, ordering, unique IDs, cross-layer movement, modal touch blocking, shared IME |
 

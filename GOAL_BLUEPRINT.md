@@ -57,7 +57,7 @@ com.ogfa.nativeviews
 | LottieAnimator | Complete | Standalone cached ZLayer component; old `LottieViewAnimator` is internal |
 | GifAnimator | Complete | Standalone cached ZLayer component; old `GIFViewAnimator` is internal |
 | Switch | Implemented | Animated track/thumb component with tap, continuous drag, shared selectable state, Figma/Px styling, ripple, feedback, documentation, and dedicated test coverage |
-| CheckBox | Not started | — |
+| CheckBox | Implemented | Two/three-state color and complete-image rendering, Figma/Px styling, controlled disabled appearance, interaction, feedback, documentation, and test coverage |
 | RadioButton | Not started | — |
 | Progress | Not started | — |
 
@@ -392,6 +392,18 @@ com.ogfa.nativeviews.progress
 - Implemented runtime state/style/region APIs, validation, animation control,
   idempotent release, `SWITCH.md`, and `SwitchTestActivity`.
 
+### CheckBox
+
+- Implemented direct `ZLayer` ownership with `Position + Size` and `RectF` regions.
+- Implemented `UNCHECKED`, `CHECKED`, and optional `INDETERMINATE` state, configurable
+  toggle order, boolean compatibility, complete-state callbacks, and `fromUser` semantics.
+- Implemented native color rendering with animated check/dash drawing and complete
+  enabled/disabled colors, Figma/Px radius, stroke, mark width, and padding.
+- Implemented immutable caller-owned four-image and six-image `CheckBoxImages`,
+  cross-fade/snap transitions, scaling, filtering, validation, and runtime mode changes.
+- Implemented press scale, optional ripple, sound/haptic hooks, centering, visibility,
+  alpha, touch cancellation, idempotent release, `CHECKBOX.md`, and device test coverage.
+
 ### Remaining secondary components
 
 `Switch`, `CheckBox`, and `RadioButton` share selectable-state infrastructure:
@@ -449,7 +461,7 @@ setOnCheckedChangeListener(listener)
 ### Phase 6 — Secondary components
 
 1. Switch — complete
-2. CheckBox
+2. CheckBox — complete
 3. RadioButton
 4. Progress
 
