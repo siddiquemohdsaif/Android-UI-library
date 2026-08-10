@@ -570,6 +570,13 @@ public final class Text implements Component {
     }
 
     private void applyPaint() {
+        // A centered Text is rebuilt after it is attached to its owner. Clear
+        // the variation from the previous layout before restoring the base
+        // typeface; otherwise some Android versions derive the next variation
+        // from the already-varied face and fall back to its default weight.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            paint.setFontVariationSettings(null);
+        }
         paint.setTypeface(resolveTypeface());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             paint.setFontVariationSettings(
