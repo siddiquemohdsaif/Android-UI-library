@@ -581,12 +581,28 @@ public final class TextField implements Component {
         if (focused && enabled && isCursorVisible()) {
             int cursorIndex = normalizedSelectionEnd();
             float cursorX = originX + measurePrefix(displayText, cursorIndex);
+            Paint.FontMetrics cursorMetrics = textPaint.getFontMetrics();
+            float cursorBaseline = content.centerY()
+                    - (cursorMetrics.ascent + cursorMetrics.descent) / 2f;
+            float cursorPixelWidth = Math.max(1f, Math.round(cursorWidthPx));
+            float minCursorLeft = (float) Math.ceil(content.left);
+            float maxCursorLeft = Math.max(
+                    minCursorLeft,
+                    (float) Math.floor(content.right - cursorPixelWidth)
+            );
+            float cursorLeft = Math.max(
+                    minCursorLeft,
+                    Math.min(
+                            Math.round(cursorX - cursorPixelWidth / 2f),
+                            maxCursorLeft
+                    )
+            );
             cursorPaint.setColor(cursorColor);
-            canvas.drawLine(
-                    cursorX,
-                    baseline + metrics.ascent,
-                    cursorX,
-                    baseline + metrics.descent,
+            canvas.drawRect(
+                    cursorLeft,
+                    cursorBaseline + cursorMetrics.ascent,
+                    cursorLeft + cursorPixelWidth,
+                    cursorBaseline + cursorMetrics.descent,
                     cursorPaint
             );
         }
