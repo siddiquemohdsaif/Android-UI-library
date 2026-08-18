@@ -250,8 +250,7 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
                 if (unicode != 0 && !Character.isISOControl(unicode)) {
                     focusedField.replaceSelection(
                             new String(Character.toChars(unicode)),
-                            1,
-                            false
+                            1
                     );
                     return true;
                 }
@@ -405,7 +404,7 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
                         focusedField.getId(),
                         editable.subSequence(start, end)
                 ));
-                focusedField.replaceSelection("", 1, false);
+                focusedField.replaceSelection("", 1);
             }
             return true;
         }
@@ -415,7 +414,7 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
                 if (clip != null && clip.getItemCount() > 0) {
                     CharSequence value = clip.getItemAt(0)
                             .coerceToText(hostView.getContext());
-                    focusedField.replaceSelection(value, 1, false);
+                    focusedField.replaceSelection(value, 1);
                 }
             }
             return true;
@@ -436,11 +435,14 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
 
         @Override
         public boolean commitText(CharSequence text, int newCursorPosition) {
-            if (focusedField == null) {
+            TextField field = focusedField;
+            if (field == null) {
                 return false;
             }
-            focusedField.replaceSelection(text, newCursorPosition, false);
-            return true;
+            String before = field.getText();
+            boolean handled = super.commitText(text, newCursorPosition);
+            field.afterImeEdit(before);
+            return handled;
         }
 
         @Override
@@ -448,29 +450,39 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
                 CharSequence text,
                 int newCursorPosition
         ) {
-            if (focusedField == null) {
+            TextField field = focusedField;
+            if (field == null) {
                 return false;
             }
-            focusedField.replaceSelection(text, newCursorPosition, true);
-            return true;
+            String before = field.getText();
+            boolean handled = super.setComposingText(
+                    text,
+                    newCursorPosition
+            );
+            field.afterImeEdit(before);
+            return handled;
         }
 
         @Override
         public boolean finishComposingText() {
-            if (focusedField == null) {
+            TextField field = focusedField;
+            if (field == null) {
                 return false;
             }
-            focusedField.finishComposingText();
-            return true;
+            boolean handled = super.finishComposingText();
+            field.afterImeStateChange();
+            return handled;
         }
 
         @Override
         public boolean setComposingRegion(int start, int end) {
-            if (focusedField == null) {
+            TextField field = focusedField;
+            if (field == null) {
                 return false;
             }
-            focusedField.setComposingRegion(start, end);
-            return true;
+            boolean handled = super.setComposingRegion(start, end);
+            field.afterImeStateChange();
+            return handled;
         }
 
         @Override
@@ -478,24 +490,46 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
                 int beforeLength,
                 int afterLength
         ) {
-            if (focusedField == null) {
+            TextField field = focusedField;
+            if (field == null) {
                 return false;
             }
-            focusedField.deleteSurroundingText(beforeLength, afterLength);
-            return true;
+            String before = field.getText();
+            boolean handled = super.deleteSurroundingText(
+                    beforeLength,
+                    afterLength
+            );
+            field.afterImeEdit(before);
+            return handled;
+        }
+
+        @Override
+        public boolean deleteSurroundingTextInCodePoints(
+                int beforeLength,
+                int afterLength
+        ) {
+            TextField field = focusedField;
+            if (field == null) {
+                return false;
+            }
+            String before = field.getText();
+            boolean handled = super.deleteSurroundingTextInCodePoints(
+                    beforeLength,
+                    afterLength
+            );
+            field.afterImeEdit(before);
+            return handled;
         }
 
         @Override
         public boolean setSelection(int start, int end) {
-            if (focusedField == null) {
+            TextField field = focusedField;
+            if (field == null) {
                 return false;
             }
-            try {
-                focusedField.setSelection(start, end);
-                return true;
-            } catch (IndexOutOfBoundsException exception) {
-                return false;
-            }
+            boolean handled = super.setSelection(start, end);
+            field.afterImeStateChange();
+            return handled;
         }
 
         @Override

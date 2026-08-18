@@ -416,7 +416,6 @@ public final class TextField implements Component {
 
     public TextField setSelection(int start, int end) {
         requireSelection(start, end);
-        BaseInputConnection.removeComposingSpans(editable);
         Selection.setSelection(editable, start, end);
         resetCursorBlink();
         ensureCursorVisible();
@@ -686,8 +685,7 @@ public final class TextField implements Component {
 
     void replaceSelection(
             CharSequence replacement,
-            int newCursorPosition,
-            boolean composing
+            int newCursorPosition
     ) {
         Objects.requireNonNull(replacement, "Replacement text cannot be null.");
         int composingStart = BaseInputConnection.getComposingSpanStart(editable);
@@ -709,22 +707,13 @@ public final class TextField implements Component {
         int insertedLength = editable.length()
                 - (originalLength - (end - start));
         int replacementEnd = start + Math.max(0, insertedLength);
-        if (composing && replacementEnd > start) {
-            editable.setSpan(
-                    new ComposingMarker(),
-                    start,
-                    replacementEnd,
-                    Editable.SPAN_EXCLUSIVE_EXCLUSIVE
-                            | Editable.SPAN_COMPOSING
-            );
-        }
 
         int cursor = newCursorPosition > 0
                 ? replacementEnd + newCursorPosition - 1
                 : start + newCursorPosition;
         cursor = clamp(cursor, 0, editable.length());
         Selection.setSelection(editable, cursor);
-        afterEdit(before);
+        afterImeEdit(before);
     }
 
     void deleteSurroundingText(int beforeLength, int afterLength) {
@@ -746,28 +735,7 @@ public final class TextField implements Component {
 
     void finishComposingText() {
         BaseInputConnection.removeComposingSpans(editable);
-        updateImeSelection();
-        invalidate();
-    }
-
-    void setComposingRegion(int start, int end) {
-        int safeStart = clamp(Math.min(start, end), 0, editable.length());
-        int safeEnd = clamp(Math.max(start, end), 0, editable.length());
-        BaseInputConnection.removeComposingSpans(editable);
-        if (safeEnd > safeStart) {
-            editable.setSpan(
-                    new ComposingMarker(),
-                    safeStart,
-                    safeEnd,
-                    Editable.SPAN_EXCLUSIVE_EXCLUSIVE
-                            | Editable.SPAN_COMPOSING
-            );
-        }
-        Selection.setSelection(editable, safeEnd);
-        resetCursorBlink();
-        ensureCursorVisible();
-        updateImeSelection();
-        invalidate();
+        afterImeStateChange();
     }
 
     void deleteBeforeCursor() {
@@ -864,19 +832,26 @@ public final class TextField implements Component {
                 clamp(start + Math.max(0, insertedLength), 0, editable.length())
         );
         if (notify) {
-            afterEdit(before);
+            afterImeEdit(before);
         } else {
             ensureCursorVisible();
             invalidate();
         }
     }
 
-    private void afterEdit(String before) {
+    void afterImeEdit(String before) {
         resetCursorBlink();
         ensureCursorVisible();
         if (!before.contentEquals(editable)) {
             notifyTextChanged();
         }
+        updateImeSelection();
+        invalidate();
+    }
+
+    void afterImeStateChange() {
+        resetCursorBlink();
+        ensureCursorVisible();
         updateImeSelection();
         invalidate();
     }
@@ -1023,9 +998,6 @@ public final class TextField implements Component {
 
     private static int clamp(int value, int minimum, int maximum) {
         return Math.max(minimum, Math.min(maximum, value));
-    }
-
-    private static final class ComposingMarker {
     }
 
     public interface OnTextChangedListener {
