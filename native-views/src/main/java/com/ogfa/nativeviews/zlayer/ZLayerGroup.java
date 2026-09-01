@@ -1,6 +1,7 @@
 package com.ogfa.nativeviews.zlayer;
 
 import android.graphics.Canvas;
+import android.graphics.RectF;
 import android.text.Editable;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -31,6 +32,7 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
     private Component touchTarget;
     private ZLayer touchLayer;
     private boolean blockedGesture;
+    private boolean textFieldDismissGesture;
     private boolean autoInvalidate = true;
     private boolean released;
 
@@ -128,6 +130,7 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
 
     public boolean onTouchEvent(MotionEvent event) {
         ensureActive();
+        if (onPreDispatchTouchEvent(event)) return true;
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             cancelTouch();
             blockedGesture = false;
@@ -169,6 +172,41 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         return handled;
     }
 
+    /**
+     * Runs before a host ViewGroup dispatches to its Android child views. Plain
+     * View hosts do not need to call this directly because {@link #onTouchEvent}
+     * already does so.
+     */
+    public boolean onPreDispatchTouchEvent(MotionEvent event) {
+        ensureActive();
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            textFieldDismissGesture = dismissFocusedTextFieldBeforeOutsideTouch(event);
+        }
+        if (!textFieldDismissGesture) return false;
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            textFieldDismissGesture = false;
+        }
+        return true;
+    }
+
+    private boolean dismissFocusedTextFieldBeforeOutsideTouch(MotionEvent event) {
+        TextField focusedField = textInput.getFocusedField();
+        if (focusedField == null) return false;
+
+        RectF focusedBounds = new RectF(focusedField.getBounds());
+        for (ZLayer layer : layers) {
+            if (layer.contains(focusedField.getId())) {
+                focusedBounds.offset(layer.getTranslationX(), layer.getTranslationY());
+                break;
+            }
+        }
+        if (focusedBounds.contains(event.getX(), event.getY())) return false;
+
+        textInput.clearFocus();
+        return true;
+    }
+
     /** Dispatches Back to the topmost visible, enabled Back-aware component. */
     public boolean onBackPressed() {
         ensureActive();
@@ -202,6 +240,7 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
     public void clear() {
         ensureActive();
         cancelTouch();
+        textFieldDismissGesture = false;
         for (ZLayer layer : new ArrayList<>(layers)) layer.clear();
         layers.clear();
         layersById.clear();
