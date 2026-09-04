@@ -73,6 +73,10 @@ public final class ComponentList<T> implements Component {
             if (owner != null) owner.notifyItemInserted(position);
         }
 
+        public final void notifyItemRangeInserted(int start, int count) {
+            if (owner != null) owner.notifyItemRangeInserted(start, count);
+        }
+
         public final void notifyItemRemoved(int position) {
             if (owner != null) owner.notifyItemRemoved(position);
         }
@@ -692,6 +696,13 @@ public final class ComponentList<T> implements Component {
     }
 
     public void notifyItemInserted(int position) { notifyStructureChanged(position, true); }
+    public void notifyItemRangeInserted(int start, int count) {
+        if (start < 0 || count < 0 || start + count > adapter.getItemCount()) {
+            throw new IndexOutOfBoundsException("Invalid inserted range.");
+        }
+        if (count == 0) return;
+        notifyDataSetChanged();
+    }
     public void notifyItemRemoved(int position) { notifyStructureChanged(position, false); }
     public void notifyItemMoved(int fromPosition, int toPosition) {
         requireAdapterPosition(fromPosition);

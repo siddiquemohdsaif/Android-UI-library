@@ -266,6 +266,18 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
     @Override public void clearFocus(TextField field) { textInput.clearFocus(field); }
     @Override public void restartInput() { textInput.restartInput(); }
     @Override public void updateSelection(TextField field) { textInput.updateSelection(field); }
+    @Override public void showSelectionActionMode(TextField field) {
+        float translationX = 0f;
+        float translationY = 0f;
+        for (ZLayer layer : layers) {
+            if (layer.contains(field.getId())) {
+                translationX = layer.getTranslationX();
+                translationY = layer.getTranslationY();
+                break;
+            }
+        }
+        textInput.showSelectionActionMode(field, translationX, translationY);
+    }
 
     @Override
     public void registerLayerComponent(Component component) {
