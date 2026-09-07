@@ -1,554 +1,730 @@
 package com.ogfa.nativeviews.textfield;
 
+import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.graphics.Canvas;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.os.Build.VERSION;
+import android.os.SystemClock;
+import android.util.Log;
 import android.text.Editable;
-import android.text.Selection;
+import android.view.ActionMode;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
-
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Owns Canvas text fields and bridges the focused field to Android's input method.
- *
- * <p>The host view delegates {@code onCreateInputConnection()},
- * {@code onCheckIsTextEditor()}, touch, draw, and optional hardware key events to this
- * group.</p>
- */
 public final class TextInputCoordinator implements TextFieldHost, AutoCloseable {
+   private static final String PROFILE_TAG = "TextInputProfile";
+   private final View hostView;
+   private final InputMethodManager inputMethodManager;
+   private final ArrayList<TextField> drawingOrder = new ArrayList();
+   private final Map<String, TextField> fieldsById = new LinkedHashMap();
+   private TextField focusedField;
+   private TextField touchTarget;
+   private FieldInputConnection inputConnection;
+   private boolean hideKeyboardWhenTouchOutside = true;
+   private final int touchSlop;
+   private float touchDownX;
+   private float touchDownY;
+   private boolean longPressTriggered;
+   private ActionMode selectionActionMode;
+   private float selectionAnchorOffsetX;
+   private float selectionAnchorOffsetY;
+   private final FocusTransferProfile focusTransferProfile = new FocusTransferProfile();
+   private final Runnable longPressRunnable = this::handleLongPress;
+   private final Runnable pendingFocusDismissRunnable = () -> {
+      String fieldId = this.focusTransferProfile.expire(SystemClock.uptimeMillis());
+      if (fieldId == null) return;
+      Log.d(PROFILE_TAG, "event=focus_transfer_expired field=" + fieldId
+            + " elapsedMs=" + this.focusTransferProfile.getLastElapsedMs());
+      this.hideKeyboardAndRestartInput();
+   };
 
-    private final View hostView;
-    private final InputMethodManager inputMethodManager;
-    private final ArrayList<TextField> drawingOrder = new ArrayList<>();
-    private final Map<String, TextField> fieldsById = new LinkedHashMap<>();
+   private void deferFocusedFieldRemoval(TextField field) {
+      this.hostView.removeCallbacks(this.longPressRunnable);
+      if (this.selectionActionMode != null) this.selectionActionMode.finish();
+      field.finishComposingText();
+      field.setFocusedInternal(false, false);
+      this.focusedField = null;
+      this.touchTarget = null;
+      this.inputConnection = null;
+      this.focusTransferProfile.begin(field.getId(), SystemClock.uptimeMillis());
+      this.hostView.removeCallbacks(this.pendingFocusDismissRunnable);
+      this.hostView.post(this.pendingFocusDismissRunnable);
+      Log.d(PROFILE_TAG, "event=focus_transfer_deferred field=" + field.getId());
+   }
 
-    private TextField focusedField;
-    private TextField touchTarget;
-    private FieldInputConnection inputConnection;
-    private boolean hideKeyboardWhenTouchOutside = true;
+   private void handleLongPress() {
+      TextField var1 = this.touchTarget;
+      if (var1 != null && var1 == this.focusedField) {
+         if (var1.selectWordAt(this.touchDownX, this.touchDownY)) {
+            this.longPressTriggered = true;
+            this.hostView.performHapticFeedback(0);
+            this.startSelectionActionMode();
+         }
+      }
+   }
 
-    public TextInputCoordinator(View hostView) {
-        this.hostView = Objects.requireNonNull(
-                hostView,
-                "Host view cannot be null."
-        );
-        inputMethodManager = (InputMethodManager) hostView.getContext()
-                .getSystemService(Context.INPUT_METHOD_SERVICE);
-        hostView.setFocusable(true);
-        hostView.setFocusableInTouchMode(true);
-    }
+   public TextInputCoordinator(View var1) {
+      this.hostView = (View)Objects.requireNonNull(var1, "Host view cannot be null.");
+      this.inputMethodManager = (InputMethodManager)var1.getContext().getSystemService("input_method");
+      this.touchSlop = ViewConfiguration.get(var1.getContext()).getScaledTouchSlop();
+      var1.setFocusable(true);
+      var1.setFocusableInTouchMode(true);
+   }
 
-    public void register(TextField field) {
-        Objects.requireNonNull(field, "TextField cannot be null.");
-        if (fieldsById.containsKey(field.getId())) {
-            throw new IllegalArgumentException(
-                    "TextInputCoordinator already contains ID: " + field.getId()
-            );
-        }
-        drawingOrder.add(field);
-        fieldsById.put(field.getId(), field);
-        invalidateComponent();
-    }
+   public void register(TextField var1) {
+      Objects.requireNonNull(var1, "TextField cannot be null.");
+      if (this.fieldsById.containsKey(var1.getId())) {
+         throw new IllegalArgumentException("TextInputCoordinator already contains ID: " + var1.getId());
+      } else {
+         this.drawingOrder.add(var1);
+         this.fieldsById.put(var1.getId(), var1);
+         if (this.focusTransferProfile.consume(var1.getId(), SystemClock.uptimeMillis())) {
+            this.hostView.removeCallbacks(this.pendingFocusDismissRunnable);
+            this.focusedField = var1;
+            var1.setFocusedInternal(true, false);
+            this.inputConnection = null;
+            this.hostView.requestFocus();
+            this.restartInput();
+            Log.d(PROFILE_TAG, "event=focus_transfer_completed field=" + var1.getId()
+                  + " elapsedMs=" + this.focusTransferProfile.getLastElapsedMs());
+         }
+         this.invalidateComponent();
+      }
+   }
 
-    public TextField find(String id) {
-        return fieldsById.get(id);
-    }
+   public TextField find(String var1) {
+      return (TextField)this.fieldsById.get(var1);
+   }
 
-    public boolean contains(String id) {
-        return fieldsById.containsKey(id);
-    }
+   public boolean contains(String var1) {
+      return this.fieldsById.containsKey(var1);
+   }
 
-    public boolean unregister(String id) {
-        TextField field = fieldsById.remove(id);
-        if (field == null) {
+   public boolean unregister(String var1) {
+      TextField var2 = (TextField)this.fieldsById.remove(var1);
+      if (var2 == null) {
+         return false;
+      } else {
+         if (var2 == this.focusedField) {
+            this.deferFocusedFieldRemoval(var2);
+         }
+
+         this.drawingOrder.remove(var2);
+         var2.detach();
+         this.invalidateComponent();
+         return true;
+      }
+   }
+
+   public int size() {
+      return this.drawingOrder.size();
+   }
+
+   public boolean isEmpty() {
+      return this.drawingOrder.isEmpty();
+   }
+
+   public TextField getFocusedField() {
+      return this.focusedField;
+   }
+
+   public boolean hasFocusedField() {
+      return this.focusedField != null;
+   }
+
+   public TextInputCoordinator setHideKeyboardWhenTouchOutside(boolean var1) {
+      this.hideKeyboardWhenTouchOutside = var1;
+      return this;
+   }
+
+   public void draw(Canvas var1) {
+      Objects.requireNonNull(var1, "Canvas cannot be null.");
+      Iterator var2 = this.drawingOrder.iterator();
+
+      while(var2.hasNext()) {
+         TextField var3 = (TextField)var2.next();
+         var3.draw(var1);
+      }
+
+      if (this.focusedField != null) {
+         this.hostView.postInvalidateDelayed(500L);
+      }
+
+   }
+
+   public boolean onTouchEvent(MotionEvent var1) {
+      Objects.requireNonNull(var1, "MotionEvent cannot be null.");
+      switch (var1.getActionMasked()) {
+         case 0:
+            this.touchTarget = this.findTopmostField(var1.getX(), var1.getY());
+            if (this.touchTarget == null) {
+               if (this.hideKeyboardWhenTouchOutside) {
+                  this.clearFocus();
+               }
+
+               return false;
+            }
+
+            this.requestFocus(this.touchTarget);
+            this.touchTarget.placeCursorFromTouch(var1.getX(), var1.getY());
+            this.touchDownX = var1.getX();
+            this.touchDownY = var1.getY();
+            this.longPressTriggered = false;
+            this.hostView.postDelayed(this.longPressRunnable, (long)ViewConfiguration.getLongPressTimeout());
+            return true;
+         case 1:
+            this.hostView.removeCallbacks(this.longPressRunnable);
+            boolean var2 = this.touchTarget != null;
+            this.touchTarget = null;
+            return var2;
+         case 2:
+            if (this.touchTarget == null) {
+               return false;
+            }
+
+            if (!this.longPressTriggered && (Math.abs(var1.getX() - this.touchDownX) > (float)this.touchSlop || Math.abs(var1.getY() - this.touchDownY) > (float)this.touchSlop)) {
+               this.hostView.removeCallbacks(this.longPressRunnable);
+            }
+
+            if (!this.longPressTriggered) {
+               this.touchTarget.placeCursorFromTouch(var1.getX(), var1.getY());
+            }
+
+            return true;
+         case 3:
+            this.hostView.removeCallbacks(this.longPressRunnable);
+            boolean var3 = this.touchTarget != null;
+            this.touchTarget = null;
+            return var3;
+         default:
             return false;
-        }
-        if (field == focusedField) {
-            clearFocus();
-        }
-        drawingOrder.remove(field);
-        field.detach();
-        invalidateComponent();
-        return true;
-    }
+      }
+   }
 
-    public int size() {
-        return drawingOrder.size();
-    }
+   public boolean requestFocus(TextField var1) {
+      if (var1 != null && var1.isEnabled()) {
+         if (this.focusedField != var1) {
+            if (this.focusedField != null) {
+               this.focusedField.setFocusedInternal(false);
+            }
 
-    public boolean isEmpty() {
-        return drawingOrder.isEmpty();
-    }
+            this.focusedField = var1;
+            this.focusedField.setFocusedInternal(true);
+            this.inputConnection = null;
+         }
 
-    public TextField getFocusedField() {
-        return focusedField;
-    }
+         this.hostView.requestFocus();
+         this.restartInput();
+         this.hostView.post(() -> {
+            if (this.focusedField == var1 && this.inputMethodManager != null) {
+               this.inputMethodManager.showSoftInput(this.hostView, 1);
+            }
 
-    public boolean hasFocusedField() {
-        return focusedField != null;
-    }
+         });
+         this.invalidateComponent();
+         return true;
+      } else {
+         return false;
+      }
+   }
 
-    public TextInputCoordinator setHideKeyboardWhenTouchOutside(boolean enabled) {
-        hideKeyboardWhenTouchOutside = enabled;
-        return this;
-    }
+   public void clearFocus() {
+      this.clearFocus(true, true);
+   }
 
-    public void draw(Canvas canvas) {
-        Objects.requireNonNull(canvas, "Canvas cannot be null.");
-        for (TextField field : drawingOrder) {
-            field.draw(canvas);
-        }
-        if (focusedField != null) {
-            hostView.postInvalidateDelayed(
-                    TextField.CURSOR_BLINK_INTERVAL_MS
-            );
-        }
-    }
+   private void hideKeyboardAndRestartInput() {
+      if (this.inputMethodManager != null) {
+         this.inputMethodManager.hideSoftInputFromWindow(this.hostView.getWindowToken(), 0);
+         this.inputMethodManager.restartInput(this.hostView);
+      }
+   }
 
-    public boolean onTouchEvent(MotionEvent event) {
-        Objects.requireNonNull(event, "MotionEvent cannot be null.");
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                touchTarget = findTopmostField(event.getX(), event.getY());
-                if (touchTarget == null) {
-                    if (hideKeyboardWhenTouchOutside) {
-                        clearFocus();
-                    }
-                    return false;
-                }
-                requestFocus(touchTarget);
-                touchTarget.placeCursorFromTouch(event.getX());
-                return true;
+   private void clearFocus(boolean notifyListener, boolean expirePendingTransfer) {
+      this.hostView.removeCallbacks(this.pendingFocusDismissRunnable);
+      if (expirePendingTransfer && this.focusTransferProfile.hasPending()) {
+         this.focusTransferProfile.expire(SystemClock.uptimeMillis());
+         this.hideKeyboardAndRestartInput();
+      }
+      if (this.focusedField != null) {
+         this.hostView.removeCallbacks(this.longPressRunnable);
+         if (this.selectionActionMode != null) {
+            this.selectionActionMode.finish();
+         }
 
-            case MotionEvent.ACTION_MOVE:
-                if (touchTarget == null) {
-                    return false;
-                }
-                touchTarget.placeCursorFromTouch(event.getX());
-                return true;
+         this.focusedField.finishComposingText();
+         this.focusedField.setFocusedInternal(false, notifyListener);
+         this.focusedField = null;
+         this.touchTarget = null;
+         this.inputConnection = null;
+         this.hideKeyboardAndRestartInput();
 
-            case MotionEvent.ACTION_UP:
-                boolean handled = touchTarget != null;
-                touchTarget = null;
-                return handled;
+         this.invalidateComponent();
+      }
+   }
 
-            case MotionEvent.ACTION_CANCEL:
-                boolean cancelled = touchTarget != null;
-                touchTarget = null;
-                return cancelled;
+   public void clearFocus(TextField var1) {
+      if (this.focusedField == var1) {
+         this.clearFocus();
+      }
 
+   }
+
+   public InputConnection onCreateInputConnection(EditorInfo var1) {
+      Objects.requireNonNull(var1, "EditorInfo cannot be null.");
+      if (this.focusedField == null) {
+         return null;
+      } else {
+         this.focusedField.configureEditorInfo(var1);
+         this.inputConnection = new FieldInputConnection(this.hostView);
+         return this.inputConnection;
+      }
+   }
+
+   public boolean onKeyDown(int var1, KeyEvent var2) {
+      Objects.requireNonNull(var2, "KeyEvent cannot be null.");
+      if (this.focusedField == null) {
+         return false;
+      } else {
+         switch (var1) {
+            case 21:
+               this.moveCursor(-1);
+               return true;
+            case 22:
+               this.moveCursor(1);
+               return true;
+            case 66:
+               if (this.focusedField.isMultiline()) {
+                  this.focusedField.replaceSelection("\n", 1, false);
+                  return true;
+               }
+
+               return this.handleEditorAction(this.focusedField.getImeOptions() & 255);
+            case 67:
+               this.focusedField.deleteBeforeCursor();
+               return true;
+            case 112:
+               this.focusedField.deleteAfterCursor();
+               return true;
             default:
-                return false;
-        }
-    }
+               int var3 = var2.getUnicodeChar();
+               if (var3 != 0 && !Character.isISOControl(var3)) {
+                  this.focusedField.replaceSelection(new String(Character.toChars(var3)), 1, false);
+                  return true;
+               } else {
+                  return false;
+               }
+         }
+      }
+   }
 
-    @Override
-    public boolean requestFocus(TextField field) {
-        if (field == null || !field.isEnabled()) {
+   public void restartInput() {
+      if (this.focusedField != null && this.inputMethodManager != null) {
+         this.inputMethodManager.restartInput(this.hostView);
+      }
+
+   }
+
+   public void clear() {
+      this.clearFocus();
+      Iterator var1 = this.drawingOrder.iterator();
+
+      while(var1.hasNext()) {
+         TextField var2 = (TextField)var1.next();
+         var2.detach();
+      }
+
+      this.drawingOrder.clear();
+      this.fieldsById.clear();
+      this.invalidateComponent();
+   }
+
+   public void release() {
+      this.clear();
+   }
+
+   public void close() {
+      this.release();
+   }
+
+   public View getHostView() {
+      return this.hostView;
+   }
+
+   public void invalidateComponent() {
+      this.hostView.invalidate();
+   }
+
+   public void postInvalidateComponentOnAnimation() {
+      this.hostView.postInvalidateOnAnimation();
+   }
+
+   public void updateSelection(TextField var1) {
+      if (var1 == this.focusedField && this.inputMethodManager != null) {
+         Editable var2 = var1.getEditable();
+         if (var1.getSelectionStart() == var1.getSelectionEnd() && this.selectionActionMode != null) {
+            this.selectionActionMode.finish();
+         }
+
+         this.inputMethodManager.updateSelection(this.hostView, var1.getSelectionStart(), var1.getSelectionEnd(), BaseInputConnection.getComposingSpanStart(var2), BaseInputConnection.getComposingSpanEnd(var2));
+         if (this.selectionActionMode != null && VERSION.SDK_INT >= 23) {
+            this.selectionActionMode.invalidateContentRect();
+         }
+
+      }
+   }
+
+   private TextField findTopmostField(float var1, float var2) {
+      for(int var3 = this.drawingOrder.size() - 1; var3 >= 0; --var3) {
+         TextField var4 = (TextField)this.drawingOrder.get(var3);
+         if (var4.contains(var1, var2)) {
+            return var4;
+         }
+      }
+
+      return null;
+   }
+
+   private void moveCursor(int var1) {
+      Editable var2 = this.focusedField.getEditable();
+      int var3 = this.focusedField.getSelectionEnd();
+
+      int var4;
+      try {
+         var4 = Character.offsetByCodePoints(var2, var3, var1);
+      } catch (IndexOutOfBoundsException var6) {
+         var4 = var1 < 0 ? 0 : var2.length();
+      }
+
+      this.focusedField.setSelection(var4);
+   }
+
+   private boolean handleEditorAction(int var1) {
+      if (this.focusedField == null) {
+         return false;
+      } else if (this.focusedField.performEditorAction(var1)) {
+         return true;
+      } else if (var1 == 5) {
+         return this.focusNext();
+      } else if (var1 != 6 && var1 != 2 && var1 != 4 && var1 != 3) {
+         return false;
+      } else {
+         this.clearFocus();
+         return true;
+      }
+   }
+
+   private boolean focusNext() {
+      if (this.focusedField != null && !this.drawingOrder.isEmpty()) {
+         int var1 = this.drawingOrder.indexOf(this.focusedField);
+
+         for(int var2 = 1; var2 <= this.drawingOrder.size(); ++var2) {
+            TextField var3 = (TextField)this.drawingOrder.get((var1 + var2) % this.drawingOrder.size());
+            if (var3.isEnabled()) {
+               return this.requestFocus(var3);
+            }
+         }
+
+         return false;
+      } else {
+         return false;
+      }
+   }
+
+   private boolean performContextMenuAction(int var1) {
+      if (this.focusedField == null) {
+         return false;
+      } else {
+         Editable var2 = this.focusedField.getEditable();
+         int var3 = this.focusedField.getSelectionStart();
+         int var4 = this.focusedField.getSelectionEnd();
+         ClipboardManager var5 = (ClipboardManager)this.hostView.getContext().getSystemService("clipboard");
+         if (var1 == 16908319) {
+            this.focusedField.setSelection(0, var2.length());
+            return true;
+         } else if (var1 == 16908321) {
+            if (var5 != null && var3 != var4) {
+               var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
+            }
+
+            return true;
+         } else if (var1 == 16908320) {
+            if (var5 != null && var3 != var4) {
+               var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
+               this.focusedField.replaceSelection("", 1, false);
+            }
+
+            return true;
+         } else if (var1 == 16908322) {
+            if (var5 != null && var5.hasPrimaryClip()) {
+               ClipData var6 = var5.getPrimaryClip();
+               if (var6 != null && var6.getItemCount() > 0) {
+                  CharSequence var7 = var6.getItemAt(0).coerceToText(this.hostView.getContext());
+                  this.focusedField.replaceSelection(var7, 1, false);
+               }
+            }
+
+            return true;
+         } else {
             return false;
-        }
-        if (focusedField != field) {
-            if (focusedField != null) {
-                focusedField.setFocusedInternal(false);
-            }
-            focusedField = field;
-            focusedField.setFocusedInternal(true);
-            inputConnection = null;
-        }
+         }
+      }
+   }
 
-        hostView.requestFocus();
-        restartInput();
-        hostView.post(() -> {
-            if (focusedField == field && inputMethodManager != null) {
-                inputMethodManager.showSoftInput(
-                        hostView,
-                        InputMethodManager.SHOW_IMPLICIT
-                );
-            }
-        });
-        invalidateComponent();
-        return true;
-    }
+   private void startSelectionActionMode() {
+      if (this.selectionActionMode != null) {
+         this.selectionActionMode.finish();
+      }
 
-    public void clearFocus() {
-        if (focusedField == null) {
-            return;
-        }
-        focusedField.finishComposingText();
-        focusedField.setFocusedInternal(false);
-        focusedField = null;
-        touchTarget = null;
-        inputConnection = null;
-        if (inputMethodManager != null) {
-            inputMethodManager.hideSoftInputFromWindow(
-                    hostView.getWindowToken(),
-                    0
-            );
-            inputMethodManager.restartInput(hostView);
-        }
-        invalidateComponent();
-    }
+      ActionMode.Callback2 var1 = new ActionMode.Callback2() {
+         public boolean onCreateActionMode(ActionMode var1, Menu var2) {
+            var2.add(0, 16908320, 0, "Cut").setShowAsAction(2);
+            var2.add(0, 16908321, 1, "Copy").setShowAsAction(2);
+            var2.add(0, 16908322, 2, "Paste").setShowAsAction(2);
+            var2.add(0, 16908319, 3, "Select all").setShowAsAction(2);
+            return true;
+         }
 
-    @Override
-    public void clearFocus(TextField field) {
-        if (focusedField == field) clearFocus();
-    }
-
-    /**
-     * Called by the host view's {@code onCreateInputConnection()} override.
-     */
-    public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        Objects.requireNonNull(outAttrs, "EditorInfo cannot be null.");
-        if (focusedField == null) {
-            return null;
-        }
-        focusedField.configureEditorInfo(outAttrs);
-        inputConnection = new FieldInputConnection(hostView);
-        return inputConnection;
-    }
-
-    /**
-     * Handles hardware delete, arrows, Enter, and printable key events.
-     */
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        Objects.requireNonNull(event, "KeyEvent cannot be null.");
-        if (focusedField == null) {
+         public boolean onPrepareActionMode(ActionMode var1, Menu var2) {
             return false;
-        }
+         }
 
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_DEL:
-                focusedField.deleteBeforeCursor();
-                return true;
-            case KeyEvent.KEYCODE_FORWARD_DEL:
-                focusedField.deleteAfterCursor();
-                return true;
-            case KeyEvent.KEYCODE_DPAD_LEFT:
-                moveCursor(-1);
-                return true;
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
-                moveCursor(1);
-                return true;
-            case KeyEvent.KEYCODE_ENTER:
-                return handleEditorAction(
-                        focusedField.getImeOptions()
-                                & EditorInfo.IME_MASK_ACTION
-                );
-            default:
-                int unicode = event.getUnicodeChar();
-                if (unicode != 0 && !Character.isISOControl(unicode)) {
-                    focusedField.replaceSelection(
-                            new String(Character.toChars(unicode)),
-                            1
-                    );
-                    return true;
-                }
-                return false;
-        }
-    }
-
-    public void restartInput() {
-        if (focusedField != null && inputMethodManager != null) {
-            inputMethodManager.restartInput(hostView);
-        }
-    }
-
-    public void clear() {
-        clearFocus();
-        for (TextField field : drawingOrder) {
-            field.detach();
-        }
-        drawingOrder.clear();
-        fieldsById.clear();
-        invalidateComponent();
-    }
-
-    public void release() {
-        clear();
-    }
-
-    @Override
-    public void close() {
-        release();
-    }
-
-    @Override
-    public View getHostView() {
-        return hostView;
-    }
-
-    @Override
-    public void invalidateComponent() {
-        hostView.invalidate();
-    }
-
-    @Override
-    public void postInvalidateComponentOnAnimation() {
-        hostView.postInvalidateOnAnimation();
-    }
-
-    @Override
-    public void updateSelection(TextField field) {
-        if (field != focusedField || inputMethodManager == null) {
-            return;
-        }
-        Editable editable = field.getEditable();
-        inputMethodManager.updateSelection(
-                hostView,
-                field.getSelectionStart(),
-                field.getSelectionEnd(),
-                BaseInputConnection.getComposingSpanStart(editable),
-                BaseInputConnection.getComposingSpanEnd(editable)
-        );
-    }
-
-    private TextField findTopmostField(float x, float y) {
-        for (int index = drawingOrder.size() - 1; index >= 0; index--) {
-            TextField field = drawingOrder.get(index);
-            if (field.contains(x, y)) {
-                return field;
+         public boolean onActionItemClicked(ActionMode var1, MenuItem var2) {
+            boolean var3 = TextInputCoordinator.this.performContextMenuAction(var2.getItemId());
+            if (var3 && var2.getItemId() != 16908319) {
+               var1.finish();
             }
-        }
-        return null;
-    }
 
-    private void moveCursor(int codePointDelta) {
-        Editable editable = focusedField.getEditable();
-        int current = focusedField.getSelectionEnd();
-        int target;
-        try {
-            target = Character.offsetByCodePoints(
-                    editable,
-                    current,
-                    codePointDelta
-            );
-        } catch (IndexOutOfBoundsException exception) {
-            target = codePointDelta < 0 ? 0 : editable.length();
-        }
-        focusedField.setSelection(target);
-    }
+            return var3;
+         }
 
-    private boolean handleEditorAction(int actionId) {
-        if (focusedField == null) {
+         public void onDestroyActionMode(ActionMode var1) {
+            if (TextInputCoordinator.this.selectionActionMode == var1) {
+               TextInputCoordinator.this.selectionActionMode = null;
+            }
+
+            TextInputCoordinator.this.invalidateComponent();
+         }
+
+         public void onGetContentRect(ActionMode var1, View var2, Rect var3) {
+            RectF var4 = TextInputCoordinator.this.focusedField == null ? new RectF(0.0F, 0.0F, (float)var2.getWidth(), (float)var2.getHeight()) : TextInputCoordinator.this.focusedField.getSelectionActionBounds();
+            var4.offset(TextInputCoordinator.this.selectionAnchorOffsetX, TextInputCoordinator.this.selectionAnchorOffsetY);
+            if (TextInputCoordinator.this.focusedField != null) {
+               RectF var5 = TextInputCoordinator.this.focusedField.getBounds();
+               var5.offset(TextInputCoordinator.this.selectionAnchorOffsetX, TextInputCoordinator.this.selectionAnchorOffsetY);
+               float var6 = Math.max(1.0F, Math.min(var4.height(), var5.height()));
+               float var7 = Math.max(1.0F, Math.min(var4.width(), var5.width()));
+               var4.left = Math.max(var5.left, Math.min(var4.left, var5.right - var7));
+               var4.top = Math.max(var5.top, Math.min(var4.top, var5.bottom - var6));
+               var4.right = var4.left + var7;
+               var4.bottom = var4.top + var6;
+            }
+
+            var4.left = Math.max(0.0F, Math.min(var4.left, (float)var2.getWidth() - 1.0F));
+            var4.right = Math.max(var4.left + 1.0F, Math.min(var4.right, (float)var2.getWidth()));
+            var4.top = Math.max(0.0F, Math.min(var4.top, (float)var2.getHeight() - 1.0F));
+            var4.bottom = Math.max(var4.top + 1.0F, Math.min(var4.bottom, (float)var2.getHeight()));
+            var3.set(Math.round(var4.left), Math.round(var4.top), Math.round(var4.right), Math.round(var4.bottom));
+         }
+      };
+      this.selectionActionMode = VERSION.SDK_INT >= 23 ? this.hostView.startActionMode(var1, 1) : this.hostView.startActionMode(var1);
+      if (this.selectionActionMode == null) {
+         Activity var2 = findActivity(this.hostView.getContext());
+         if (var2 != null) {
+            this.selectionActionMode = VERSION.SDK_INT >= 23 ? var2.startActionMode(var1, 1) : var2.startActionMode(var1);
+         }
+      }
+
+      if (this.selectionActionMode != null && VERSION.SDK_INT >= 23) {
+         this.selectionActionMode.invalidateContentRect();
+      }
+
+   }
+
+   private static Activity findActivity(Context var0) {
+      Context var1;
+      Context var2;
+      for(var1 = var0; var1 instanceof ContextWrapper; var1 = var2) {
+         if (var1 instanceof Activity) {
+            return (Activity)var1;
+         }
+
+         var2 = ((ContextWrapper)var1).getBaseContext();
+         if (var2 == var1) {
+            break;
+         }
+      }
+
+      return var1 instanceof Activity ? (Activity)var1 : null;
+   }
+
+   public void showSelectionActionMode(TextField var1) {
+      this.showSelectionActionMode(var1, 0.0F, 0.0F);
+   }
+
+   public void showSelectionActionMode(TextField var1, float var2, float var3) {
+      if (var1 != null && var1 == this.focusedField) {
+         this.selectionAnchorOffsetX = var2;
+         this.selectionAnchorOffsetY = var3;
+         this.startSelectionActionMode();
+      }
+   }
+
+   public void dismissSelectionActionMode(boolean var1) {
+      TextField var2 = this.focusedField;
+      if (this.selectionActionMode != null) {
+         this.selectionActionMode.finish();
+      }
+
+      if (var1 && var2 != null && var2.getSelectionStart() != var2.getSelectionEnd()) {
+         var2.setSelection(var2.getSelectionEnd());
+      }
+
+   }
+
+   private final class FieldInputConnection extends BaseInputConnection {
+      private boolean deleteHandledOnDown;
+
+      private FieldInputConnection(View var2) {
+         super(var2, true);
+      }
+
+      public Editable getEditable() {
+         return TextInputCoordinator.this.focusedField == null ? null : TextInputCoordinator.this.focusedField.getEditable();
+      }
+
+      public boolean commitText(CharSequence var1, int var2) {
+         TextField var3 = TextInputCoordinator.this.focusedField;
+         if (var3 == null) {
             return false;
-        }
-        if (focusedField.performEditorAction(actionId)) {
-            return true;
-        }
-        if (actionId == EditorInfo.IME_ACTION_NEXT) {
-            return focusNext();
-        }
-        if (actionId == EditorInfo.IME_ACTION_DONE
-                || actionId == EditorInfo.IME_ACTION_GO
-                || actionId == EditorInfo.IME_ACTION_SEND
-                || actionId == EditorInfo.IME_ACTION_SEARCH) {
-            clearFocus();
-            return true;
-        }
-        return false;
-    }
+         } else {
+            String var4 = var3.getText();
+            boolean var5 = super.commitText(var1, var2);
+            var3.afterImeEdit(var4);
+            return var5;
+         }
+      }
 
-    private boolean focusNext() {
-        if (focusedField == null || drawingOrder.isEmpty()) {
+      public boolean setComposingText(CharSequence var1, int var2) {
+         TextField var3 = TextInputCoordinator.this.focusedField;
+         if (var3 == null) {
             return false;
-        }
-        int current = drawingOrder.indexOf(focusedField);
-        for (int offset = 1; offset <= drawingOrder.size(); offset++) {
-            TextField candidate = drawingOrder.get(
-                    (current + offset) % drawingOrder.size()
-            );
-            if (candidate.isEnabled()) {
-                return requestFocus(candidate);
-            }
-        }
-        return false;
-    }
+         } else {
+            String var4 = var3.getText();
+            boolean var5 = super.setComposingText(var1, var2);
+            var3.afterImeEdit(var4);
+            return var5;
+         }
+      }
 
-    private boolean performContextMenuAction(int id) {
-        if (focusedField == null) {
+      public boolean finishComposingText() {
+         TextField var1 = TextInputCoordinator.this.focusedField;
+         if (var1 == null) {
             return false;
-        }
-        Editable editable = focusedField.getEditable();
-        int start = focusedField.getSelectionStart();
-        int end = focusedField.getSelectionEnd();
-        ClipboardManager clipboard = (ClipboardManager) hostView.getContext()
-                .getSystemService(Context.CLIPBOARD_SERVICE);
+         } else {
+            boolean var2 = super.finishComposingText();
+            var1.afterImeStateChange();
+            return var2;
+         }
+      }
 
-        if (id == android.R.id.selectAll) {
-            focusedField.setSelection(0, editable.length());
+      public boolean setComposingRegion(int var1, int var2) {
+         TextField var3 = TextInputCoordinator.this.focusedField;
+         if (var3 == null) {
+            return false;
+         } else {
+            boolean var4 = super.setComposingRegion(var1, var2);
+            var3.afterImeStateChange();
+            return var4;
+         }
+      }
+
+      public boolean deleteSurroundingText(int var1, int var2) {
+         TextField var3 = TextInputCoordinator.this.focusedField;
+         if (var3 == null) {
+            return false;
+         } else {
+            String var4 = var3.getText();
+            boolean var5 = super.deleteSurroundingText(var1, var2);
+            var3.afterImeEdit(var4);
+            return var5;
+         }
+      }
+
+      public boolean deleteSurroundingTextInCodePoints(int var1, int var2) {
+         TextField var3 = TextInputCoordinator.this.focusedField;
+         if (var3 == null) {
+            return false;
+         } else {
+            String var4 = var3.getText();
+            boolean var5 = super.deleteSurroundingTextInCodePoints(var1, var2);
+            var3.afterImeEdit(var4);
+            return var5;
+         }
+      }
+
+      public boolean setSelection(int var1, int var2) {
+         TextField var3 = TextInputCoordinator.this.focusedField;
+         if (var3 == null) {
+            return false;
+         } else {
+            boolean var4 = super.setSelection(var1, var2);
+            var3.afterImeStateChange();
+            return var4;
+         }
+      }
+
+      public boolean performEditorAction(int var1) {
+         return TextInputCoordinator.this.handleEditorAction(var1);
+      }
+
+      public boolean performContextMenuAction(int var1) {
+         return TextInputCoordinator.this.performContextMenuAction(var1);
+      }
+
+      public boolean sendKeyEvent(KeyEvent var1) {
+         if (var1.getKeyCode() == KeyEvent.KEYCODE_DEL
+                 || var1.getKeyCode() == KeyEvent.KEYCODE_FORWARD_DEL) {
+            if (var1.getAction() == KeyEvent.ACTION_DOWN) {
+               this.deleteHandledOnDown = TextInputCoordinator.this.onKeyDown(
+                       var1.getKeyCode(), var1);
+               if (this.deleteHandledOnDown) {
+                  return true;
+               }
+            } else if (var1.getAction() == KeyEvent.ACTION_UP) {
+               if (this.deleteHandledOnDown) {
+                  this.deleteHandledOnDown = false;
+                  return true;
+               }
+
+               // Some OEM IMEs send only ACTION_UP for delete.
+               if (TextInputCoordinator.this.onKeyDown(var1.getKeyCode(), var1)) {
+                  return true;
+               }
+            }
+         } else if (var1.getAction() == KeyEvent.ACTION_DOWN
+                 && TextInputCoordinator.this.onKeyDown(var1.getKeyCode(), var1)) {
             return true;
-        }
-        if (id == android.R.id.copy) {
-            if (clipboard != null && start != end) {
-                clipboard.setPrimaryClip(ClipData.newPlainText(
-                        focusedField.getId(),
-                        editable.subSequence(start, end)
-                ));
-            }
-            return true;
-        }
-        if (id == android.R.id.cut) {
-            if (clipboard != null && start != end) {
-                clipboard.setPrimaryClip(ClipData.newPlainText(
-                        focusedField.getId(),
-                        editable.subSequence(start, end)
-                ));
-                focusedField.replaceSelection("", 1);
-            }
-            return true;
-        }
-        if (id == android.R.id.paste) {
-            if (clipboard != null && clipboard.hasPrimaryClip()) {
-                ClipData clip = clipboard.getPrimaryClip();
-                if (clip != null && clip.getItemCount() > 0) {
-                    CharSequence value = clip.getItemAt(0)
-                            .coerceToText(hostView.getContext());
-                    focusedField.replaceSelection(value, 1);
-                }
-            }
-            return true;
-        }
-        return false;
-    }
+         }
 
-    private final class FieldInputConnection extends BaseInputConnection {
-
-        private FieldInputConnection(View targetView) {
-            super(targetView, true);
-        }
-
-        @Override
-        public Editable getEditable() {
-            return focusedField == null ? null : focusedField.getEditable();
-        }
-
-        @Override
-        public boolean commitText(CharSequence text, int newCursorPosition) {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            String before = field.getText();
-            boolean handled = super.commitText(text, newCursorPosition);
-            field.afterImeEdit(before);
-            return handled;
-        }
-
-        @Override
-        public boolean setComposingText(
-                CharSequence text,
-                int newCursorPosition
-        ) {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            String before = field.getText();
-            boolean handled = super.setComposingText(
-                    text,
-                    newCursorPosition
-            );
-            field.afterImeEdit(before);
-            return handled;
-        }
-
-        @Override
-        public boolean finishComposingText() {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            boolean handled = super.finishComposingText();
-            field.afterImeStateChange();
-            return handled;
-        }
-
-        @Override
-        public boolean setComposingRegion(int start, int end) {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            boolean handled = super.setComposingRegion(start, end);
-            field.afterImeStateChange();
-            return handled;
-        }
-
-        @Override
-        public boolean deleteSurroundingText(
-                int beforeLength,
-                int afterLength
-        ) {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            String before = field.getText();
-            boolean handled = super.deleteSurroundingText(
-                    beforeLength,
-                    afterLength
-            );
-            field.afterImeEdit(before);
-            return handled;
-        }
-
-        @Override
-        public boolean deleteSurroundingTextInCodePoints(
-                int beforeLength,
-                int afterLength
-        ) {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            String before = field.getText();
-            boolean handled = super.deleteSurroundingTextInCodePoints(
-                    beforeLength,
-                    afterLength
-            );
-            field.afterImeEdit(before);
-            return handled;
-        }
-
-        @Override
-        public boolean setSelection(int start, int end) {
-            TextField field = focusedField;
-            if (field == null) {
-                return false;
-            }
-            boolean handled = super.setSelection(start, end);
-            field.afterImeStateChange();
-            return handled;
-        }
-
-        @Override
-        public boolean performEditorAction(int actionCode) {
-            return handleEditorAction(actionCode);
-        }
-
-        @Override
-        public boolean performContextMenuAction(int id) {
-            return TextInputCoordinator.this.performContextMenuAction(id);
-        }
-
-        @Override
-        public boolean sendKeyEvent(KeyEvent event) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN
-                    && onKeyDown(event.getKeyCode(), event)) {
-                return true;
-            }
-            return super.sendKeyEvent(event);
-        }
-    }
+         return super.sendKeyEvent(var1);
+      }
+   }
 }

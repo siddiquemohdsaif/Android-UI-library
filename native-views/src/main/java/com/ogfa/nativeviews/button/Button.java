@@ -9,6 +9,8 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.os.SystemClock;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -41,6 +43,7 @@ public final class Button implements Component {
     public static final long DEFAULT_PRESS_ANIMATION_DURATION = 100L;
     public static final long DEFAULT_RIPPLE_DURATION = 320L;
     private static final int FALLBACK_RIPPLE_COLOR = 0x1f000000;
+    private static final String RIPPLE_TIMING_TAG = "RippleTiming";
 
     private final Context context;
     private final View hostView;
@@ -92,6 +95,7 @@ public final class Button implements Component {
     private boolean rippleEnabled;
     private int rippleColor;
     private long rippleDuration;
+    private boolean waitForRippleBeforeClick;
     private RippleOrigin rippleOrigin;
     private float rippleRadius;
     private boolean rippleRadiusAuto;
@@ -104,6 +108,8 @@ public final class Button implements Component {
     private boolean released;
     private boolean touchCaptured;
     private boolean clickCancelled;
+    private boolean clickPending;
+    private long rippleStartedAt;
     private OnClickListener clickListener;
 
     private Button(Builder builder, View hostView) {
@@ -125,6 +131,7 @@ public final class Button implements Component {
                 ? resolveThemeRippleColor(builder.context)
                 : builder.rippleColor;
         rippleDuration = builder.rippleDuration;
+        waitForRippleBeforeClick = builder.waitForRippleBeforeClick;
         rippleOrigin = builder.rippleOrigin;
         rippleRadius = builder.rippleRadius;
         rippleRadiusAuto = builder.rippleRadiusAuto;
@@ -764,6 +771,11 @@ public final class Button implements Component {
                 touchCaptured = acceptsTouch(event.getX(), event.getY());
                 clickCancelled = false;
                 if (touchCaptured) {
+                    rippleStartedAt = SystemClock.uptimeMillis();
+                    Log.i(RIPPLE_TIMING_TAG, "component=button event=ripple_start id=" + id
+                            + " uptimeMs=" + rippleStartedAt
+                            + " durationMs=" + rippleDuration
+                            + " wait=" + waitForRippleBeforeClick);
                     setPressedState(true);
                     startRipple(event.getX(), event.getY());
                 }
@@ -783,8 +795,22 @@ public final class Button implements Component {
                         && acceptsTouch(event.getX(), event.getY());
                 touchCaptured = false;
                 setPressedState(false);
-                releaseActiveRipple();
-                if (click) clickListener.onClick(id);
+                if (click && rippleEnabled && waitForRippleBeforeClick) {
+                    clickPending = true;
+                    releaseActiveRipple(() -> {
+                        clickPending = false;
+                        if (!released && visible && enabled && clickListener != null) {
+                            logRippleAction("after_fade");
+                            clickListener.onClick(id);
+                        }
+                    });
+                } else {
+                    releaseActiveRipple();
+                    if (click) {
+                        logRippleAction("immediate");
+                        clickListener.onClick(id);
+                    }
+                }
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 boolean handled = touchCaptured;
@@ -819,6 +845,7 @@ public final class Button implements Component {
         clearRipples();
         currentPressedScale = 1f;
         released = true;
+        clickPending = false;
         clickListener = null;
         owner = null;
         if (text != null) {
@@ -1020,6 +1047,7 @@ public final class Button implements Component {
                 && visible
                 && enabled
                 && clickListener != null
+                && !clickPending
                 && bounds.contains(x, y);
     }
 
@@ -1062,15 +1090,31 @@ public final class Button implements Component {
     }
 
     private void releaseActiveRipple() {
+        releaseActiveRipple(null);
+    }
+
+    private void logRippleAction(String dispatchMode) {
+        long now = SystemClock.uptimeMillis();
+        Log.i(RIPPLE_TIMING_TAG, "component=button event=action_dispatch id=" + id
+                + " uptimeMs=" + now
+                + " elapsedFromRippleStartMs=" + Math.max(0L, now - rippleStartedAt)
+                + " mode=" + dispatchMode);
+    }
+
+    private void releaseActiveRipple(Runnable completion) {
         Ripple ripple = activeRipple;
         activeRipple = null;
-        if (ripple == null || ripple.released) return;
+        if (ripple == null || ripple.released) {
+            if (completion != null) completion.run();
+            return;
+        }
         ripple.released = true;
         long fadeDuration = rippleDuration == 0L
                 ? 0L
                 : Math.max(1L, rippleDuration / 2L);
         if (fadeDuration == 0L) {
             removeRipple(ripple);
+            if (completion != null) completion.run();
             return;
         }
         ripple.fadeAnimator = ValueAnimator.ofFloat(ripple.opacity, 0f);
@@ -1084,6 +1128,7 @@ public final class Button implements Component {
             @Override
             public void onAnimationEnd(android.animation.Animator animation) {
                 removeRipple(ripple);
+                if (completion != null) completion.run();
             }
         });
         ripple.fadeAnimator.start();
@@ -1396,6 +1441,7 @@ public final class Button implements Component {
         private boolean rippleEnabled;
         private Integer rippleColor;
         private long rippleDuration = DEFAULT_RIPPLE_DURATION;
+        private boolean waitForRippleBeforeClick;
         private RippleOrigin rippleOrigin = RippleOrigin.TOUCH;
         private float rippleRadius;
         private boolean rippleRadiusAuto = true;
@@ -1794,6 +1840,12 @@ public final class Button implements Component {
 
         public Builder setRippleDuration(long durationMillis) {
             rippleDuration = requireRippleDuration(durationMillis);
+            return this;
+        }
+
+        /** Delays click delivery until the enabled ripple has completely faded. */
+        public Builder setWaitForRippleBeforeClick(boolean wait) {
+            waitForRippleBeforeClick = wait;
             return this;
         }
 

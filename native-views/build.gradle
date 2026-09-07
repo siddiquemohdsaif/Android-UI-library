@@ -36,4 +36,5 @@ dependencies {
     // Required only to compile font-resource loading. AndroidX remains owned by
     // the parent application and is intentionally not embedded in the fat AAR.
     compileOnly libs.core
+    testImplementation libs.junit
 }

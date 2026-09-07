@@ -2,6 +2,7 @@ package com.ogfa.nativeviews.zlayer;
 
 import android.graphics.Canvas;
 import android.graphics.RectF;
+import android.util.Log;
 import android.text.Editable;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -323,6 +324,26 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
 
     public void unregisterNestedComponent(Component component) {
         unregisterLayerComponent(component);
+    }
+
+    @Override
+    public float normalizeLayerTranslationY(float requestedTranslationY) {
+        int[] location = new int[2];
+        hostView.getLocationOnScreen(location);
+        int displayBottom = hostView.getResources().getDisplayMetrics().heightPixels;
+        int obscuredBelowHost = Math.max(
+                0, displayBottom - location[1] - hostView.getHeight());
+        int keyboardThreshold = Math.round(
+                160f * hostView.getResources().getDisplayMetrics().density);
+        float normalized = ImeTranslationProfile.normalize(
+                requestedTranslationY, obscuredBelowHost, keyboardThreshold,
+                textInput.hasFocusedField());
+        if (normalized != requestedTranslationY) {
+            Log.d("ImeTranslationProfile", "requested=" + requestedTranslationY
+                    + " normalized=" + normalized + " obscured=" + obscuredBelowHost
+                    + " threshold=" + keyboardThreshold);
+        }
+        return normalized;
     }
 
     @Override

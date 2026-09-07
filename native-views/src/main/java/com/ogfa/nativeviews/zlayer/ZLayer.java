@@ -58,6 +58,7 @@ public final class ZLayer {
     public ZLayer setTranslation(float translationX, float translationY) {
         requireFiniteTranslation(translationX, "X");
         requireFiniteTranslation(translationY, "Y");
+        translationY = owner.normalizeLayerTranslationY(translationY);
         if (owner.ownsLayerTranslation()) {
             owner.setOwnedLayerTranslation(translationX, translationY);
             return this;

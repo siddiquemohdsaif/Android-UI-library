@@ -14,6 +14,10 @@ public interface ZLayerOwner {
     void unregisterLayerComponent(Component component);
     void invalidateLayer();
 
+    default float normalizeLayerTranslationY(float requestedTranslationY) {
+        return requestedTranslationY;
+    }
+
     default boolean ownsLayerTranslation() {
         return false;
     }
