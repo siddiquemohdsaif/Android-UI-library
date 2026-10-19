@@ -1558,6 +1558,18 @@ public final class ComponentList<T> implements Component {
 
          }
 
+          @Override public void showSelectionActionMode(TextField field) {
+             if (Item.this.list.rootHost != null) {
+                Item.this.list.rootHost.showSelectionActionMode(field);
+             }
+          }
+
+          @Override public void showInsertionActionMode(TextField field) {
+             if (Item.this.list.rootHost != null) {
+                Item.this.list.rootHost.showInsertionActionMode(field);
+             }
+          }
+
          public void registerNestedComponent(Component var1) {
             if (Item.this.list.rootHost != null) {
                Item.this.list.rootHost.registerNestedComponent(var1);

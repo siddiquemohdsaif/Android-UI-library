@@ -1,13 +1,17 @@
 package com.ogfa.nativeviews.textfield;
 
 import android.content.Context;
+import android.content.res.TypedArray;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.Paint.Style;
+import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
 import android.os.Build.VERSION;
 import android.text.Editable;
@@ -47,6 +51,12 @@ public final class TextField implements Component {
    private final Paint cursorPaint = new Paint(1);
    private final Paint selectionPaint = new Paint(1);
    private final Paint scrollBarPaint = new Paint(1);
+   private final Drawable startHandleDrawable;
+   private final Drawable endHandleDrawable;
+   private final Drawable insertionHandleDrawable;
+   private final PointF startHandleHotspot;
+   private final PointF endHandleHotspot;
+   private final PointF insertionHandleHotspot;
    private final RectF contentBounds = new RectF();
    private TextFieldHost owner;
    private String hint;
@@ -57,6 +67,7 @@ public final class TextField implements Component {
    private int hintColor;
    private int cursorColor;
    private int selectionColor;
+   private final int selectionHandleColor;
    private int backgroundColor;
    private int focusedBackgroundColor;
    private int strokeColor;
@@ -140,6 +151,22 @@ public final class TextField implements Component {
       this.textColor = var1.textColor;
       this.hintColor = var1.hintColor;
       this.cursorColor = var1.cursorColor;
+      this.selectionHandleColor = var1.selectionHandleColor;
+      TypedArray handles = var2.getContext().obtainStyledAttributes(new int[] {
+              android.R.attr.textSelectHandleLeft,
+              android.R.attr.textSelectHandleRight,
+              android.R.attr.textSelectHandle
+      });
+      try {
+         this.startHandleDrawable = tintHandle(handles.getDrawable(0), this.selectionHandleColor);
+         this.endHandleDrawable = tintHandle(handles.getDrawable(1), this.selectionHandleColor);
+         this.insertionHandleDrawable = tintHandle(handles.getDrawable(2), this.selectionHandleColor);
+      } finally {
+         handles.recycle();
+      }
+      this.startHandleHotspot = findHandleHotspot(this.startHandleDrawable, 1);
+      this.endHandleHotspot = findHandleHotspot(this.endHandleDrawable, 2);
+      this.insertionHandleHotspot = findHandleHotspot(this.insertionHandleDrawable, 3);
       this.selectionColor = var1.selectionColor;
       this.backgroundColor = var1.backgroundColor;
       this.focusedBackgroundColor = var1.focusedBackgroundColor;
@@ -492,7 +519,6 @@ public final class TextField implements Component {
 
    public TextField setSelection(int var1, int var2) {
       this.requireSelection(var1, var2);
-      BaseInputConnection.removeComposingSpans(this.editable);
       Selection.setSelection(this.editable, var1, var2);
       this.resetCursorBlink();
       this.ensureCursorVisible();
@@ -558,6 +584,7 @@ public final class TextField implements Component {
    void detach() {
       this.hostView.removeCallbacks(this.touchLongPressRunnable);
       this.stopSelectionAutoScroll();
+      this.collapseSelectionOnBlur();
       this.focused = false;
       this.owner = null;
    }
@@ -593,6 +620,8 @@ public final class TextField implements Component {
             this.resetCursorBlink();
             this.ensureSelection();
             this.ensureCursorVisible();
+         } else {
+            this.collapseSelectionOnBlur();
          }
 
          if (notifyListener && this.focusChangedListener != null) {
@@ -603,8 +632,23 @@ public final class TextField implements Component {
       }
    }
 
+   private void collapseSelectionOnBlur() {
+      int activeEnd = Selection.getSelectionEnd(this.editable);
+      int cursor = activeEnd < 0 ? this.editable.length()
+              : clamp(activeEnd, 0, this.editable.length());
+      if (Selection.getSelectionStart(this.editable) != cursor || activeEnd != cursor) {
+         Selection.setSelection(this.editable, cursor);
+      }
+   }
+
    boolean contains(float var1, float var2) {
       return this.visible && this.enabled && this.bounds.contains(var1, var2);
+   }
+
+   private boolean containsSelectionHandle(float x, float y) {
+      return this.visible && this.enabled && this.focused
+              && this.handleTouchBounds().contains(x, y)
+              && this.touchedSelectionHandle(x, y) != 0;
    }
 
    void placeCursorFromTouch(float var1) {
@@ -707,6 +751,8 @@ public final class TextField implements Component {
                        this.cursorPaint);
             }
 
+            this.drawMultilineScrollBar(var1, var19, var21);
+            var1.restoreToCount(var20);
             if (this.focused && this.enabled && this.editable.length() > 0) {
                if (this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                   this.drawCursorHandle(var1, var19);
@@ -714,9 +760,6 @@ public final class TextField implements Component {
                   this.drawMultilineSelectionHandles(var1, var21, var19.left, var9);
                }
             }
-
-            this.drawMultilineScrollBar(var1, var19, var21);
-            var1.restoreToCount(var20);
          } else {
             Paint.FontMetrics var8 = var6.getFontMetrics();
             var9 = var19.centerY() - (var8.ascent + var8.descent) / 2.0F;
@@ -744,6 +787,7 @@ public final class TextField implements Component {
                        this.cursorPaint);
             }
 
+            var1.restoreToCount(var20);
             if (this.focused && this.enabled && this.editable.length() > 0) {
                if (this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                   this.drawCursorHandle(var1, var19);
@@ -751,8 +795,6 @@ public final class TextField implements Component {
                   this.drawSingleLineSelectionHandles(var1, var19, var9, var10, var4);
                }
             }
-
-            var1.restoreToCount(var20);
          }
       }
    }
@@ -773,7 +815,8 @@ public final class TextField implements Component {
       switch (var1.getActionMasked()) {
          case 0:
             this.stopSelectionAutoScroll();
-            this.touchCaptured = this.contains(var1.getX(), var1.getY());
+            this.touchCaptured = this.contains(var1.getX(), var1.getY())
+                    || this.containsSelectionHandle(var1.getX(), var1.getY());
             if (this.touchCaptured) {
                 this.touchCursorDragCandidate = false;
                 this.touchCursorDragging = false;
@@ -837,7 +880,10 @@ public final class TextField implements Component {
                     && this.owner != null) {
                this.owner.showSelectionActionMode(this);
             }
-
+            if ((this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
+                    && this.owner != null) {
+               this.owner.showSelectionActionMode(this);
+            }
             this.touchCaptured = false;
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
@@ -918,6 +964,8 @@ public final class TextField implements Component {
             this.hostView.performHapticFeedback(0);
             this.owner.showSelectionActionMode(this);
             this.updateSelectionAutoScroll(this.touchDownX, this.touchDownY);
+          } else {
+             this.touchLongPressTriggered = true;
          }
       }
    }
@@ -1162,8 +1210,8 @@ public final class TextField implements Component {
               content, textLeft + this.measurePrefix(text, start), endpointY);
       PointF endEndpoint = this.selectionEndpointPoint(
               content, textLeft + this.measurePrefix(text, end), endpointY);
-      this.drawSelectionHandle(canvas, content, startEndpoint, true);
-      this.drawSelectionHandle(canvas, content, endEndpoint, false);
+      this.drawSelectionHandle(canvas, startEndpoint, 1);
+      this.drawSelectionHandle(canvas, endEndpoint, 2);
    }
 
    private void drawMultilineSelection(Canvas var1, StaticLayout var2, float var3, float var4) {
@@ -1187,8 +1235,8 @@ public final class TextField implements Component {
       RectF content = this.contentBounds();
       PointF startEndpoint = this.selectionEndpointPoint(layout, left, top, start);
       PointF endEndpoint = this.selectionEndpointPoint(layout, left, top, end);
-      this.drawSelectionHandle(canvas, content, startEndpoint, true);
-      this.drawSelectionHandle(canvas, content, endEndpoint, false);
+      this.drawSelectionHandle(canvas, startEndpoint, 1);
+      this.drawSelectionHandle(canvas, endEndpoint, 2);
    }
 
    private float selectionHandleRadius() {
@@ -1202,7 +1250,7 @@ public final class TextField implements Component {
          StaticLayout layout = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
          float top = this.multilineLayoutTop(content, layout);
          int line = layout.getLineForOffset(offset);
-         if (top + layout.getLineBottom(line) <= content.top
+         if (top + this.handleLineBottom(layout, line) <= content.top
                  || top + layout.getLineTop(line) >= content.bottom) return null;
          return this.selectionEndpointPoint(layout, content.left, top, offset);
       }
@@ -1218,95 +1266,146 @@ public final class TextField implements Component {
    private void drawCursorHandle(Canvas canvas, RectF content) {
       if (this.normalizedSelectionEnd() >= this.editable.length()) return;
       PointF endpoint = this.cursorHandleEndpoint();
-      if (endpoint != null) this.drawSelectionHandle(canvas, content, endpoint, 0.0F);
+      if (endpoint != null) this.drawSelectionHandle(canvas, endpoint, 3);
    }
 
    private PointF selectionEndpointPoint(StaticLayout layout, float left, float top, int offset) {
       int safeOffset = clamp(offset, 0, layout.getText().length());
       int line = layout.getLineForOffset(safeOffset);
-      return this.selectionEndpointPoint(this.contentBounds(),
-              left + layout.getPrimaryHorizontal(safeOffset),
-              top + (float)layout.getLineBottom(line));
+      RectF content = this.contentBounds();
+      float lineTop = top + layout.getLineTop(line);
+      float lineBottom = top + this.handleLineBottom(layout, line);
+      if (lineBottom <= content.top || lineTop >= content.bottom) return null;
+      return new PointF(left + layout.getPrimaryHorizontal(safeOffset), lineBottom);
+   }
+
+   private int handleLineBottom(StaticLayout layout, int line) {
+      return VERSION.SDK_INT >= 34
+              ? layout.getLineBottom(line, false)
+              : layout.getLineBottom(line);
    }
 
    private PointF selectionEndpointPoint(RectF content, float x, float y) {
-      return new PointF(
-              Math.max(content.left, Math.min(x, content.right)),
-              Math.max(content.top, Math.min(y, content.bottom)));
+      return x < content.left || x > content.right ? null : new PointF(x, y);
    }
 
-   private PointF selectionHandleGripPoint(RectF content, PointF endpoint, boolean startHandle) {
-      return this.selectionHandleGripPoint(content, endpoint, startHandle ? -1.0F : 1.0F);
+   private Drawable handleDrawable(int type) {
+      if (type == 1) return this.startHandleDrawable;
+      if (type == 2) return this.endHandleDrawable;
+      return this.insertionHandleDrawable;
    }
 
-   private PointF selectionHandleGripPoint(RectF content, PointF endpoint, float direction) {
-      float radius = this.selectionHandleRadius();
-      float desiredX = endpoint.x + direction * radius * 0.82F;
-      float desiredY = endpoint.y + radius * 1.05F;
-      return new PointF(
-              this.clampHandleCenterX(content, desiredX, radius),
-              this.clampHandleCenterY(content, desiredY, radius));
+   private PointF handleHotspot(int type) {
+      if (type == 1) return this.startHandleHotspot;
+      if (type == 2) return this.endHandleHotspot;
+      return this.insertionHandleHotspot;
    }
 
-   private void drawSelectionHandle(
-           Canvas canvas, RectF content, PointF endpoint, boolean startHandle) {
-      this.drawSelectionHandle(canvas, content, endpoint, startHandle ? -1.0F : 1.0F);
+   private static Drawable tintHandle(Drawable drawable, int color) {
+      if (drawable == null) return null;
+      Drawable tinted = drawable.mutate();
+      tinted.setTint(color);
+      return tinted;
    }
 
-   private void drawSelectionHandle(
-           Canvas canvas, RectF content, PointF endpoint, float direction) {
-      float radius = this.selectionHandleRadius();
-      PointF grip = this.selectionHandleGripPoint(content, endpoint, direction);
-      float deltaX = grip.x - endpoint.x;
-      float deltaY = grip.y - endpoint.y;
-      float distance = (float)Math.hypot(deltaX, deltaY);
-      float unitX = distance > 0.001F ? deltaX / distance : direction;
-      float unitY = distance > 0.001F ? deltaY / distance : (direction == 0.0F ? 1.0F : 0.0F);
-      float perpendicularX = -unitY;
-      float perpendicularY = unitX;
-      float shoulderCenterX = grip.x - unitX * radius * 0.42F;
-      float shoulderCenterY = grip.y - unitY * radius * 0.42F;
-      float shoulderOffset = radius * 0.72F;
-      float firstShoulderX = shoulderCenterX + perpendicularX * shoulderOffset;
-      float firstShoulderY = shoulderCenterY + perpendicularY * shoulderOffset;
-      float secondShoulderX = shoulderCenterX - perpendicularX * shoulderOffset;
-      float secondShoulderY = shoulderCenterY - perpendicularY * shoulderOffset;
-      float controlDistance = radius * 0.30F;
-      float controlOffset = radius * 0.12F;
-
-      Path teardropNeck = new Path();
-      teardropNeck.moveTo(endpoint.x, endpoint.y);
-      teardropNeck.quadTo(
-              endpoint.x + unitX * controlDistance + perpendicularX * controlOffset,
-              endpoint.y + unitY * controlDistance + perpendicularY * controlOffset,
-              firstShoulderX,
-              firstShoulderY);
-      teardropNeck.lineTo(secondShoulderX, secondShoulderY);
-      teardropNeck.quadTo(
-              endpoint.x + unitX * controlDistance - perpendicularX * controlOffset,
-              endpoint.y + unitY * controlDistance - perpendicularY * controlOffset,
-              endpoint.x,
-              endpoint.y);
-      teardropNeck.close();
-
-      this.cursorPaint.setColor(this.cursorColor);
-      this.cursorPaint.setStyle(Paint.Style.FILL);
-      canvas.drawPath(teardropNeck, this.cursorPaint);
-      canvas.drawCircle(grip.x, grip.y, radius, this.cursorPaint);
+   private static PointF findHandleHotspot(Drawable drawable, int type) {
+      if (drawable == null) return new PointF(0.5F, 0.0F);
+      int width = drawable.getIntrinsicWidth();
+      int height = drawable.getIntrinsicHeight();
+      float fallbackX = type == 1 ? width : type == 2 ? 0.0F : width / 2.0F;
+      if (width <= 0 || height <= 0 || width > 512 || height > 512) {
+         return new PointF(fallbackX, 0.0F);
+      }
+      Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+      Rect originalBounds = new Rect(drawable.getBounds());
+      try {
+         drawable.setBounds(0, 0, width, height);
+         drawable.draw(new Canvas(bitmap));
+         for (int y = 0; y < height; y++) {
+            int first = -1;
+            int last = -1;
+            for (int x = 0; x < width; x++) {
+               if ((bitmap.getPixel(x, y) >>> 24) >= 64) {
+                  if (first < 0) first = x;
+                  last = x;
+               }
+            }
+            if (first >= 0) {
+               // The start handle points from its top-right corner; the end
+               // handle points from its top-left corner.
+               float x = type == 1 ? last + 1.0F
+                       : type == 2 ? first : (first + last + 1.0F) / 2.0F;
+               return new PointF(x, y);
+            }
+         }
+         return new PointF(fallbackX, 0.0F);
+      } finally {
+         drawable.setBounds(originalBounds);
+         bitmap.recycle();
+      }
    }
 
-   private float clampHandleCenterX(RectF content, float x, float radius) {
-      float minimum = content.left + radius;
-      float maximum = content.right - radius;
-      if (minimum > maximum) return content.centerX();
-      return Math.max(minimum, Math.min(x, maximum));
+   private Rect handleBounds(PointF endpoint, int type) {
+      Drawable drawable = this.handleDrawable(type);
+      int fallbackSize = Math.round(this.selectionHandleRadius() * 2.0F);
+      int width = drawable == null ? fallbackSize : Math.max(1, drawable.getIntrinsicWidth());
+      int height = drawable == null ? fallbackSize : Math.max(1, drawable.getIntrinsicHeight());
+      PointF hotspot = this.handleHotspot(type);
+      int left = Math.round(endpoint.x - (drawable == null ? width / 2.0F : hotspot.x));
+      int top = Math.round(endpoint.y - hotspot.y);
+      return new Rect(left, top, left + width, top + height);
    }
 
-   private float clampHandleCenterY(RectF content, float y, float radius) {
-      float minimum = content.top + radius;
-      float maximum = content.bottom - radius;
-      if (minimum > maximum) return content.centerY();
-      return Math.max(minimum, Math.min(y, maximum));
+   private RectF handleDrawingBounds() {
+      int fallbackSize = Math.round(this.selectionHandleRadius() * 2.0F);
+      float horizontalPadding = Math.max(fallbackSize, Math.max(
+              this.handleWidth(this.startHandleDrawable), Math.max(
+                      this.handleWidth(this.endHandleDrawable),
+                      this.handleWidth(this.insertionHandleDrawable))));
+      float verticalPadding = Math.max(fallbackSize, Math.max(
+              this.handleHeight(this.startHandleDrawable), Math.max(
+                      this.handleHeight(this.endHandleDrawable),
+                      this.handleHeight(this.insertionHandleDrawable))));
+      RectF padded = new RectF(this.bounds);
+      padded.inset(-horizontalPadding, -verticalPadding);
+      return padded;
+   }
+
+   private int handleWidth(Drawable drawable) {
+      return drawable == null ? 0 : Math.max(1, drawable.getIntrinsicWidth());
+   }
+
+   private int handleHeight(Drawable drawable) {
+      return drawable == null ? 0 : Math.max(1, drawable.getIntrinsicHeight());
+   }
+
+   private RectF handleTouchBounds() {
+      RectF padded = this.handleDrawingBounds();
+      float touchPadding = Math.max(0.0F, (float)this.touchSlop);
+      padded.inset(-touchPadding, -touchPadding);
+      return padded;
+   }
+
+   private void drawSelectionHandle(Canvas canvas, PointF endpoint, int type) {
+      if (endpoint == null) return;
+      Rect handle = this.handleBounds(endpoint, type);
+      int saveCount = canvas.save();
+      canvas.clipRect(this.handleDrawingBounds());
+      Drawable drawable = this.handleDrawable(type);
+      if (drawable != null) {
+         drawable.setBounds(handle);
+         drawable.draw(canvas);
+      } else {
+         // Keep a simple handle under themes without the platform attributes.
+         this.cursorPaint.setColor(this.selectionHandleColor);
+         this.cursorPaint.setStyle(Paint.Style.FILL);
+         float centerX = handle.exactCenterX();
+         canvas.drawRect(centerX - 1.0F, handle.top, centerX + 1.0F,
+                 handle.centerY(), this.cursorPaint);
+         canvas.drawRoundRect(handle.left, handle.centerY(), handle.right, handle.bottom,
+                 handle.width() * 0.25F, handle.width() * 0.25F, this.cursorPaint);
+      }
+      canvas.restoreToCount(saveCount);
    }
 
    private int touchedSelectionHandle(float var1, float var2) {
@@ -1314,55 +1413,38 @@ public final class TextField implements Component {
       int var4 = this.normalizedSelectionEnd();
       if (var3 == var4 && var4 < this.editable.length()) {
          PointF endpoint = this.cursorHandleEndpoint();
-         if (endpoint != null) {
-            PointF grip = this.selectionHandleGripPoint(this.contentBounds(), endpoint, 0.0F);
-            float hitRadius = Math.max(24.0F, this.textSizePx * 0.9F);
-            if (distanceSquared(var1, var2, grip.x, grip.y) <= hitRadius * hitRadius) {
-               return 3;
-            }
-         }
+         if (endpoint != null && this.isHandleHit(var1, var2, endpoint, 3)) return 3;
       }
       if (var3 != var4 && this.isMultiline()) {
          RectF var5 = this.contentBounds();
          StaticLayout var6 = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
          float var7 = this.multilineLayoutTop(var5, var6);
-         PointF var8 = this.selectionHandleGripPoint(var5,
-                 this.selectionEndpointPoint(var6, var5.left, var7, var3), true);
-         PointF var9 = this.selectionHandleGripPoint(var5,
-                 this.selectionEndpointPoint(var6, var5.left, var7, var4), false);
-         float var10 = Math.max(24.0F, this.textSizePx * 0.9F);
-         float var11 = var10 * var10;
-         if (distanceSquared(var1, var2, var8.x, var8.y) <= var11) {
-            return 1;
-         } else {
-            return distanceSquared(var1, var2, var9.x, var9.y) <= var11 ? 2 : 0;
-         }
+         PointF start = this.selectionEndpointPoint(var6, var5.left, var7, var3);
+         PointF end = this.selectionEndpointPoint(var6, var5.left, var7, var4);
+         if (this.isHandleHit(var1, var2, start, 1)) return 1;
+         return this.isHandleHit(var1, var2, end, 2) ? 2 : 0;
       } else if (var3 != var4) {
          RectF content = this.contentBounds();
          Paint.FontMetrics metrics = this.textPaint.getFontMetrics();
          float baseline = content.centerY() - (metrics.ascent + metrics.descent) / 2.0F;
          float textLeft = content.left - this.horizontalScrollPx;
          float endpointY = baseline + metrics.descent;
-         PointF startGrip = this.selectionHandleGripPoint(content,
-                 this.selectionEndpointPoint(content,
-                         textLeft + this.measurePrefix(this.getDisplayText(), var3), endpointY),
-                 true);
-         PointF endGrip = this.selectionHandleGripPoint(content,
-                 this.selectionEndpointPoint(content,
-                         textLeft + this.measurePrefix(this.getDisplayText(), var4), endpointY),
-                 false);
-         float hitRadius = Math.max(24.0F, this.textSizePx * 0.9F);
-         float hitRadiusSquared = hitRadius * hitRadius;
-         if (distanceSquared(var1, var2, startGrip.x, startGrip.y) <= hitRadiusSquared) return 1;
-         return distanceSquared(var1, var2, endGrip.x, endGrip.y) <= hitRadiusSquared ? 2 : 0;
+         PointF start = this.selectionEndpointPoint(content,
+                 textLeft + this.measurePrefix(this.getDisplayText(), var3), endpointY);
+         PointF end = this.selectionEndpointPoint(content,
+                 textLeft + this.measurePrefix(this.getDisplayText(), var4), endpointY);
+         if (this.isHandleHit(var1, var2, start, 1)) return 1;
+         return this.isHandleHit(var1, var2, end, 2) ? 2 : 0;
       }
       return 0;
    }
 
-   private static float distanceSquared(float var0, float var1, float var2, float var3) {
-      float var4 = var0 - var2;
-      float var5 = var1 - var3;
-      return var4 * var4 + var5 * var5;
+   private boolean isHandleHit(float x, float y, PointF endpoint, int type) {
+      if (endpoint == null) return false;
+      Rect handle = this.handleBounds(endpoint, type);
+      float inset = Math.max(0.0F, (float)this.touchSlop);
+      return x >= handle.left - inset && x <= handle.right + inset
+              && y >= handle.top - inset && y <= handle.bottom + inset;
    }
 
    private void drawMultilineScrollBar(Canvas var1, RectF var2, StaticLayout var3) {
@@ -1803,6 +1885,7 @@ public final class TextField implements Component {
       private int hintColor;
       private int cursorColor;
       private int selectionColor;
+      private int selectionHandleColor;
       private int backgroundColor;
       private int focusedBackgroundColor;
       private int strokeColor;
@@ -1845,6 +1928,7 @@ public final class TextField implements Component {
          this.hintColor = -1996488705;
          this.cursorColor = -1;
          this.selectionColor = 1714664933;
+         this.selectionHandleColor = 0xFF6633B5;
          this.backgroundColor = 855638016;
          this.focusedBackgroundColor = 1140850688;
          this.strokeColor = 1728053247;
@@ -1883,6 +1967,7 @@ public final class TextField implements Component {
          this.hintColor = -1996488705;
          this.cursorColor = -1;
          this.selectionColor = 1714664933;
+         this.selectionHandleColor = 0xFF6633B5;
          this.backgroundColor = 855638016;
          this.focusedBackgroundColor = 1140850688;
          this.strokeColor = 1728053247;
@@ -1980,6 +2065,11 @@ public final class TextField implements Component {
 
       public Builder setSelectionColor(int var1) {
          this.selectionColor = var1;
+         return this;
+      }
+
+      public Builder setSelectionHandleColor(int color) {
+         this.selectionHandleColor = color;
          return this;
       }
 

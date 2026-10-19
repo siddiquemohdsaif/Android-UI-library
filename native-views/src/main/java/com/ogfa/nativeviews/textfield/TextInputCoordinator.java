@@ -44,6 +44,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    private float touchDownY;
    private boolean longPressTriggered;
    private ActionMode selectionActionMode;
+   private TextField actionModeField;
+   private boolean insertionActionMode;
    private float selectionAnchorOffsetX;
    private float selectionAnchorOffsetY;
    private final FocusTransferProfile focusTransferProfile = new FocusTransferProfile();
@@ -222,6 +224,7 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    public boolean requestFocus(TextField var1) {
       if (var1 != null && var1.isEnabled()) {
          if (this.focusedField != var1) {
+            if (this.selectionActionMode != null) this.selectionActionMode.finish();
             if (this.focusedField != null) {
                this.focusedField.setFocusedInternal(false);
             }
@@ -391,13 +394,16 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    }
 
    public void updateSelection(TextField var1) {
-      if (var1 == this.focusedField && this.inputMethodManager != null) {
+      if (var1 == this.focusedField) {
          Editable var2 = var1.getEditable();
-         if (var1.getSelectionStart() == var1.getSelectionEnd() && this.selectionActionMode != null) {
+         boolean collapsed = var1.getSelectionStart() == var1.getSelectionEnd();
+         if (this.selectionActionMode != null && collapsed != this.insertionActionMode) {
             this.selectionActionMode.finish();
          }
 
-         this.inputMethodManager.updateSelection(this.hostView, var1.getRawSelectionStart(), var1.getRawSelectionEnd(), BaseInputConnection.getComposingSpanStart(var2), BaseInputConnection.getComposingSpanEnd(var2));
+         if (this.inputMethodManager != null) {
+            this.inputMethodManager.updateSelection(this.hostView, var1.getRawSelectionStart(), var1.getRawSelectionEnd(), BaseInputConnection.getComposingSpanStart(var2), BaseInputConnection.getComposingSpanEnd(var2));
+         }
          if (this.selectionActionMode != null) {
             this.selectionActionMode.invalidate();
             if (VERSION.SDK_INT >= 23) this.selectionActionMode.invalidateContentRect();
@@ -507,9 +513,22 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    }
 
    private void startSelectionActionMode() {
+      this.startTextActionMode(false);
+   }
+
+   private void startTextActionMode(boolean insertion) {
+      if (this.focusedField == null) return;
+      if (this.selectionActionMode != null && this.actionModeField == this.focusedField
+              && this.insertionActionMode == insertion) {
+         this.selectionActionMode.invalidate();
+         if (VERSION.SDK_INT >= 23) this.selectionActionMode.invalidateContentRect();
+         return;
+      }
       if (this.selectionActionMode != null) {
          this.selectionActionMode.finish();
       }
+      this.actionModeField = this.focusedField;
+      this.insertionActionMode = insertion;
 
       ActionMode.Callback2 var1 = new ActionMode.Callback2() {
          public boolean onCreateActionMode(ActionMode var1, Menu var2) {
@@ -519,30 +538,33 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             var2.add(0, android.R.id.paste, 2, context.getString(android.R.string.paste)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             var2.add(0, android.R.id.selectAll, 3, context.getString(android.R.string.selectAll)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             TextInputCoordinator.this.prepareSelectionMenu(var1, var2);
-            TextField field = TextInputCoordinator.this.focusedField;
-            TextSelectionActionCallback callback = field == null
-                    ? null : field.getSelectionActionCallback();
+            TextField field = TextInputCoordinator.this.actionModeField;
+            TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null) callback.onCreateActionMode(field, var1, var2);
-            return true;
+            return var2.hasVisibleItems();
          }
 
          public boolean onPrepareActionMode(ActionMode var1, Menu var2) {
             TextInputCoordinator.this.prepareSelectionMenu(var1, var2);
-            TextField field = TextInputCoordinator.this.focusedField;
-            TextSelectionActionCallback callback = field == null
-                    ? null : field.getSelectionActionCallback();
+            TextField field = TextInputCoordinator.this.actionModeField;
+            TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null) callback.onPrepareActionMode(field, var1, var2);
             return true;
          }
 
          public boolean onActionItemClicked(ActionMode var1, MenuItem var2) {
-            TextField field = TextInputCoordinator.this.focusedField;
-            TextSelectionActionCallback callback = field == null
-                    ? null : field.getSelectionActionCallback();
+            TextField field = TextInputCoordinator.this.actionModeField;
+            if (field == null || field != TextInputCoordinator.this.focusedField) return false;
+            TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null && callback.onActionItemClicked(field, var1, var2)) return true;
             boolean var3 = TextInputCoordinator.this.performContextMenuAction(var2.getItemId());
-            if (var3 && var2.getItemId() != android.R.id.selectAll) {
-               var1.finish();
+            if (var3) {
+               if (var2.getItemId() == android.R.id.selectAll) {
+                  TextInputCoordinator.this.hostView.post(() ->
+                          TextInputCoordinator.this.showSelectionActionMode(field));
+               } else {
+                  var1.finish();
+               }
             }
 
             return var3;
@@ -551,6 +573,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
          public void onDestroyActionMode(ActionMode var1) {
             if (TextInputCoordinator.this.selectionActionMode == var1) {
                TextInputCoordinator.this.selectionActionMode = null;
+               TextInputCoordinator.this.actionModeField = null;
+               TextInputCoordinator.this.insertionActionMode = false;
             }
 
             TextInputCoordinator.this.invalidateComponent();
@@ -588,11 +612,15 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       if (this.selectionActionMode != null && VERSION.SDK_INT >= 23) {
          this.selectionActionMode.invalidateContentRect();
       }
+      if (this.selectionActionMode == null) {
+         this.actionModeField = null;
+         this.insertionActionMode = false;
+      }
 
    }
 
    private void prepareSelectionMenu(ActionMode mode, Menu menu) {
-      TextField field = this.focusedField;
+      TextField field = this.actionModeField;
       if (field == null) return;
       boolean hasSelection = field.getSelectionStart() != field.getSelectionEnd();
       boolean password = field.isPassword();
@@ -603,8 +631,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       MenuItem copy = menu.findItem(android.R.id.copy);
       MenuItem paste = menu.findItem(android.R.id.paste);
       MenuItem selectAll = menu.findItem(android.R.id.selectAll);
-      if (cut != null) cut.setVisible(hasSelection && !password && field.isCutEnabled());
-      if (copy != null) copy.setVisible(hasSelection && !password && field.isCopyEnabled());
+      if (cut != null) cut.setVisible(hasSelection && !password && field.isSelectionEnabled() && field.isCutEnabled());
+      if (copy != null) copy.setVisible(hasSelection && !password && field.isSelectionEnabled() && field.isCopyEnabled());
       if (paste != null) paste.setVisible(field.isPasteEnabled()
               && clipboard != null && clipboard.hasPrimaryClip());
       if (selectAll != null) selectAll.setVisible(field.isSelectionEnabled()
@@ -640,6 +668,15 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
          this.selectionAnchorOffsetX = var2;
          this.selectionAnchorOffsetY = var3;
          this.startSelectionActionMode();
+      }
+   }
+
+   public void showInsertionActionMode(TextField field) {
+      if (field != null && field == this.focusedField && field.isEnabled()
+              && field.getSelectionStart() == field.getSelectionEnd()) {
+         this.selectionAnchorOffsetX = 0.0F;
+         this.selectionAnchorOffsetY = 0.0F;
+         this.startTextActionMode(true);
       }
    }
 

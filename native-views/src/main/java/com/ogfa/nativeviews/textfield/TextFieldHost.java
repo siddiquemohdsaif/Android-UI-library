@@ -13,4 +13,7 @@ public interface TextFieldHost extends ComponentHost {
 
    default void showSelectionActionMode(TextField field) {
    }
+
+   default void showInsertionActionMode(TextField field) {
+   }
 }

@@ -70,6 +70,12 @@ public final class ZLayerContainer implements Component {
         @Override public void clearFocus(TextField field) { if (rootHost != null) rootHost.clearFocus(field); }
         @Override public void restartInput() { if (rootHost != null) rootHost.restartInput(); }
         @Override public void updateSelection(TextField field) { if (rootHost != null) rootHost.updateSelection(field); }
+        @Override public void showSelectionActionMode(TextField field) {
+            if (rootHost != null) rootHost.showSelectionActionMode(field);
+        }
+        @Override public void showInsertionActionMode(TextField field) {
+            if (rootHost != null) rootHost.showInsertionActionMode(field);
+        }
         @Override public void registerNestedComponent(Component component) {
             if (rootHost != null) rootHost.registerNestedComponent(component);
         }
