@@ -73,6 +73,9 @@ public final class ZLayerContainer implements Component {
         @Override public void showSelectionActionMode(TextField field) {
             if (rootHost != null) rootHost.showSelectionActionMode(field);
         }
+        @Override public void hideSelectionActionMode(TextField field) {
+            if (rootHost != null) rootHost.hideSelectionActionMode(field);
+        }
         @Override public void showInsertionActionMode(TextField field) {
             if (rootHost != null) rootHost.showInsertionActionMode(field);
         }

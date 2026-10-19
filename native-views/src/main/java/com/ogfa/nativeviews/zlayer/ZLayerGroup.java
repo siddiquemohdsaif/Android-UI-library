@@ -293,6 +293,9 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         }
         textInput.showSelectionActionMode(field, translationX, translationY);
     }
+    @Override public void hideSelectionActionMode(TextField field) {
+        textInput.hideSelectionActionMode(field);
+    }
     @Override public void showInsertionActionMode(TextField field) {
         textInput.showInsertionActionMode(field);
     }

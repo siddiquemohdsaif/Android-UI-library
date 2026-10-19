@@ -104,12 +104,13 @@ public final class TextField implements Component {
    private boolean touchInsideSelection;
    private boolean touchCursorDragCandidate;
    private boolean touchCursorDragging;
+   private boolean selectionHandleDragging;
    private boolean doubleTapSelecting;
    private boolean touchStayedInTapRegion;
    private int touchedSelectionHandle;
    private float cursorDragOffsetX;
    private float cursorDragOffsetY;
-   private int cursorHandleDragLine;
+   private int handleDragLine;
    private int selectionAnchorStart;
    private int selectionAnchorEnd;
    private int selectionAutoScrollDirection;
@@ -835,6 +836,7 @@ public final class TextField implements Component {
             if (this.touchCaptured) {
                 this.touchCursorDragCandidate = false;
                 this.touchCursorDragging = false;
+                this.selectionHandleDragging = false;
                this.owner.requestFocus(this);
                this.touchedSelectionHandle = this.touchedSelectionHandle(var1.getX(), var1.getY());
                this.touchInsideSelection = this.touchedSelectionHandle == 0
@@ -859,12 +861,14 @@ public final class TextField implements Component {
                      PointF endpoint = this.cursorHandleEndpoint();
                      this.cursorDragOffsetX = var1.getX() - endpoint.x;
                      this.cursorDragOffsetY = var1.getY() - this.cursorDragAnchorY(endpoint);
-                     if (this.isMultiline()) {
-                        StaticLayout layout = this.multilineLayout(
-                                this.getDisplayText(), this.textPaint, false);
-                        this.cursorHandleDragLine = layout.getLineForOffset(
-                                this.normalizedSelectionEnd());
-                     }
+                  }
+                  if (this.isMultiline() && this.touchedSelectionHandle != 0) {
+                     StaticLayout layout = this.multilineLayout(
+                             this.getDisplayText(), this.textPaint, false);
+                     int offset = this.touchedSelectionHandle == 1
+                             ? this.normalizedSelectionStart()
+                             : this.normalizedSelectionEnd();
+                     this.handleDragLine = layout.getLineForOffset(offset);
                   }
                }
 
@@ -922,6 +926,7 @@ public final class TextField implements Component {
             this.doubleTapSelecting = false;
              this.touchCursorDragCandidate = false;
              this.touchCursorDragging = false;
+            this.selectionHandleDragging = false;
             this.touchedSelectionHandle = 0;
             this.stopSelectionAutoScroll();
             return var3;
@@ -943,6 +948,17 @@ public final class TextField implements Component {
                this.updateSelectionAutoScroll(var1.getX(), var1.getY());
                return true;
             } else if (this.touchedSelectionHandle != 0) {
+               if ((this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
+                       && !this.selectionHandleDragging) {
+                  float dx = var1.getX() - this.touchDownX;
+                  float dy = var1.getY() - this.touchDownY;
+                  if (dx * dx + dy * dy > (float)this.touchSlop * this.touchSlop) {
+                     this.selectionHandleDragging = true;
+                     if (this.owner != null) this.owner.hideSelectionActionMode(this);
+                  } else {
+                     return true;
+                  }
+               }
                this.applySelectionDrag(var1.getX(), var1.getY());
                this.updateSelectionAutoScroll(var1.getX(), var1.getY());
                return true;
@@ -988,6 +1004,9 @@ public final class TextField implements Component {
          case 3:
             this.hostView.removeCallbacks(this.touchLongPressRunnable);
             boolean var4 = this.touchCaptured;
+            if (this.selectionHandleDragging && this.owner != null) {
+               this.owner.showSelectionActionMode(this);
+            }
             this.touchCaptured = false;
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
@@ -996,6 +1015,7 @@ public final class TextField implements Component {
             this.lastTapUpTime = 0L;
              this.touchCursorDragCandidate = false;
              this.touchCursorDragging = false;
+            this.selectionHandleDragging = false;
             this.touchedSelectionHandle = 0;
             this.stopSelectionAutoScroll();
             return var4;
@@ -1066,12 +1086,14 @@ public final class TextField implements Component {
          float x = var1 - this.cursorDragOffsetX;
          float y = var2 - this.cursorDragOffsetY;
          if (this.isMultiline()) {
-            this.placeCursorFromHandleDrag(x, y);
+            this.setSelection(this.handleDragOffsetFromTouch(x, y));
          } else {
             this.placeCursorFromTouch(x, y);
          }
       } else if (this.touchedSelectionHandle == 1) {
-         int movingOffset = this.cursorOffsetFromTouch(var1, var2);
+         int movingOffset = this.isMultiline()
+                 ? this.handleDragOffsetFromTouch(var1, var2)
+                 : this.cursorOffsetFromTouch(var1, var2);
          int maximumStart = TextBoundaryHelper.previousGrapheme(
                  this.editable, this.selectionAnchorEnd);
          this.setSelection(
@@ -1079,7 +1101,9 @@ public final class TextField implements Component {
                  this.selectionAnchorEnd
          );
       } else if (this.touchedSelectionHandle == 2) {
-         int movingOffset = this.cursorOffsetFromTouch(var1, var2);
+         int movingOffset = this.isMultiline()
+                 ? this.handleDragOffsetFromTouch(var1, var2)
+                 : this.cursorOffsetFromTouch(var1, var2);
          int minimumEnd = TextBoundaryHelper.nextGrapheme(
                  this.editable, this.selectionAnchorStart);
          this.setSelection(
@@ -1092,26 +1116,34 @@ public final class TextField implements Component {
 
    }
 
-   private void placeCursorFromHandleDrag(float x, float y) {
+   private int handleDragOffsetFromTouch(float x, float y) {
       RectF content = this.contentBounds();
       StaticLayout layout = this.multilineLayout(
               this.getDisplayText(), this.textPaint, false);
       float vertical = y - this.multilineLayoutTop(content, layout);
-      int line = Math.max(0, Math.min(this.cursorHandleDragLine,
+      int line = Math.max(0, Math.min(this.handleDragLine,
               layout.getLineCount() - 1));
 
-      // Enter the next line only after the handle reaches that line's bottom.
-      while (line + 1 < layout.getLineCount()
-              && vertical >= layout.getLineBottom(line + 1)) {
+      // Selection handles wait for the following line's bottom; the cursor
+      // handle still switches at the next line's bottom.
+      int thresholdLineOffset = this.touchedSelectionHandle == 3 ? 1 : 2;
+      int lastLine = layout.getLineCount() - 1;
+      float lastLineHeight = layout.getLineBottom(lastLine)
+              - layout.getLineTop(lastLine);
+      while (line < lastLine) {
+         int thresholdLine = line + thresholdLineOffset;
+         float threshold = layout.getLineBottom(Math.min(thresholdLine, lastLine))
+                 + Math.max(0, thresholdLine - lastLine) * lastLineHeight;
+         if (vertical < threshold) break;
          line++;
       }
       while (line > 0 && vertical < layout.getLineTop(line)) {
          line--;
       }
-      this.cursorHandleDragLine = line;
+      this.handleDragLine = line;
       int offset = layout.getOffsetForHorizontal(line,
               Math.max(0.0F, x - content.left));
-      this.setSelection(clamp(offset, 0, this.editable.length()));
+      return clamp(offset, 0, this.editable.length());
    }
 
    private void updateSelectionAutoScroll(float var1, float var2) {

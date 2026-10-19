@@ -676,6 +676,13 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       this.showSelectionActionMode(var1, 0.0F, 0.0F);
    }
 
+   @Override
+   public void hideSelectionActionMode(TextField field) {
+      if (field == this.focusedField) {
+         this.dismissSelectionActionMode(false);
+      }
+   }
+
    public void showSelectionActionMode(TextField var1, float var2, float var3) {
       if (var1 != null && var1 == this.focusedField
               && var1.isSelectionEnabled() && !var1.isPassword()
