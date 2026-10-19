@@ -303,12 +303,26 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       if (this.focusedField == null) {
          return false;
       } else {
+         if (var2.isCtrlPressed()) {
+            switch (var1) {
+               case KeyEvent.KEYCODE_A:
+                  return this.performContextMenuAction(android.R.id.selectAll);
+               case KeyEvent.KEYCODE_C:
+                  return this.performContextMenuAction(android.R.id.copy);
+               case KeyEvent.KEYCODE_V:
+                  return this.performContextMenuAction(android.R.id.paste);
+               case KeyEvent.KEYCODE_X:
+                  return this.performContextMenuAction(android.R.id.cut);
+               default:
+                  break;
+            }
+         }
          switch (var1) {
             case 21:
-               this.moveCursor(-1);
+               this.moveCursor(-1, var2.isShiftPressed());
                return true;
             case 22:
-               this.moveCursor(1);
+               this.moveCursor(1, var2.isShiftPressed());
                return true;
             case 66:
                if (this.focusedField.isMultiline()) {
@@ -383,9 +397,10 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             this.selectionActionMode.finish();
          }
 
-         this.inputMethodManager.updateSelection(this.hostView, var1.getSelectionStart(), var1.getSelectionEnd(), BaseInputConnection.getComposingSpanStart(var2), BaseInputConnection.getComposingSpanEnd(var2));
-         if (this.selectionActionMode != null && VERSION.SDK_INT >= 23) {
-            this.selectionActionMode.invalidateContentRect();
+         this.inputMethodManager.updateSelection(this.hostView, var1.getRawSelectionStart(), var1.getRawSelectionEnd(), BaseInputConnection.getComposingSpanStart(var2), BaseInputConnection.getComposingSpanEnd(var2));
+         if (this.selectionActionMode != null) {
+            this.selectionActionMode.invalidate();
+            if (VERSION.SDK_INT >= 23) this.selectionActionMode.invalidateContentRect();
          }
 
       }
@@ -402,18 +417,21 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       return null;
    }
 
-   private void moveCursor(int var1) {
+   private void moveCursor(int var1, boolean extendSelection) {
       Editable var2 = this.focusedField.getEditable();
-      int var3 = this.focusedField.getSelectionEnd();
-
-      int var4;
-      try {
-         var4 = Character.offsetByCodePoints(var2, var3, var1);
-      } catch (IndexOutOfBoundsException var6) {
-         var4 = var1 < 0 ? 0 : var2.length();
+      int rawStart = this.focusedField.getRawSelectionStart();
+      int rawEnd = this.focusedField.getRawSelectionEnd();
+      if (!extendSelection && rawStart != rawEnd) {
+         this.focusedField.setSelection(var1 < 0
+                 ? this.focusedField.getSelectionStart()
+                 : this.focusedField.getSelectionEnd());
+         return;
       }
-
-      this.focusedField.setSelection(var4);
+      int next = var1 < 0
+              ? TextBoundaryHelper.previousGrapheme(var2, rawEnd)
+              : TextBoundaryHelper.nextGrapheme(var2, rawEnd);
+      if (extendSelection) this.focusedField.setSelection(rawStart, next);
+      else this.focusedField.setSelection(next);
    }
 
    private boolean handleEditorAction(int var1) {
@@ -456,24 +474,24 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
          int var3 = this.focusedField.getSelectionStart();
          int var4 = this.focusedField.getSelectionEnd();
          ClipboardManager var5 = (ClipboardManager)this.hostView.getContext().getSystemService("clipboard");
-         if (var1 == 16908319) {
+         boolean hasSelection = var3 != var4;
+         boolean password = this.focusedField.isPassword();
+         if (var1 == android.R.id.selectAll) {
+            if (!this.focusedField.isSelectionEnabled() || var2.length() == 0) return false;
             this.focusedField.setSelection(0, var2.length());
             return true;
-         } else if (var1 == 16908321) {
-            if (var5 != null && var3 != var4) {
-               var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
-            }
-
+         } else if (var1 == android.R.id.copy) {
+            if (password || !this.focusedField.isCopyEnabled() || !hasSelection || var5 == null) return false;
+            var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
             return true;
-         } else if (var1 == 16908320) {
-            if (var5 != null && var3 != var4) {
-               var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
-               this.focusedField.replaceSelection("", 1, false);
-            }
-
+         } else if (var1 == android.R.id.cut) {
+            if (password || !this.focusedField.isCutEnabled() || !hasSelection || var5 == null) return false;
+            var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
+            this.focusedField.replaceSelection("", 1, false);
             return true;
-         } else if (var1 == 16908322) {
-            if (var5 != null && var5.hasPrimaryClip()) {
+         } else if (var1 == android.R.id.paste) {
+            if (!this.focusedField.isPasteEnabled() || var5 == null || !var5.hasPrimaryClip()) return false;
+            if (var5.hasPrimaryClip()) {
                ClipData var6 = var5.getPrimaryClip();
                if (var6 != null && var6.getItemCount() > 0) {
                   CharSequence var7 = var6.getItemAt(0).coerceToText(this.hostView.getContext());
@@ -495,20 +513,35 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
 
       ActionMode.Callback2 var1 = new ActionMode.Callback2() {
          public boolean onCreateActionMode(ActionMode var1, Menu var2) {
-            var2.add(0, 16908320, 0, "Cut").setShowAsAction(2);
-            var2.add(0, 16908321, 1, "Copy").setShowAsAction(2);
-            var2.add(0, 16908322, 2, "Paste").setShowAsAction(2);
-            var2.add(0, 16908319, 3, "Select all").setShowAsAction(2);
+            Context context = TextInputCoordinator.this.hostView.getContext();
+            var2.add(0, android.R.id.cut, 0, context.getString(android.R.string.cut)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            var2.add(0, android.R.id.copy, 1, context.getString(android.R.string.copy)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            var2.add(0, android.R.id.paste, 2, context.getString(android.R.string.paste)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            var2.add(0, android.R.id.selectAll, 3, context.getString(android.R.string.selectAll)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            TextInputCoordinator.this.prepareSelectionMenu(var1, var2);
+            TextField field = TextInputCoordinator.this.focusedField;
+            TextSelectionActionCallback callback = field == null
+                    ? null : field.getSelectionActionCallback();
+            if (callback != null) callback.onCreateActionMode(field, var1, var2);
             return true;
          }
 
          public boolean onPrepareActionMode(ActionMode var1, Menu var2) {
-            return false;
+            TextInputCoordinator.this.prepareSelectionMenu(var1, var2);
+            TextField field = TextInputCoordinator.this.focusedField;
+            TextSelectionActionCallback callback = field == null
+                    ? null : field.getSelectionActionCallback();
+            if (callback != null) callback.onPrepareActionMode(field, var1, var2);
+            return true;
          }
 
          public boolean onActionItemClicked(ActionMode var1, MenuItem var2) {
+            TextField field = TextInputCoordinator.this.focusedField;
+            TextSelectionActionCallback callback = field == null
+                    ? null : field.getSelectionActionCallback();
+            if (callback != null && callback.onActionItemClicked(field, var1, var2)) return true;
             boolean var3 = TextInputCoordinator.this.performContextMenuAction(var2.getItemId());
-            if (var3 && var2.getItemId() != 16908319) {
+            if (var3 && var2.getItemId() != android.R.id.selectAll) {
                var1.finish();
             }
 
@@ -558,6 +591,27 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
 
    }
 
+   private void prepareSelectionMenu(ActionMode mode, Menu menu) {
+      TextField field = this.focusedField;
+      if (field == null) return;
+      boolean hasSelection = field.getSelectionStart() != field.getSelectionEnd();
+      boolean password = field.isPassword();
+      Editable text = field.getEditable();
+      ClipboardManager clipboard = (ClipboardManager)this.hostView.getContext()
+              .getSystemService(Context.CLIPBOARD_SERVICE);
+      MenuItem cut = menu.findItem(android.R.id.cut);
+      MenuItem copy = menu.findItem(android.R.id.copy);
+      MenuItem paste = menu.findItem(android.R.id.paste);
+      MenuItem selectAll = menu.findItem(android.R.id.selectAll);
+      if (cut != null) cut.setVisible(hasSelection && !password && field.isCutEnabled());
+      if (copy != null) copy.setVisible(hasSelection && !password && field.isCopyEnabled());
+      if (paste != null) paste.setVisible(field.isPasteEnabled()
+              && clipboard != null && clipboard.hasPrimaryClip());
+      if (selectAll != null) selectAll.setVisible(field.isSelectionEnabled()
+              && text.length() > 0 && !(field.getSelectionStart() == 0
+              && field.getSelectionEnd() == text.length()));
+   }
+
    private static Activity findActivity(Context var0) {
       Context var1;
       Context var2;
@@ -580,7 +634,9 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    }
 
    public void showSelectionActionMode(TextField var1, float var2, float var3) {
-      if (var1 != null && var1 == this.focusedField) {
+      if (var1 != null && var1 == this.focusedField
+              && var1.isSelectionEnabled() && !var1.isPassword()
+              && var1.getSelectionStart() != var1.getSelectionEnd()) {
          this.selectionAnchorOffsetX = var2;
          this.selectionAnchorOffsetY = var3;
          this.startSelectionActionMode();

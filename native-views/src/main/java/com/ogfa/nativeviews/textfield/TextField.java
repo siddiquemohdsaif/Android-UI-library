@@ -33,7 +33,7 @@ import com.ogfa.nativeviews.text.FontVariation;
 import java.util.Objects;
 
 public final class TextField implements Component {
-   public static final long CURSOR_BLINK_INTERVAL_MS = 500L;
+   public static final long DEFAULT_CURSOR_BLINK_INTERVAL_MS = 500L;
    private final Context context;
    private final View hostView;
    private final String id;
@@ -69,6 +69,10 @@ public final class TextField implements Component {
    private float cursorWidth;
    private float cursorWidthPx;
    private boolean cursorWidthInPixels;
+   private float cursorHeight;
+   private float cursorHeightPx;
+   private boolean cursorHeightInPixels;
+   private long cursorBlinkIntervalMs;
    private float horizontalScrollPx;
    private float verticalScrollPx;
    private float multilineBottomEndInsetPx;
@@ -86,7 +90,12 @@ public final class TextField implements Component {
    private boolean touchCaptured;
    private boolean touchDragging;
    private boolean touchLongPressTriggered;
+   private boolean touchInsideSelection;
+   private boolean touchCursorDragCandidate;
+   private boolean touchCursorDragging;
    private int touchedSelectionHandle;
+   private float cursorDragOffsetX;
+   private float cursorDragOffsetY;
    private int selectionAnchorStart;
    private int selectionAnchorEnd;
    private int selectionAutoScrollDirection;
@@ -103,11 +112,16 @@ public final class TextField implements Component {
    private final int touchSlop;
    private final Runnable touchLongPressRunnable = this::handleTouchLongPress;
    private boolean password;
+   private boolean selectionEnabled;
+   private boolean cutEnabled;
+   private boolean copyEnabled;
+   private boolean pasteEnabled;
    private boolean focused;
    private long cursorBlinkStartedAt;
    private OnTextChangedListener textChangedListener;
    private OnEditorActionListener editorActionListener;
    private OnFocusChangedListener focusChangedListener;
+   private TextSelectionActionCallback selectionActionCallback;
 
    private TextField(Builder var1, View var2) {
       this.context = var1.context.getApplicationContext();
@@ -139,8 +153,18 @@ public final class TextField implements Component {
       this.cursorWidth = var1.cursorWidth;
       this.cursorWidthInPixels = var1.cursorWidthInPixels;
       this.cursorWidthPx = var1.resolveCursorWidth(var2);
+      this.cursorHeight = var1.cursorHeight;
+      this.cursorHeightInPixels = var1.cursorHeightInPixels;
+      this.cursorHeightPx = var1.cursorHeight > 0.0F
+              ? var1.resolveCursorHeight(var2) : -1.0F;
+      this.cursorBlinkIntervalMs = var1.cursorBlinkIntervalMs;
       this.enabled = var1.enabled;
       this.password = var1.password;
+      this.selectionEnabled = var1.selectionEnabled;
+      this.cutEnabled = var1.cutEnabled;
+      this.copyEnabled = var1.copyEnabled;
+      this.pasteEnabled = var1.pasteEnabled;
+      this.selectionActionCallback = var1.selectionActionCallback;
       this.textChangedListener = var1.textChangedListener;
       this.editorActionListener = var1.editorActionListener;
       this.focusChangedListener = var1.focusChangedListener;
@@ -221,6 +245,22 @@ public final class TextField implements Component {
 
    public boolean isCursorWidthInPixels() {
       return this.cursorWidthInPixels;
+   }
+
+   public float getCursorHeight() {
+      return this.cursorHeight;
+   }
+
+   public float getResolvedCursorHeight() {
+      return this.cursorHeightPx;
+   }
+
+   public boolean isCursorHeightInPixels() {
+      return this.cursorHeightInPixels;
+   }
+
+   public long getCursorBlinkIntervalMs() {
+      return this.cursorBlinkIntervalMs;
    }
 
    public boolean isHorizontalCentered() {
@@ -368,6 +408,9 @@ public final class TextField implements Component {
 
    public TextField setPassword(boolean var1) {
       this.password = var1;
+      if (var1 && this.getSelectionStart() != this.getSelectionEnd()) {
+         this.setSelection(this.getRawSelectionEnd());
+      }
       this.ensureCursorVisible();
       this.invalidate();
       return this;
@@ -375,6 +418,37 @@ public final class TextField implements Component {
 
    public boolean isPassword() {
       return this.password;
+   }
+
+   public boolean isSelectionEnabled() { return this.selectionEnabled; }
+   public boolean isCutEnabled() { return this.cutEnabled; }
+   public boolean isCopyEnabled() { return this.copyEnabled; }
+   public boolean isPasteEnabled() { return this.pasteEnabled; }
+   public TextSelectionActionCallback getSelectionActionCallback() {
+      return this.selectionActionCallback;
+   }
+
+   public TextField setSelectionEnabled(boolean value) {
+      this.selectionEnabled = value;
+      if (!value && this.getSelectionStart() != this.getSelectionEnd()) {
+         this.setSelection(this.getRawSelectionEnd());
+      }
+      this.refreshSelectionUi();
+      return this;
+   }
+
+   public TextField setCutEnabled(boolean value) { this.cutEnabled = value; this.refreshSelectionUi(); return this; }
+   public TextField setCopyEnabled(boolean value) { this.copyEnabled = value; this.refreshSelectionUi(); return this; }
+   public TextField setPasteEnabled(boolean value) { this.pasteEnabled = value; this.refreshSelectionUi(); return this; }
+   public TextField setSelectionActionCallback(TextSelectionActionCallback value) {
+      this.selectionActionCallback = value;
+      this.refreshSelectionUi();
+      return this;
+   }
+
+   private void refreshSelectionUi() {
+      if (this.focused && this.owner != null) this.owner.updateSelection(this);
+      this.invalidate();
    }
 
    public TextField setEnabled(boolean var1) {
@@ -433,6 +507,22 @@ public final class TextField implements Component {
 
    public int getSelectionEnd() {
       return this.normalizedSelectionEnd();
+   }
+
+   /** Returns the fixed/raw selection endpoint, which may be after the extent. */
+   public int getSelectionAnchor() { return this.getRawSelectionStart(); }
+
+   /** Returns the active/raw selection endpoint used by Shift+arrow movement. */
+   public int getSelectionExtent() { return this.getRawSelectionEnd(); }
+
+   int getRawSelectionStart() {
+      this.ensureSelection();
+      return clamp(Selection.getSelectionStart(this.editable), 0, this.editable.length());
+   }
+
+   int getRawSelectionEnd() {
+      this.ensureSelection();
+      return clamp(Selection.getSelectionEnd(this.editable), 0, this.editable.length());
    }
 
    public TextField setOnTextChangedListener(OnTextChangedListener var1) {
@@ -526,32 +616,13 @@ public final class TextField implements Component {
    }
 
    boolean selectWordAt(float var1, float var2) {
-      if (this.editable.length() != 0 && !this.password) {
-         int var3 = this.cursorOffsetFromTouch(var1, var2);
-         var3 = clamp(var3, 0, this.editable.length());
-         if (var3 == this.editable.length()) {
-            --var3;
-         }
-
-         while(var3 > 0 && Character.isWhitespace(this.editable.charAt(var3))) {
-            --var3;
-         }
-
-         boolean var4 = isWordCharacter(this.editable.charAt(var3));
-         int var5 = var3;
-
-         int var6;
-         for(var6 = var3 + 1; var5 > 0 && isWordCharacter(this.editable.charAt(var5 - 1)) == var4 && !Character.isWhitespace(this.editable.charAt(var5 - 1)); --var5) {
-         }
-
-         while(var6 < this.editable.length() && isWordCharacter(this.editable.charAt(var6)) == var4 && !Character.isWhitespace(this.editable.charAt(var6))) {
-            ++var6;
-         }
-
-         this.setSelection(var5, var6);
-         this.selectionAnchorStart = var5;
-         this.selectionAnchorEnd = var6;
-         return var5 < var6;
+      if (this.editable.length() != 0 && !this.password && this.selectionEnabled) {
+         int[] range = TextBoundaryHelper.wordAt(
+                 this.editable, this.cursorOffsetFromTouch(var1, var2));
+         this.setSelection(range[0], range[1]);
+         this.selectionAnchorStart = range[0];
+         this.selectionAnchorEnd = range[1];
+         return range[0] < range[1];
       } else {
          return false;
       }
@@ -582,10 +653,6 @@ public final class TextField implements Component {
 
          return clamp(var5, 0, this.editable.length());
       }
-   }
-
-   private static boolean isWordCharacter(char var0) {
-      return Character.isLetterOrDigit(var0) || var0 == '_' || var0 == '\'';
    }
 
    public void draw(Canvas var1) {
@@ -624,7 +691,8 @@ public final class TextField implements Component {
             var1.translate(var19.left, var9);
             var21.draw(var1);
             var1.restore();
-            if (this.focused && this.enabled && this.isCursorVisible()) {
+            if (this.focused && this.enabled && this.isCursorVisible()
+                    && this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                StaticLayout var22 = this.multilineLayout(var4, this.textPaint, false);
                var11 = clamp(this.normalizedSelectionEnd(), 0, var22.getText().length());
                int var23 = var22.getLineForOffset(var11);
@@ -634,7 +702,17 @@ public final class TextField implements Component {
                var16 = Math.max(1.0F, (float)Math.round(this.cursorWidthPx));
                var17 = Math.max(var19.left, Math.min(var24, var19.right - var16));
                this.cursorPaint.setColor(this.cursorColor);
-               var1.drawRect(var17, Math.max(var19.top, var14), var17 + var16, Math.min(var19.bottom, var15), this.cursorPaint);
+               var1.drawRect(var17, this.cursorTop(var14, var15, var19),
+                       var17 + var16, this.cursorBottom(var14, var15, var19),
+                       this.cursorPaint);
+            }
+
+            if (this.focused && this.enabled && this.editable.length() > 0) {
+               if (this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
+                  this.drawCursorHandle(var1, var19);
+               } else if (!this.password) {
+                  this.drawMultilineSelectionHandles(var1, var21, var19.left, var9);
+               }
             }
 
             this.drawMultilineScrollBar(var1, var19, var21);
@@ -648,7 +726,8 @@ public final class TextField implements Component {
             }
 
             var1.drawText((CharSequence)var7, 0, ((CharSequence)var7).length(), var10, var9, var6);
-            if (this.focused && this.enabled && this.isCursorVisible()) {
+            if (this.focused && this.enabled && this.isCursorVisible()
+                    && this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                var11 = this.normalizedSelectionEnd();
                float var12 = var10 + this.measurePrefix(var4, var11);
                Paint.FontMetrics var13 = this.textPaint.getFontMetrics();
@@ -658,12 +737,36 @@ public final class TextField implements Component {
                var17 = Math.max(var16, (float)Math.floor((double)(var19.right - var15)));
                float var18 = Math.max(var16, Math.min((float)Math.round(var12 - var15 / 2.0F), var17));
                this.cursorPaint.setColor(this.cursorColor);
-               var1.drawRect(var18, var14 + var13.ascent, var18 + var15, var14 + var13.descent, this.cursorPaint);
+               float var25 = var14 + var13.ascent;
+               float var26 = var14 + var13.descent;
+               var1.drawRect(var18, this.cursorTop(var25, var26, var19),
+                       var18 + var15, this.cursorBottom(var25, var26, var19),
+                       this.cursorPaint);
+            }
+
+            if (this.focused && this.enabled && this.editable.length() > 0) {
+               if (this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
+                  this.drawCursorHandle(var1, var19);
+               } else if (!this.password) {
+                  this.drawSingleLineSelectionHandles(var1, var19, var9, var10, var4);
+               }
             }
 
             var1.restoreToCount(var20);
          }
       }
+   }
+
+   private float cursorTop(float naturalTop, float naturalBottom, RectF clipBounds) {
+      if (this.cursorHeightPx <= 0.0F) return Math.max(clipBounds.top, naturalTop);
+      float center = (naturalTop + naturalBottom) / 2.0F;
+      return Math.max(clipBounds.top, center - this.cursorHeightPx / 2.0F);
+   }
+
+   private float cursorBottom(float naturalTop, float naturalBottom, RectF clipBounds) {
+      if (this.cursorHeightPx <= 0.0F) return Math.min(clipBounds.bottom, naturalBottom);
+      float center = (naturalTop + naturalBottom) / 2.0F;
+      return Math.min(clipBounds.bottom, center + this.cursorHeightPx / 2.0F);
    }
 
    public boolean onTouchEvent(MotionEvent var1) {
@@ -672,20 +775,32 @@ public final class TextField implements Component {
             this.stopSelectionAutoScroll();
             this.touchCaptured = this.contains(var1.getX(), var1.getY());
             if (this.touchCaptured) {
+                this.touchCursorDragCandidate = false;
+                this.touchCursorDragging = false;
                this.owner.requestFocus(this);
                this.touchedSelectionHandle = this.touchedSelectionHandle(var1.getX(), var1.getY());
+               this.touchInsideSelection = this.touchedSelectionHandle == 0
+                       && this.isTouchInsideSelection(var1.getX(), var1.getY());
                if (this.touchedSelectionHandle == 0) {
-                  this.placeCursorFromTouch(var1.getX(), var1.getY());
+                  if (!this.touchInsideSelection) {
+                     this.placeCursorFromTouch(var1.getX(), var1.getY());
+                      this.touchCursorDragCandidate = true;
+                  }
                } else {
                   this.selectionAnchorStart = this.normalizedSelectionStart();
                   this.selectionAnchorEnd = this.normalizedSelectionEnd();
+                  if (this.touchedSelectionHandle == 3) {
+                     PointF endpoint = this.cursorHandleEndpoint();
+                     this.cursorDragOffsetX = var1.getX() - endpoint.x;
+                     this.cursorDragOffsetY = var1.getY() - endpoint.y;
+                  }
                }
 
                this.touchDownX = var1.getX();
                this.touchDownY = this.touchLastY = var1.getY();
                this.touchDragging = false;
                this.touchLongPressTriggered = false;
-               if (this.touchedSelectionHandle == 0) {
+               if (this.touchedSelectionHandle == 0 && !this.touchInsideSelection) {
                   this.hostView.postDelayed(this.touchLongPressRunnable, (long)ViewConfiguration.getLongPressTimeout());
                }
             }
@@ -695,7 +810,8 @@ public final class TextField implements Component {
             this.hostView.removeCallbacks(this.touchLongPressRunnable);
             boolean var3 = this.touchCaptured;
             boolean var5 = this.touchCaptured && !this.touchDragging
-                    && !this.touchLongPressTriggered && this.touchedSelectionHandle == 0;
+                    && !this.touchLongPressTriggered && this.touchedSelectionHandle == 0
+                    && !this.touchInsideSelection;
             if (var5) {
                long var6 = var1.getEventTime();
                float var8 = var1.getX() - this.lastTapX;
@@ -717,9 +833,17 @@ public final class TextField implements Component {
                }
             }
 
+            if (this.touchInsideSelection && !this.touchDragging
+                    && this.owner != null) {
+               this.owner.showSelectionActionMode(this);
+            }
+
             this.touchCaptured = false;
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
+            this.touchInsideSelection = false;
+             this.touchCursorDragCandidate = false;
+             this.touchCursorDragging = false;
             this.touchedSelectionHandle = 0;
             this.stopSelectionAutoScroll();
             return var3;
@@ -737,9 +861,28 @@ public final class TextField implements Component {
                   return true;
                }
 
+                float horizontalDistance = var1.getX() - this.touchDownX;
+                float verticalDistance = var1.getY() - this.touchDownY;
+                if (this.touchCursorDragCandidate && !this.touchDragging
+                        && Math.abs(horizontalDistance) > (float)this.touchSlop
+                        && Math.abs(horizontalDistance) >= Math.abs(verticalDistance)) {
+                   this.touchDragging = true;
+                   this.touchCursorDragging = true;
+                   this.hostView.removeCallbacks(this.touchLongPressRunnable);
+                }
+
+                if (this.touchCursorDragging) {
+                   this.placeCursorFromTouch(var1.getX(), this.touchDownY);
+                   if (!this.isMultiline()) {
+                      this.updateSelectionAutoScroll(var1.getX(), this.touchDownY);
+                   }
+                   return true;
+                }
+
                float var2 = this.touchLastY - var1.getY();
                if (!this.touchDragging && this.isMultilineScrollable() && Math.abs(var1.getY() - this.touchDownY) > (float)this.touchSlop) {
                   this.touchDragging = true;
+                   this.touchCursorDragCandidate = false;
                   this.hostView.removeCallbacks(this.touchLongPressRunnable);
                }
 
@@ -756,6 +899,9 @@ public final class TextField implements Component {
             this.touchCaptured = false;
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
+            this.touchInsideSelection = false;
+             this.touchCursorDragCandidate = false;
+             this.touchCursorDragging = false;
             this.touchedSelectionHandle = 0;
             this.stopSelectionAutoScroll();
             return var4;
@@ -767,12 +913,21 @@ public final class TextField implements Component {
    private void handleTouchLongPress() {
       if (this.touchCaptured && !this.touchDragging && this.owner != null) {
          if (this.selectWordAt(this.touchDownX, this.touchDownY)) {
+            this.touchCursorDragCandidate = false;
             this.touchLongPressTriggered = true;
             this.hostView.performHapticFeedback(0);
             this.owner.showSelectionActionMode(this);
             this.updateSelectionAutoScroll(this.touchDownX, this.touchDownY);
          }
       }
+   }
+
+   private boolean isTouchInsideSelection(float x, float y) {
+      int start = this.normalizedSelectionStart();
+      int end = this.normalizedSelectionEnd();
+      if (start == end || !this.contentBounds().contains(x, y)) return false;
+      int offset = this.cursorOffsetFromTouch(x, y);
+      return offset >= start && offset <= end;
    }
 
    private void extendLongPressSelection(float var1, float var2) {
@@ -788,16 +943,25 @@ public final class TextField implements Component {
    }
 
    private void applySelectionDrag(float var1, float var2) {
-      int var3;
-      if (this.touchedSelectionHandle == 1) {
-         var3 = this.cursorOffsetFromTouch(var1, var2);
-         int var4 = Math.min(var3, this.selectionAnchorEnd - 1);
-         this.setSelection(Math.max(0, var4), this.selectionAnchorEnd);
+      if (this.touchedSelectionHandle == 3) {
+         this.placeCursorFromTouch(var1 - this.cursorDragOffsetX,
+                 var2 - this.cursorDragOffsetY);
+      } else if (this.touchedSelectionHandle == 1) {
+         int movingOffset = this.cursorOffsetFromTouch(var1, var2);
+         int maximumStart = TextBoundaryHelper.previousGrapheme(
+                 this.editable, this.selectionAnchorEnd);
+         this.setSelection(
+                 Math.max(0, Math.min(movingOffset, maximumStart)),
+                 this.selectionAnchorEnd
+         );
       } else if (this.touchedSelectionHandle == 2) {
-         var3 = this.cursorOffsetFromTouch(var1, var2);
-         int var5 = Math.max(var3, this.selectionAnchorStart + 1);
-         this.setSelection(this.selectionAnchorStart,
-                 Math.min(this.editable.length(), var5));
+         int movingOffset = this.cursorOffsetFromTouch(var1, var2);
+         int minimumEnd = TextBoundaryHelper.nextGrapheme(
+                 this.editable, this.selectionAnchorStart);
+         this.setSelection(
+                 this.selectionAnchorStart,
+                 Math.min(this.editable.length(), Math.max(movingOffset, minimumEnd))
+         );
       } else {
          this.extendLongPressSelection(var1, var2);
       }
@@ -846,7 +1010,9 @@ public final class TextField implements Component {
 
    private void runSelectionAutoScroll() {
       this.selectionAutoScrollPosted = false;
-      if (this.touchCaptured && this.selectionAutoScrollDirection != 0 && (this.touchLongPressTriggered || this.touchedSelectionHandle != 0)) {
+      if (this.touchCaptured && this.selectionAutoScrollDirection != 0
+              && (this.touchLongPressTriggered || this.touchedSelectionHandle != 0
+              || this.touchCursorDragging)) {
          float var2 = Math.max(4.0F, this.textSizePx * 0.32F) * (float)this.selectionAutoScrollDirection;
          float var1;
          float var3;
@@ -865,7 +1031,11 @@ public final class TextField implements Component {
          if (Math.abs(var3 - var1) < 0.5F) {
             this.stopSelectionAutoScroll();
          } else {
-            this.applySelectionDrag(this.selectionDragX, this.selectionDragY);
+            if (this.touchCursorDragging) {
+               this.placeCursorFromTouch(this.selectionDragX, this.touchDownY);
+            } else {
+               this.applySelectionDrag(this.selectionDragX, this.selectionDragY);
+            }
             this.updateSelectionAutoScroll(this.selectionDragX, this.selectionDragY);
          }
       }
@@ -898,26 +1068,45 @@ public final class TextField implements Component {
    }
 
    RectF getSelectionActionBounds() {
-      int var1 = this.activeSelectionEnd();
-      RectF var2 = this.contentBounds();
-      float var3 = Math.max(2.0F, this.textSizePx * 0.08F);
+      int selectionStart = this.normalizedSelectionStart();
+      RectF content = this.contentBounds();
+      float halfWidth = Math.max(2.0F, this.textSizePx * 0.08F);
       if (this.isMultiline()) {
-         StaticLayout var11 = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
-         int var12 = clamp(var1, 0, var11.getText().length());
-         int var13 = var11.getLineForOffset(var12);
-         float var7 = this.multilineLayoutTop(var2, var11);
-         float var8 = var2.left + var11.getPrimaryHorizontal(var12);
-         float var9 = Math.max(1.0F, (float)(var11.getLineBottom(var13) - var11.getLineTop(var13)));
-         float var10 = var7 + (float)var11.getLineTop(var13);
-         var10 = Math.max(var2.top, Math.min(var10, var2.bottom - var9));
-         var8 = Math.max(var2.left, Math.min(var8, var2.right));
-         return new RectF(var8 - var3, var10, var8 + var3, var10 + var9);
+         StaticLayout layout = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
+         int offset = clamp(selectionStart, 0, layout.getText().length());
+         int line = layout.getLineForOffset(offset);
+         float layoutTop = this.multilineLayoutTop(content, layout);
+         float anchorX = content.left + layout.getPrimaryHorizontal(offset);
+         float lineTop = layoutTop + (float)layout.getLineTop(line);
+         float lineBottom = layoutTop + (float)layout.getLineBottom(line);
+         if (lineBottom <= content.top || lineTop >= content.bottom) {
+            return this.selectionActionBoundsAtFieldTop(anchorX, halfWidth);
+         }
+
+         float lineHeight = Math.max(1.0F, lineBottom - lineTop);
+         float visibleTop = Math.max(content.top,
+                 Math.min(lineTop, content.bottom - lineHeight));
+         anchorX = Math.max(content.left, Math.min(anchorX, content.right));
+         return new RectF(anchorX - halfWidth, visibleTop,
+                 anchorX + halfWidth, visibleTop + lineHeight);
       } else {
-         Paint.FontMetrics var4 = this.textPaint.getFontMetrics();
-         float var5 = var2.centerY() - (var4.ascent + var4.descent) / 2.0F;
-         float var6 = var2.left - this.horizontalScrollPx + this.measurePrefix(this.getDisplayText(), var1);
-         return new RectF(var6 - var3, var5 + var4.ascent, var6 + var3, var5 + var4.descent);
+         Paint.FontMetrics metrics = this.textPaint.getFontMetrics();
+         float baseline = content.centerY() - (metrics.ascent + metrics.descent) / 2.0F;
+         float anchorX = content.left - this.horizontalScrollPx
+                 + this.measurePrefix(this.getDisplayText(), selectionStart);
+         if (anchorX < content.left || anchorX > content.right) {
+            return this.selectionActionBoundsAtFieldTop(anchorX, halfWidth);
+         }
+
+         return new RectF(anchorX - halfWidth, baseline + metrics.ascent,
+                 anchorX + halfWidth, baseline + metrics.descent);
       }
+   }
+
+   private RectF selectionActionBoundsAtFieldTop(float anchorX, float halfWidth) {
+      float clampedX = Math.max(this.bounds.left, Math.min(anchorX, this.bounds.right));
+      return new RectF(clampedX - halfWidth, this.bounds.top,
+              clampedX + halfWidth, this.bounds.top + 1.0F);
    }
 
    private boolean isMultilineScrollable() {
@@ -962,6 +1151,21 @@ public final class TextField implements Component {
       }
    }
 
+   private void drawSingleLineSelectionHandles(
+           Canvas canvas, RectF content, float baseline, float textLeft, CharSequence text) {
+      int start = this.normalizedSelectionStart();
+      int end = this.normalizedSelectionEnd();
+      if (start == end) return;
+      Paint.FontMetrics metrics = this.textPaint.getFontMetrics();
+      float endpointY = baseline + metrics.descent;
+      PointF startEndpoint = this.selectionEndpointPoint(
+              content, textLeft + this.measurePrefix(text, start), endpointY);
+      PointF endEndpoint = this.selectionEndpointPoint(
+              content, textLeft + this.measurePrefix(text, end), endpointY);
+      this.drawSelectionHandle(canvas, content, startEndpoint, true);
+      this.drawSelectionHandle(canvas, content, endEndpoint, false);
+   }
+
    private void drawMultilineSelection(Canvas var1, StaticLayout var2, float var3, float var4) {
       int var5 = this.normalizedSelectionStart();
       int var6 = this.normalizedSelectionEnd();
@@ -972,30 +1176,160 @@ public final class TextField implements Component {
          var1.translate(var3, var4);
          var1.drawPath(var7, this.selectionPaint);
          var1.restore();
-         PointF var8 = this.selectionHandlePoint(var2, var3, var4, var5);
-         PointF var9 = this.selectionHandlePoint(var2, var3, var4, var6);
-         float var10 = Math.max(5.0F, this.textSizePx * 0.22F);
-         this.cursorPaint.setColor(this.cursorColor);
-         var1.drawCircle(var8.x, var8.y, var10, this.cursorPaint);
-         var1.drawCircle(var9.x, var9.y, var10, this.cursorPaint);
       }
    }
 
-   private PointF selectionHandlePoint(StaticLayout var1, float var2, float var3, int var4) {
-      int var5 = clamp(var4, 0, var1.getText().length());
-      int var6 = var1.getLineForOffset(var5);
-      return new PointF(var2 + var1.getPrimaryHorizontal(var5), var3 + (float)var1.getLineBottom(var6) - Math.max(3.0F, this.textSizePx * 0.12F));
+   private void drawMultilineSelectionHandles(
+           Canvas canvas, StaticLayout layout, float left, float top) {
+      int start = this.normalizedSelectionStart();
+      int end = this.normalizedSelectionEnd();
+      if (start == end) return;
+      RectF content = this.contentBounds();
+      PointF startEndpoint = this.selectionEndpointPoint(layout, left, top, start);
+      PointF endEndpoint = this.selectionEndpointPoint(layout, left, top, end);
+      this.drawSelectionHandle(canvas, content, startEndpoint, true);
+      this.drawSelectionHandle(canvas, content, endEndpoint, false);
+   }
+
+   private float selectionHandleRadius() {
+      return Math.max(8.0F, this.textSizePx * 0.32F);
+   }
+
+   private PointF cursorHandleEndpoint() {
+      int offset = this.normalizedSelectionEnd();
+      RectF content = this.contentBounds();
+      if (this.isMultiline()) {
+         StaticLayout layout = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
+         float top = this.multilineLayoutTop(content, layout);
+         int line = layout.getLineForOffset(offset);
+         if (top + layout.getLineBottom(line) <= content.top
+                 || top + layout.getLineTop(line) >= content.bottom) return null;
+         return this.selectionEndpointPoint(layout, content.left, top, offset);
+      }
+
+      Paint.FontMetrics metrics = this.textPaint.getFontMetrics();
+      float baseline = content.centerY() - (metrics.ascent + metrics.descent) / 2.0F;
+      return this.selectionEndpointPoint(content,
+              content.left - this.horizontalScrollPx
+                      + this.measurePrefix(this.getDisplayText(), offset),
+              baseline + metrics.descent);
+   }
+
+   private void drawCursorHandle(Canvas canvas, RectF content) {
+      if (this.normalizedSelectionEnd() >= this.editable.length()) return;
+      PointF endpoint = this.cursorHandleEndpoint();
+      if (endpoint != null) this.drawSelectionHandle(canvas, content, endpoint, 0.0F);
+   }
+
+   private PointF selectionEndpointPoint(StaticLayout layout, float left, float top, int offset) {
+      int safeOffset = clamp(offset, 0, layout.getText().length());
+      int line = layout.getLineForOffset(safeOffset);
+      return this.selectionEndpointPoint(this.contentBounds(),
+              left + layout.getPrimaryHorizontal(safeOffset),
+              top + (float)layout.getLineBottom(line));
+   }
+
+   private PointF selectionEndpointPoint(RectF content, float x, float y) {
+      return new PointF(
+              Math.max(content.left, Math.min(x, content.right)),
+              Math.max(content.top, Math.min(y, content.bottom)));
+   }
+
+   private PointF selectionHandleGripPoint(RectF content, PointF endpoint, boolean startHandle) {
+      return this.selectionHandleGripPoint(content, endpoint, startHandle ? -1.0F : 1.0F);
+   }
+
+   private PointF selectionHandleGripPoint(RectF content, PointF endpoint, float direction) {
+      float radius = this.selectionHandleRadius();
+      float desiredX = endpoint.x + direction * radius * 0.82F;
+      float desiredY = endpoint.y + radius * 1.05F;
+      return new PointF(
+              this.clampHandleCenterX(content, desiredX, radius),
+              this.clampHandleCenterY(content, desiredY, radius));
+   }
+
+   private void drawSelectionHandle(
+           Canvas canvas, RectF content, PointF endpoint, boolean startHandle) {
+      this.drawSelectionHandle(canvas, content, endpoint, startHandle ? -1.0F : 1.0F);
+   }
+
+   private void drawSelectionHandle(
+           Canvas canvas, RectF content, PointF endpoint, float direction) {
+      float radius = this.selectionHandleRadius();
+      PointF grip = this.selectionHandleGripPoint(content, endpoint, direction);
+      float deltaX = grip.x - endpoint.x;
+      float deltaY = grip.y - endpoint.y;
+      float distance = (float)Math.hypot(deltaX, deltaY);
+      float unitX = distance > 0.001F ? deltaX / distance : direction;
+      float unitY = distance > 0.001F ? deltaY / distance : (direction == 0.0F ? 1.0F : 0.0F);
+      float perpendicularX = -unitY;
+      float perpendicularY = unitX;
+      float shoulderCenterX = grip.x - unitX * radius * 0.42F;
+      float shoulderCenterY = grip.y - unitY * radius * 0.42F;
+      float shoulderOffset = radius * 0.72F;
+      float firstShoulderX = shoulderCenterX + perpendicularX * shoulderOffset;
+      float firstShoulderY = shoulderCenterY + perpendicularY * shoulderOffset;
+      float secondShoulderX = shoulderCenterX - perpendicularX * shoulderOffset;
+      float secondShoulderY = shoulderCenterY - perpendicularY * shoulderOffset;
+      float controlDistance = radius * 0.30F;
+      float controlOffset = radius * 0.12F;
+
+      Path teardropNeck = new Path();
+      teardropNeck.moveTo(endpoint.x, endpoint.y);
+      teardropNeck.quadTo(
+              endpoint.x + unitX * controlDistance + perpendicularX * controlOffset,
+              endpoint.y + unitY * controlDistance + perpendicularY * controlOffset,
+              firstShoulderX,
+              firstShoulderY);
+      teardropNeck.lineTo(secondShoulderX, secondShoulderY);
+      teardropNeck.quadTo(
+              endpoint.x + unitX * controlDistance - perpendicularX * controlOffset,
+              endpoint.y + unitY * controlDistance - perpendicularY * controlOffset,
+              endpoint.x,
+              endpoint.y);
+      teardropNeck.close();
+
+      this.cursorPaint.setColor(this.cursorColor);
+      this.cursorPaint.setStyle(Paint.Style.FILL);
+      canvas.drawPath(teardropNeck, this.cursorPaint);
+      canvas.drawCircle(grip.x, grip.y, radius, this.cursorPaint);
+   }
+
+   private float clampHandleCenterX(RectF content, float x, float radius) {
+      float minimum = content.left + radius;
+      float maximum = content.right - radius;
+      if (minimum > maximum) return content.centerX();
+      return Math.max(minimum, Math.min(x, maximum));
+   }
+
+   private float clampHandleCenterY(RectF content, float y, float radius) {
+      float minimum = content.top + radius;
+      float maximum = content.bottom - radius;
+      if (minimum > maximum) return content.centerY();
+      return Math.max(minimum, Math.min(y, maximum));
    }
 
    private int touchedSelectionHandle(float var1, float var2) {
       int var3 = this.normalizedSelectionStart();
       int var4 = this.normalizedSelectionEnd();
+      if (var3 == var4 && var4 < this.editable.length()) {
+         PointF endpoint = this.cursorHandleEndpoint();
+         if (endpoint != null) {
+            PointF grip = this.selectionHandleGripPoint(this.contentBounds(), endpoint, 0.0F);
+            float hitRadius = Math.max(24.0F, this.textSizePx * 0.9F);
+            if (distanceSquared(var1, var2, grip.x, grip.y) <= hitRadius * hitRadius) {
+               return 3;
+            }
+         }
+      }
       if (var3 != var4 && this.isMultiline()) {
          RectF var5 = this.contentBounds();
          StaticLayout var6 = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
          float var7 = this.multilineLayoutTop(var5, var6);
-         PointF var8 = this.selectionHandlePoint(var6, var5.left, var7, var3);
-         PointF var9 = this.selectionHandlePoint(var6, var5.left, var7, var4);
+         PointF var8 = this.selectionHandleGripPoint(var5,
+                 this.selectionEndpointPoint(var6, var5.left, var7, var3), true);
+         PointF var9 = this.selectionHandleGripPoint(var5,
+                 this.selectionEndpointPoint(var6, var5.left, var7, var4), false);
          float var10 = Math.max(24.0F, this.textSizePx * 0.9F);
          float var11 = var10 * var10;
          if (distanceSquared(var1, var2, var8.x, var8.y) <= var11) {
@@ -1003,9 +1337,26 @@ public final class TextField implements Component {
          } else {
             return distanceSquared(var1, var2, var9.x, var9.y) <= var11 ? 2 : 0;
          }
-      } else {
-         return 0;
+      } else if (var3 != var4) {
+         RectF content = this.contentBounds();
+         Paint.FontMetrics metrics = this.textPaint.getFontMetrics();
+         float baseline = content.centerY() - (metrics.ascent + metrics.descent) / 2.0F;
+         float textLeft = content.left - this.horizontalScrollPx;
+         float endpointY = baseline + metrics.descent;
+         PointF startGrip = this.selectionHandleGripPoint(content,
+                 this.selectionEndpointPoint(content,
+                         textLeft + this.measurePrefix(this.getDisplayText(), var3), endpointY),
+                 true);
+         PointF endGrip = this.selectionHandleGripPoint(content,
+                 this.selectionEndpointPoint(content,
+                         textLeft + this.measurePrefix(this.getDisplayText(), var4), endpointY),
+                 false);
+         float hitRadius = Math.max(24.0F, this.textSizePx * 0.9F);
+         float hitRadiusSquared = hitRadius * hitRadius;
+         if (distanceSquared(var1, var2, startGrip.x, startGrip.y) <= hitRadiusSquared) return 1;
+         return distanceSquared(var1, var2, endGrip.x, endGrip.y) <= hitRadiusSquared ? 2 : 0;
       }
+      return 0;
    }
 
    private static float distanceSquared(float var0, float var1, float var2, float var3) {
@@ -1116,7 +1467,7 @@ public final class TextField implements Component {
       if (var1 != var2) {
          this.replaceRange(var1, var2, "", true);
       } else if (var1 != 0) {
-         int var3 = Character.offsetByCodePoints(this.editable, var1, -1);
+         int var3 = TextBoundaryHelper.previousGrapheme(this.editable, var1);
          this.replaceRange(var3, var1, "", true);
       }
    }
@@ -1127,7 +1478,7 @@ public final class TextField implements Component {
       if (var1 != var2) {
          this.replaceRange(var1, var2, "", true);
       } else if (var2 < this.editable.length()) {
-         int var3 = Character.offsetByCodePoints(this.editable, var2, 1);
+         int var3 = TextBoundaryHelper.nextGrapheme(this.editable, var2);
          this.replaceRange(var2, var3, "", true);
       }
    }
@@ -1139,15 +1490,15 @@ public final class TextField implements Component {
    void configureEditorInfo(EditorInfo var1) {
       var1.inputType = this.inputType;
       var1.imeOptions = this.imeOptions;
-      var1.initialSelStart = this.normalizedSelectionStart();
-      var1.initialSelEnd = this.normalizedSelectionEnd();
+      var1.initialSelStart = this.getRawSelectionStart();
+      var1.initialSelEnd = this.getRawSelectionEnd();
       var1.hintText = this.hint;
       var1.fieldName = this.id;
    }
 
    boolean isCursorVisible() {
       long var1 = SystemClock.uptimeMillis() - this.cursorBlinkStartedAt;
-      return var1 / 500L % 2L == 0L;
+      return var1 / this.cursorBlinkIntervalMs % 2L == 0L;
    }
 
    void resetCursorBlink() {
@@ -1467,13 +1818,21 @@ public final class TextField implements Component {
       private boolean strokeWidthInPixels;
       private float cursorWidth;
       private boolean cursorWidthInPixels;
+      private float cursorHeight = -1.0F;
+      private boolean cursorHeightInPixels;
+      private long cursorBlinkIntervalMs = DEFAULT_CURSOR_BLINK_INTERVAL_MS;
       private boolean enabled;
       private boolean password;
+      private boolean selectionEnabled = true;
+      private boolean cutEnabled = true;
+      private boolean copyEnabled = true;
+      private boolean pasteEnabled = true;
       private boolean horizontalCentered;
       private boolean verticalCentered;
       private OnTextChangedListener textChangedListener;
       private OnEditorActionListener editorActionListener;
       private OnFocusChangedListener focusChangedListener;
+      private TextSelectionActionCallback selectionActionCallback;
 
       public Builder(Context var1, String var2, Position var3, float var4, float var5) {
          this.hint = "";
@@ -1706,8 +2065,37 @@ public final class TextField implements Component {
          return this;
       }
 
+      public Builder setCursorHeight(float var1) {
+         this.cursorHeight = requirePositive(var1, "Cursor height");
+         this.cursorHeightInPixels = false;
+         return this;
+      }
+
+      public Builder setCursorHeightPx(float var1) {
+         this.cursorHeight = requirePositive(var1, "Cursor height");
+         this.cursorHeightInPixels = true;
+         return this;
+      }
+
+      public Builder setCursorBlinkIntervalMs(long var1) {
+         if (var1 <= 0L) {
+            throw new IllegalArgumentException("Cursor blink interval must be greater than 0.");
+         }
+         this.cursorBlinkIntervalMs = var1;
+         return this;
+      }
+
       public Builder setPassword(boolean var1) {
          this.password = var1;
+         return this;
+      }
+
+      public Builder setSelectionEnabled(boolean value) { this.selectionEnabled = value; return this; }
+      public Builder setCutEnabled(boolean value) { this.cutEnabled = value; return this; }
+      public Builder setCopyEnabled(boolean value) { this.copyEnabled = value; return this; }
+      public Builder setPasteEnabled(boolean value) { this.pasteEnabled = value; return this; }
+      public Builder setSelectionActionCallback(TextSelectionActionCallback value) {
+         this.selectionActionCallback = value;
          return this;
       }
 
@@ -1759,6 +2147,10 @@ public final class TextField implements Component {
 
       private float resolveCursorWidth(View var1) {
          return this.resolveDimension(var1, this.cursorWidth, this.cursorWidthInPixels);
+      }
+
+      private float resolveCursorHeight(View var1) {
+         return this.resolveDimension(var1, this.cursorHeight, this.cursorHeightInPixels);
       }
 
       private float resolveDimension(View var1, float var2, boolean var3) {

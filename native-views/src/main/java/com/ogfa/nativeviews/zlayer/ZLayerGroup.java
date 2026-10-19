@@ -121,8 +121,9 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
     public void draw(Canvas canvas) {
         ensureActive();
         for (ZLayer layer : layers) layer.draw(canvas);
-        if (textInput.hasFocusedField()) {
-            hostView.postInvalidateDelayed(TextField.CURSOR_BLINK_INTERVAL_MS);
+        TextField focusedField = textInput.getFocusedField();
+        if (focusedField != null) {
+            hostView.postInvalidateDelayed(focusedField.getCursorBlinkIntervalMs());
         }
         if (autoInvalidate && !componentsById.isEmpty()) {
             hostView.postInvalidateOnAnimation();

@@ -9,6 +9,7 @@ Package:
 
 ```java
 import com.ogfa.nativeviews.textfield.TextField;
+import com.ogfa.nativeviews.textfield.TextSelectionActionCallback;
 import com.ogfa.nativeviews.zlayer.ZLayer;
 import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 ```
@@ -228,6 +229,11 @@ render normally, and API 24–25 safely retain the font's normal weight.
 | `setHintColor(color)` | Set hint color |
 | `setCursorColor(color)` | Set cursor color |
 | `setSelectionColor(color)` | Set selection highlight |
+| `setSelectionEnabled(enabled)` | Enable long-press/double-tap selection and Select all |
+| `setCutEnabled(enabled)` | Include or reject Cut actions |
+| `setCopyEnabled(enabled)` | Include or reject Copy actions |
+| `setPasteEnabled(enabled)` | Include or reject Paste actions |
+| `setSelectionActionCallback(callback)` | Customize or handle contextual toolbar actions |
 | `setBackgroundColor(normal, focused)` | Set background states |
 | `setStrokeColor(normal, focused)` | Set border states |
 | `setTextSize(figmaSize)` | Set Figma-scaled text size |
@@ -321,6 +327,38 @@ field.setSelection(index);
 field.setSelection(start, end);
 field.getSelectionStart();
 field.getSelectionEnd();
+field.getSelectionAnchor(); // Raw fixed endpoint; may be greater than the extent
+field.getSelectionExtent(); // Raw actively moving endpoint
+
+field.setSelectionEnabled(true);
+field.setCutEnabled(true);
+field.setCopyEnabled(true);
+field.setPasteEnabled(true);
+```
+
+Customize the contextual toolbar without replacing the built-in clipboard behavior:
+
+```java
+field.setSelectionActionCallback(new TextSelectionActionCallback() {
+    @Override
+    public void onCreateActionMode(TextField field, ActionMode mode, Menu menu) {
+        // Add application-specific actions once.
+    }
+
+    @Override
+    public void onPrepareActionMode(TextField field, ActionMode mode, Menu menu) {
+        // Update, remove, enable, or disable actions as selection state changes.
+    }
+
+    @Override
+    public boolean onActionItemClicked(
+            TextField field,
+            ActionMode mode,
+            MenuItem item
+    ) {
+        return false; // Return true when the application handled the action.
+    }
+});
 ```
 
 Callbacks may also be replaced after creation:
@@ -335,11 +373,30 @@ field.setOnFocusChangedListener(listener);
 
 - `ACTION_DOWN` focuses the topmost enabled field under the pointer.
 - Tapping places the cursor at the nearest character.
-- `ACTION_MOVE` continuously moves the cursor horizontally.
+- Long press and double tap select a locale-aware word.
+- Dragging a selection handle adjusts only that endpoint. Handles do not cross,
+  and the selection retains at least one character.
+- A caret inside the text shows a centered teardrop grip beneath it; dragging
+  the grip moves the cursor without selecting text. The grip is hidden at the
+  end of the text.
+- Pressing the cursor's current line and dragging horizontally also moves the
+  caret along that line; vertical movement continues to scroll multiline text.
+- Start and end handles use directional Android-style teardrop grips below the
+  exact text boundary and remain fully inside the field's drawable area.
+- Tapping inside the highlighted range preserves the selection and shows its
+  contextual toolbar; tapping outside places the cursor normally.
+- The contextual toolbar is anchored above the selection start. If that start
+  scrolls out of view, the toolbar remains above the top edge of the field.
+- Dragging near an edge automatically scrolls long text.
+- Left/right movement and deletion operate on user-visible character boundaries.
 - Long text scrolls horizontally to keep the cursor visible.
 - Selection ranges are drawn when the field is focused.
+- The contextual toolbar dynamically shows applicable localized Cut, Copy, Paste,
+  and Select all actions.
+- Password fields reject Cut and Copy at both the toolbar and input-connection layers.
 - Composing spans from Android keyboards are preserved until committed.
-- Delete, forward-delete, arrow, Enter, and printable hardware keys are supported.
+- Delete, forward-delete, Shift+arrow selection, Ctrl+A/C/X/V, Enter, and printable
+  hardware keys are supported.
 
 ## Group API
 

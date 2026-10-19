@@ -5,11 +5,15 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -63,11 +67,19 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         private static final String TOP_FIELD = "top_field";
         private static final String MIDDLE_FIELD = "middle_field";
         private static final String BOTTOM_FIELD = "bottom_field";
+        private static final String COMPOSER_FIELD = "message_composer";
+        private static final int COMPOSER_MAX_VISIBLE_LINES = 5;
         private static final long PAN_ANIMATION_DURATION_MS = 220L;
 
         private final ZLayerGroup ui;
         private final ZLayer fieldLayer;
         private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint composerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path composerIconPath = new Path();
+        private final RectF composerPanelBounds = new RectF();
+        private final RectF composerFieldBounds = new RectF();
+        private final RectF composerAddBounds = new RectF();
+        private final RectF composerActionBounds = new RectF();
         private final Rect visibleWindow = new Rect();
         private final int[] locationOnScreen = new int[2];
         private final ViewTreeObserver.OnGlobalLayoutListener globalLayoutListener =
@@ -78,6 +90,10 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         private float canvasTranslationY;
         private float panTargetY;
         private ValueAnimator panAnimator;
+        private TextField composerField;
+        private int composerLineCount = 1;
+        private boolean composerAddGesture;
+        private boolean composerActionGesture;
         private String eventMessage =
                 "Tap or drag in any field; NEXT changes focus";
 
@@ -129,6 +145,8 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         }
 
         private void createTextFields() {
+            removeCallbacks(composerGeometryUpdate);
+            composerField = null;
             fieldLayer.clear();
 
             float margin = dp(40);
@@ -175,6 +193,159 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                     ),
                     EditorInfo.IME_ACTION_DONE
             );
+
+            addMessageComposer();
+        }
+
+        /** Mirrors the adaptive message field used by NativeGenieView. */
+        private void addMessageComposer() {
+            composerLineCount = 1;
+            updateComposerBounds(1);
+            composerField = fieldLayer.add(new TextField.Builder(
+                    getContext(),
+                    COMPOSER_FIELD,
+                    new RectF(composerFieldBounds)
+            )
+                    .setHint("Message Genie")
+                    .setMaxLength(500)
+                    .setInputType(
+                            InputType.TYPE_CLASS_TEXT
+                                    | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                                    | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    )
+                    .setImeOptions(
+                            EditorInfo.IME_ACTION_SEND
+                                    | EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                                    | EditorInfo.IME_FLAG_NO_FULLSCREEN
+                    )
+                    .setFont(NativeFonts.INTER)
+                    .setFontVariations(FontVariation.REGULAR)
+                    .setTextSizePx(dp(18))
+                    .setTextColor(Color.WHITE)
+                    .setHintColor(0xff9d9da6)
+                    .setCursorColor(0xff22b573)
+                    .setSelectionColor(0x5522b573)
+                    .setBackgroundColor(Color.TRANSPARENT, Color.TRANSPARENT)
+                    .setStrokeColor(Color.TRANSPARENT, Color.TRANSPARENT)
+                    .setStrokeWidthPx(0f)
+                    .setPaddingPx(0f, 0f)
+                    .setOnFocusChangedListener((fieldId, focused) -> {
+                        if (focused) eventMessage = "Focused: Genie composer";
+                        post(this::updateCanvasTranslation);
+                        invalidate();
+                    })
+                    .setOnTextChangedListener((fieldId, text) -> {
+                        eventMessage = text.trim().isEmpty()
+                                ? "Genie composer is empty"
+                                : "Composer: " + text;
+                        removeCallbacks(composerGeometryUpdate);
+                        post(composerGeometryUpdate);
+                        invalidate();
+                    })
+                    .setOnEditorActionListener((fieldId, action) -> {
+                        if (action != EditorInfo.IME_ACTION_SEND) return false;
+                        submitComposer();
+                        return true;
+                    }));
+        }
+
+        private final Runnable composerGeometryUpdate = () -> {
+            TextField field = composerField;
+            if (field == null) return;
+            int lines = calculateComposerLines(field.getText());
+            if (lines != composerLineCount) {
+                composerLineCount = lines;
+                updateComposerBounds(lines);
+                field.setRegion(new RectF(composerFieldBounds));
+                post(this::updateCanvasTranslation);
+            }
+            invalidate();
+        };
+
+        private int calculateComposerLines(String text) {
+            if (text == null || text.isEmpty() || getWidth() <= 0) return 1;
+            if (measureComposerLines(text, composerSingleLineWidth()) <= 1) return 1;
+            return Math.max(2, Math.min(
+                    COMPOSER_MAX_VISIBLE_LINES,
+                    measureComposerLines(text, composerExpandedWidth())
+            ));
+        }
+
+        private int measureComposerLines(String text, float width) {
+            TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            paint.setTextSize(dp(18));
+            TextField field = composerField;
+            if (field != null) paint.setTypeface(field.getTypeface());
+            StaticLayout layout = StaticLayout.Builder.obtain(
+                            text, 0, text.length(), paint,
+                            Math.max(1, (int) Math.floor(width)))
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false)
+                    .build();
+            return Math.max(1, layout.getLineCount());
+        }
+
+        private void updateComposerBounds(int lines) {
+            float panelLeft = dp(24);
+            float panelRight = getWidth() - dp(24);
+            float panelBottom = getHeight() - dp(155);
+            float controlSize = dp(44);
+            float controlBottom = panelBottom - dp(14);
+            float controlTop = controlBottom - controlSize;
+
+            composerAddBounds.set(
+                    panelLeft + dp(12), controlTop,
+                    panelLeft + dp(12) + controlSize, controlBottom
+            );
+            composerActionBounds.set(
+                    panelRight - dp(12) - controlSize, controlTop,
+                    panelRight - dp(12), controlBottom
+            );
+
+            if (lines <= 1) {
+                float panelTop = panelBottom - dp(72);
+                composerPanelBounds.set(panelLeft, panelTop, panelRight, panelBottom);
+                composerFieldBounds.set(
+                        panelLeft + dp(66), panelTop + dp(9),
+                        panelRight - dp(66), panelBottom - dp(9)
+                );
+                return;
+            }
+
+            float textHeight = composerTextHeight(lines);
+            float textBottom = panelBottom - dp(66);
+            float textTop = textBottom - textHeight;
+            composerPanelBounds.set(
+                    panelLeft, textTop - dp(12), panelRight, panelBottom
+            );
+            composerFieldBounds.set(
+                    panelLeft + dp(20), textTop,
+                    panelRight - dp(20), textBottom
+            );
+        }
+
+        private float composerTextHeight(int lines) {
+            TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            paint.setTextSize(dp(18));
+            TextField field = composerField;
+            if (field != null) paint.setTypeface(field.getTypeface());
+            StringBuilder probe = new StringBuilder("Ag");
+            for (int line = 1; line < lines; line++) probe.append("\nAg");
+            StaticLayout layout = StaticLayout.Builder.obtain(
+                            probe, 0, probe.length(), paint,
+                            Math.max(1, (int) composerExpandedWidth()))
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false)
+                    .build();
+            return layout.getHeight() + dp(2);
+        }
+
+        private float composerSingleLineWidth() {
+            return Math.max(1f, composerPanelBounds.width() - dp(132));
+        }
+
+        private float composerExpandedWidth() {
+            return Math.max(1f, getWidth() - dp(88));
         }
 
         private void addTestField(
@@ -276,8 +447,78 @@ public final class TextFieldTestActivity extends AppCompatActivity {
             int saveCount = canvas.save();
             canvas.translate(0f, canvasTranslationY);
             drawLabels(canvas);
+            drawComposerChrome(canvas);
             ui.draw(canvas);
             canvas.restoreToCount(saveCount);
+        }
+
+        private void drawComposerChrome(Canvas canvas) {
+            if (composerField == null) return;
+
+            float radius = dp(28);
+            composerPaint.setStyle(Paint.Style.FILL);
+            composerPaint.setColor(0xff1c1c1f);
+            canvas.drawRoundRect(composerPanelBounds, radius, radius, composerPaint);
+            composerPaint.setStyle(Paint.Style.STROKE);
+            composerPaint.setStrokeWidth(dp(1));
+            composerPaint.setColor(0xff3e3e44);
+            RectF strokeBounds = new RectF(composerPanelBounds);
+            strokeBounds.inset(dp(1), dp(1));
+            canvas.drawRoundRect(strokeBounds, radius - dp(1), radius - dp(1), composerPaint);
+
+            composerPaint.setStyle(Paint.Style.FILL);
+            composerPaint.setColor(0xff29292e);
+            canvas.drawOval(composerAddBounds, composerPaint);
+            canvas.drawOval(composerActionBounds, composerPaint);
+
+            composerPaint.setStyle(Paint.Style.STROKE);
+            composerPaint.setStrokeCap(Paint.Cap.ROUND);
+            composerPaint.setStrokeWidth(dp(2));
+            composerPaint.setColor(0xffd8d8dd);
+            float addCx = composerAddBounds.centerX();
+            float addCy = composerAddBounds.centerY();
+            float plusRadius = dp(7);
+            canvas.drawLine(addCx - plusRadius, addCy,
+                    addCx + plusRadius, addCy, composerPaint);
+            canvas.drawLine(addCx, addCy - plusRadius,
+                    addCx, addCy + plusRadius, composerPaint);
+
+            composerPaint.setStyle(Paint.Style.FILL);
+            composerPaint.setColor(0xff22b573);
+            if (composerField.getText().trim().isEmpty()) {
+                float cx = composerActionBounds.centerX();
+                float cy = composerActionBounds.centerY();
+                composerPaint.setStyle(Paint.Style.STROKE);
+                composerPaint.setStrokeWidth(dp(2));
+                canvas.drawRoundRect(
+                        cx - dp(4), cy - dp(9),
+                        cx + dp(4), cy + dp(4),
+                        dp(4), dp(4), composerPaint
+                );
+                canvas.drawArc(
+                        cx - dp(9), cy - dp(4),
+                        cx + dp(9), cy + dp(9),
+                        0f, 180f, false, composerPaint
+                );
+                canvas.drawLine(cx, cy + dp(9), cx, cy + dp(13), composerPaint);
+            } else {
+                composerIconPath.reset();
+                composerIconPath.moveTo(
+                        composerActionBounds.centerX() - dp(8),
+                        composerActionBounds.centerY() - dp(9)
+                );
+                composerIconPath.lineTo(
+                        composerActionBounds.centerX() + dp(11),
+                        composerActionBounds.centerY()
+                );
+                composerIconPath.lineTo(
+                        composerActionBounds.centerX() - dp(8),
+                        composerActionBounds.centerY() + dp(9)
+                );
+                composerIconPath.close();
+                canvas.drawPath(composerIconPath, composerPaint);
+            }
+            composerPaint.setStrokeCap(Paint.Cap.BUTT);
         }
 
         private void drawLabels(Canvas canvas) {
@@ -307,9 +548,53 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         public boolean onTouchEvent(MotionEvent event) {
             MotionEvent translatedEvent = MotionEvent.obtain(event);
             translatedEvent.offsetLocation(0f, -canvasTranslationY);
-            boolean handled = ui.onTouchEvent(translatedEvent);
+            boolean handled = handleComposerControlTouch(translatedEvent)
+                    || ui.onTouchEvent(translatedEvent);
             translatedEvent.recycle();
             return handled || super.onTouchEvent(event);
+        }
+
+        private boolean handleComposerControlTouch(MotionEvent event) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                composerAddGesture = composerAddBounds.contains(
+                        event.getX(), event.getY());
+                composerActionGesture = composerActionBounds.contains(
+                        event.getX(), event.getY());
+                return composerAddGesture || composerActionGesture;
+            }
+            if (!composerAddGesture && !composerActionGesture) return false;
+            if (action == MotionEvent.ACTION_UP) {
+                if (composerAddGesture && composerAddBounds.contains(
+                        event.getX(), event.getY())) {
+                    eventMessage = "Genie attachment action";
+                    invalidate();
+                } else if (composerActionGesture && composerActionBounds.contains(
+                        event.getX(), event.getY())) {
+                    submitComposer();
+                }
+                composerAddGesture = false;
+                composerActionGesture = false;
+            } else if (action == MotionEvent.ACTION_CANCEL) {
+                composerAddGesture = false;
+                composerActionGesture = false;
+            }
+            return true;
+        }
+
+        private void submitComposer() {
+            TextField field = composerField;
+            if (field == null) return;
+            String message = field.getText().trim();
+            if (message.isEmpty()) {
+                eventMessage = "Genie voice action";
+            } else {
+                field.clear();
+                eventMessage = "Sent: " + message;
+            }
+            field.clearFocus();
+            post(composerGeometryUpdate);
+            invalidate();
         }
 
         @Override
@@ -411,6 +696,7 @@ public final class TextFieldTestActivity extends AppCompatActivity {
         }
 
         public void release() {
+            removeCallbacks(composerGeometryUpdate);
             if (getViewTreeObserver().isAlive()) {
                 getViewTreeObserver().removeOnGlobalLayoutListener(
                         globalLayoutListener
