@@ -31,6 +31,7 @@ import java.util.Objects;
 
 public final class TextInputCoordinator implements TextFieldHost, AutoCloseable {
    private static final String PROFILE_TAG = "TextInputProfile";
+   private static final String INPUT_TAG = "TextFieldInput";
    private final View hostView;
    private final InputMethodManager inputMethodManager;
    private final ArrayList<TextField> drawingOrder = new ArrayList();
@@ -223,6 +224,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
 
    public boolean requestFocus(TextField var1) {
       if (var1 != null && var1.isEnabled()) {
+         Log.d(INPUT_TAG, "event=request_focus field=" + var1.getId()
+               + " previous=" + (this.focusedField == null ? "none" : this.focusedField.getId()));
          if (this.focusedField != var1) {
             if (this.selectionActionMode != null) this.selectionActionMode.finish();
             if (this.focusedField != null) {
@@ -238,7 +241,13 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
          this.restartInput();
          this.hostView.post(() -> {
             if (this.focusedField == var1 && this.inputMethodManager != null) {
-               this.inputMethodManager.showSoftInput(this.hostView, 1);
+               boolean shown = this.inputMethodManager.showSoftInput(this.hostView, 1);
+               Log.d(INPUT_TAG, "event=show_soft_input field=" + var1.getId()
+                     + " accepted=" + shown);
+             } else {
+               Log.d(INPUT_TAG, "event=show_soft_input_skipped field=" + var1.getId()
+                     + " focused=" + (this.focusedField == null ? "none" : this.focusedField.getId())
+                     + " immAvailable=" + (this.inputMethodManager != null));
             }
 
          });
@@ -255,12 +264,18 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
 
    private void hideKeyboardAndRestartInput() {
       if (this.inputMethodManager != null) {
-         this.inputMethodManager.hideSoftInputFromWindow(this.hostView.getWindowToken(), 0);
+         boolean hidden = this.inputMethodManager.hideSoftInputFromWindow(this.hostView.getWindowToken(), 0);
+         Log.d(INPUT_TAG, "event=hide_soft_input accepted=" + hidden);
          this.inputMethodManager.restartInput(this.hostView);
+      } else {
+         Log.d(INPUT_TAG, "event=hide_soft_input_skipped immAvailable=false");
       }
    }
 
    private void clearFocus(boolean notifyListener, boolean expirePendingTransfer) {
+      Log.d(INPUT_TAG, "event=clear_focus field="
+            + (this.focusedField == null ? "none" : this.focusedField.getId())
+            + " pendingTransfer=" + this.focusTransferProfile.hasPending());
       this.hostView.removeCallbacks(this.pendingFocusDismissRunnable);
       if (expirePendingTransfer && this.focusTransferProfile.hasPending()) {
          this.focusTransferProfile.expire(SystemClock.uptimeMillis());

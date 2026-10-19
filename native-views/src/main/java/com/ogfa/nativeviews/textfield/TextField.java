@@ -104,6 +104,8 @@ public final class TextField implements Component {
    private boolean touchInsideSelection;
    private boolean touchCursorDragCandidate;
    private boolean touchCursorDragging;
+   private boolean doubleTapSelecting;
+   private boolean touchStayedInTapRegion;
    private int touchedSelectionHandle;
    private float cursorDragOffsetX;
    private float cursorDragOffsetY;
@@ -116,11 +118,13 @@ public final class TextField implements Component {
    private final Runnable selectionAutoScrollRunnable = this::runSelectionAutoScroll;
    private float touchDownX;
    private float touchDownY;
+   private long touchDownTime;
    private float touchLastY;
    private long lastTapUpTime;
    private float lastTapX;
    private float lastTapY;
    private final int touchSlop;
+   private final int doubleTapSlop;
    private final Runnable touchLongPressRunnable = this::handleTouchLongPress;
    private boolean password;
    private boolean selectionEnabled;
@@ -138,6 +142,7 @@ public final class TextField implements Component {
       this.context = var1.context.getApplicationContext();
       this.hostView = (View)Objects.requireNonNull(var2, "Host view cannot be null.");
       this.touchSlop = ViewConfiguration.get(var2.getContext()).getScaledTouchSlop();
+      this.doubleTapSlop = ViewConfiguration.get(var2.getContext()).getScaledDoubleTapSlop();
       this.id = requireId(var1.id);
       this.baseBounds.set(var1.resolveBounds(var2));
       requireBounds(this.baseBounds);
@@ -584,6 +589,8 @@ public final class TextField implements Component {
    void detach() {
       this.hostView.removeCallbacks(this.touchLongPressRunnable);
       this.stopSelectionAutoScroll();
+      this.lastTapUpTime = 0L;
+      this.doubleTapSelecting = false;
       this.collapseSelectionOnBlur();
       this.focused = false;
       this.owner = null;
@@ -621,6 +628,8 @@ public final class TextField implements Component {
             this.ensureSelection();
             this.ensureCursorVisible();
          } else {
+             this.lastTapUpTime = 0L;
+             this.doubleTapSelecting = false;
             this.collapseSelectionOnBlur();
          }
 
@@ -645,7 +654,8 @@ public final class TextField implements Component {
       return this.visible && this.enabled && this.bounds.contains(var1, var2);
    }
 
-   private boolean containsSelectionHandle(float x, float y) {
+   /** Whether a touch hits a visible cursor or selection handle in the owning layer's coordinates. */
+   public boolean containsSelectionHandle(float x, float y) {
       return this.visible && this.enabled && this.focused
               && this.handleTouchBounds().contains(x, y)
               && this.touchedSelectionHandle(x, y) != 0;
@@ -660,9 +670,13 @@ public final class TextField implements Component {
    }
 
    boolean selectWordAt(float var1, float var2) {
+      return this.selectWordAtOffset(this.cursorOffsetFromTouch(var1, var2));
+   }
+
+   private boolean selectWordAtOffset(int offset) {
       if (this.editable.length() != 0 && !this.password && this.selectionEnabled) {
          int[] range = TextBoundaryHelper.wordAt(
-                 this.editable, this.cursorOffsetFromTouch(var1, var2));
+                 this.editable, offset);
          this.setSelection(range[0], range[1]);
          this.selectionAnchorStart = range[0];
          this.selectionAnchorEnd = range[1];
@@ -824,26 +838,37 @@ public final class TextField implements Component {
                this.touchedSelectionHandle = this.touchedSelectionHandle(var1.getX(), var1.getY());
                this.touchInsideSelection = this.touchedSelectionHandle == 0
                        && this.isTouchInsideSelection(var1.getX(), var1.getY());
+               boolean secondTap = this.isSecondTap(var1)
+                       && this.touchedSelectionHandle != 1
+                       && this.touchedSelectionHandle != 2
+                       && !this.touchInsideSelection;
+               this.doubleTapSelecting = secondTap && (this.touchedSelectionHandle == 3
+                       ? this.selectWordAtOffset(this.normalizedSelectionEnd())
+                       : this.selectWordAt(var1.getX(), var1.getY()));
+               if (this.doubleTapSelecting) this.lastTapUpTime = 0L;
                if (this.touchedSelectionHandle == 0) {
-                  if (!this.touchInsideSelection) {
+                  if (!this.touchInsideSelection && !this.doubleTapSelecting) {
                      this.placeCursorFromTouch(var1.getX(), var1.getY());
                       this.touchCursorDragCandidate = true;
                   }
-               } else {
+               } else if (!this.doubleTapSelecting) {
                   this.selectionAnchorStart = this.normalizedSelectionStart();
                   this.selectionAnchorEnd = this.normalizedSelectionEnd();
                   if (this.touchedSelectionHandle == 3) {
                      PointF endpoint = this.cursorHandleEndpoint();
                      this.cursorDragOffsetX = var1.getX() - endpoint.x;
-                     this.cursorDragOffsetY = var1.getY() - endpoint.y;
+                     this.cursorDragOffsetY = var1.getY() - this.cursorDragAnchorY(endpoint);
                   }
                }
 
                this.touchDownX = var1.getX();
                this.touchDownY = this.touchLastY = var1.getY();
+               this.touchDownTime = var1.getEventTime();
                this.touchDragging = false;
                this.touchLongPressTriggered = false;
-               if (this.touchedSelectionHandle == 0 && !this.touchInsideSelection) {
+               this.touchStayedInTapRegion = true;
+               if (this.touchedSelectionHandle == 0 && !this.touchInsideSelection
+                       && !this.doubleTapSelecting) {
                   this.hostView.postDelayed(this.touchLongPressRunnable, (long)ViewConfiguration.getLongPressTimeout());
                }
             }
@@ -852,33 +877,32 @@ public final class TextField implements Component {
          case 1:
             this.hostView.removeCallbacks(this.touchLongPressRunnable);
             boolean var3 = this.touchCaptured;
-            boolean var5 = this.touchCaptured && !this.touchDragging
-                    && !this.touchLongPressTriggered && this.touchedSelectionHandle == 0
-                    && !this.touchInsideSelection;
-            if (var5) {
-               long var6 = var1.getEventTime();
-               float var8 = var1.getX() - this.lastTapX;
-               float var9 = var1.getY() - this.lastTapY;
-               float var10 = (float)(this.touchSlop * 2);
-               boolean var11 = this.lastTapUpTime > 0L
-                       && var6 - this.lastTapUpTime
-                       <= (long)ViewConfiguration.getDoubleTapTimeout()
-                       && var8 * var8 + var9 * var9 <= var10 * var10;
-               if (var11 && this.selectWordAt(var1.getX(), var1.getY())) {
-                  this.lastTapUpTime = 0L;
-                  if (this.owner != null) {
-                     this.owner.showSelectionActionMode(this);
-                  }
-               } else {
-                  this.lastTapUpTime = var6;
-                  this.lastTapX = var1.getX();
-                  this.lastTapY = var1.getY();
-               }
+            if (this.touchCaptured && this.touchStayedInTapRegion) {
+               float dx = var1.getX() - this.touchDownX;
+               float dy = var1.getY() - this.touchDownY;
+               this.touchStayedInTapRegion = dx * dx + dy * dy
+                       <= (float)this.touchSlop * (float)this.touchSlop;
+            }
+            boolean completedTap = this.touchCaptured && !this.touchDragging
+                    && !this.touchLongPressTriggered && !this.doubleTapSelecting
+                    && this.touchStayedInTapRegion && this.touchedSelectionHandle == 0
+                    && !this.touchInsideSelection
+                    && var1.getEventTime() - this.touchDownTime
+                    <= (long)ViewConfiguration.getDoubleTapTimeout();
+            if (completedTap) {
+               this.lastTapUpTime = var1.getEventTime();
+               this.lastTapX = this.touchDownX;
+               this.lastTapY = this.touchDownY;
+            } else {
+               this.lastTapUpTime = 0L;
+            }
+            if (this.doubleTapSelecting && this.owner != null) {
+               this.owner.showSelectionActionMode(this);
             }
 
             if (this.touchInsideSelection && !this.touchDragging
-                    && this.owner != null) {
-               this.owner.showSelectionActionMode(this);
+                    && this.touchStayedInTapRegion) {
+               this.placeCursorFromTouch(var1.getX(), var1.getY());
             }
             if ((this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
                     && this.owner != null) {
@@ -888,6 +912,7 @@ public final class TextField implements Component {
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
             this.touchInsideSelection = false;
+            this.doubleTapSelecting = false;
              this.touchCursorDragCandidate = false;
              this.touchCursorDragging = false;
             this.touchedSelectionHandle = 0;
@@ -896,6 +921,20 @@ public final class TextField implements Component {
          case 2:
             if (!this.touchCaptured) {
                return false;
+            }
+            if (this.touchStayedInTapRegion) {
+               float dx = var1.getX() - this.touchDownX;
+               float dy = var1.getY() - this.touchDownY;
+               this.touchStayedInTapRegion = dx * dx + dy * dy
+                       <= (float)this.touchSlop * (float)this.touchSlop;
+               if (!this.touchStayedInTapRegion) {
+                  this.hostView.removeCallbacks(this.touchLongPressRunnable);
+               }
+            }
+            if (this.doubleTapSelecting) {
+               this.extendDoubleTapSelection(var1.getX(), var1.getY());
+               this.updateSelectionAutoScroll(var1.getX(), var1.getY());
+               return true;
             } else if (this.touchedSelectionHandle != 0) {
                this.applySelectionDrag(var1.getX(), var1.getY());
                this.updateSelectionAutoScroll(var1.getX(), var1.getY());
@@ -946,6 +985,8 @@ public final class TextField implements Component {
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
             this.touchInsideSelection = false;
+            this.doubleTapSelecting = false;
+            this.lastTapUpTime = 0L;
              this.touchCursorDragCandidate = false;
              this.touchCursorDragging = false;
             this.touchedSelectionHandle = 0;
@@ -970,6 +1011,16 @@ public final class TextField implements Component {
       }
    }
 
+   private boolean isSecondTap(MotionEvent event) {
+      if (this.lastTapUpTime <= 0L
+              || event.getEventTime() - this.lastTapUpTime
+              > (long)ViewConfiguration.getDoubleTapTimeout()) return false;
+      float dx = event.getX() - this.lastTapX;
+      float dy = event.getY() - this.lastTapY;
+      return dx * dx + dy * dy
+              <= (float)this.doubleTapSlop * (float)this.doubleTapSlop;
+   }
+
    private boolean isTouchInsideSelection(float x, float y) {
       int start = this.normalizedSelectionStart();
       int end = this.normalizedSelectionEnd();
@@ -990,8 +1041,21 @@ public final class TextField implements Component {
 
    }
 
+   private void extendDoubleTapSelection(float x, float y) {
+      int[] word = TextBoundaryHelper.wordAt(this.editable, this.cursorOffsetFromTouch(x, y));
+      if (word[0] < this.selectionAnchorStart) {
+         this.setSelection(word[0], this.selectionAnchorEnd);
+      } else if (word[1] > this.selectionAnchorEnd) {
+         this.setSelection(this.selectionAnchorStart, word[1]);
+      } else {
+         this.setSelection(this.selectionAnchorStart, this.selectionAnchorEnd);
+      }
+   }
+
    private void applySelectionDrag(float var1, float var2) {
-      if (this.touchedSelectionHandle == 3) {
+      if (this.doubleTapSelecting) {
+         this.extendDoubleTapSelection(var1, var2);
+      } else if (this.touchedSelectionHandle == 3) {
          this.placeCursorFromTouch(var1 - this.cursorDragOffsetX,
                  var2 - this.cursorDragOffsetY);
       } else if (this.touchedSelectionHandle == 1) {
@@ -1019,13 +1083,17 @@ public final class TextField implements Component {
    private void updateSelectionAutoScroll(float var1, float var2) {
       this.selectionDragX = var1;
       this.selectionDragY = var2;
+      float scrollX = this.touchedSelectionHandle == 3 && !this.doubleTapSelecting
+              ? var1 - this.cursorDragOffsetX : var1;
+      float scrollY = this.touchedSelectionHandle == 3 && !this.doubleTapSelecting
+              ? var2 - this.cursorDragOffsetY : var2;
       RectF var3 = this.contentBounds();
       float var4 = Math.max(16.0F, this.textSizePx * 0.8F);
       if (!this.isMultiline()) {
          float var5 = this.maxHorizontalScroll();
-         if (var1 <= var3.left + var4 && this.horizontalScrollPx > 0.0F) {
+         if (scrollX <= var3.left + var4 && this.horizontalScrollPx > 0.0F) {
             this.selectionAutoScrollDirection = -1;
-         } else if (var1 >= var3.right - var4
+         } else if (scrollX >= var3.right - var4
                  && this.horizontalScrollPx < var5 - 0.5F) {
             this.selectionAutoScrollDirection = 1;
          } else {
@@ -1038,10 +1106,10 @@ public final class TextField implements Component {
             return;
          }
 
-         if (var2 <= var3.top + var4 && this.verticalScrollPx > 0.0F) {
+         if (scrollY <= var3.top + var4 && this.verticalScrollPx > 0.0F) {
             this.selectionAutoScrollDirection = -1;
          } else {
-            if (!(var2 >= var3.bottom - var4) || !this.canScrollMultilineForward()) {
+            if (!(scrollY >= var3.bottom - var4) || !this.canScrollMultilineForward()) {
                this.stopSelectionAutoScroll();
                return;
             }
@@ -1059,7 +1127,8 @@ public final class TextField implements Component {
    private void runSelectionAutoScroll() {
       this.selectionAutoScrollPosted = false;
       if (this.touchCaptured && this.selectionAutoScrollDirection != 0
-              && (this.touchLongPressTriggered || this.touchedSelectionHandle != 0
+              && (this.touchLongPressTriggered || this.doubleTapSelecting
+              || this.touchedSelectionHandle != 0
               || this.touchCursorDragging)) {
          float var2 = Math.max(4.0F, this.textSizePx * 0.32F) * (float)this.selectionAutoScrollDirection;
          float var1;
@@ -1261,6 +1330,17 @@ public final class TextField implements Component {
               content.left - this.horizontalScrollPx
                       + this.measurePrefix(this.getDisplayText(), offset),
               baseline + metrics.descent);
+   }
+
+   private float cursorDragAnchorY(PointF endpoint) {
+      if (!this.isMultiline()) return endpoint.y;
+      RectF content = this.contentBounds();
+      StaticLayout layout = this.multilineLayout(this.getDisplayText(), this.textPaint, false);
+      int line = layout.getLineForOffset(this.normalizedSelectionEnd());
+      float top = this.multilineLayoutTop(content, layout);
+      float visibleTop = Math.max(content.top, top + layout.getLineTop(line));
+      float visibleBottom = Math.min(content.bottom, top + this.handleLineBottom(layout, line));
+      return (visibleTop + visibleBottom) / 2.0F;
    }
 
    private void drawCursorHandle(Canvas canvas, RectF content) {

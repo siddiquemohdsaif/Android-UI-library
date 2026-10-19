@@ -25,6 +25,7 @@ import java.util.Objects;
 public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         NestedComponentHost,
         ZLayerOwner, AutoCloseable {
+    private static final String TEXT_INPUT_TAG = "TextFieldInput";
     private final View hostView;
     private final ArrayList<ZLayer> layers = new ArrayList<>();
     private final Map<String, ZLayer> layersById = new LinkedHashMap<>();
@@ -197,14 +198,26 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         if (focusedField == null) return false;
 
         RectF focusedBounds = new RectF(focusedField.getBounds());
+        float localX = event.getX();
+        float localY = event.getY();
         for (ZLayer layer : layers) {
             if (layer.contains(focusedField.getId())) {
                 focusedBounds.offset(layer.getTranslationX(), layer.getTranslationY());
+                localX -= layer.getTranslationX();
+                localY -= layer.getTranslationY();
                 break;
             }
         }
-        if (focusedBounds.contains(event.getX(), event.getY())) return false;
+        boolean insideBounds = focusedBounds.contains(event.getX(), event.getY());
+        boolean onHandle = focusedField.containsSelectionHandle(localX, localY);
+        boolean inside = insideBounds || onHandle;
+        Log.d(TEXT_INPUT_TAG, "event=touch_down focused=" + focusedField.getId()
+                + " x=" + event.getX() + " y=" + event.getY()
+                + " bounds=" + focusedBounds + " insideBounds=" + insideBounds
+                + " onHandle=" + onHandle + " inside=" + inside);
+        if (inside) return false;
 
+        Log.d(TEXT_INPUT_TAG, "event=outside_touch_clear_focus field=" + focusedField.getId());
         textInput.clearFocus();
         return true;
     }

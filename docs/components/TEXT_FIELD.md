@@ -373,7 +373,9 @@ field.setOnFocusChangedListener(listener);
 
 - `ACTION_DOWN` focuses the topmost enabled field under the pointer.
 - Tapping places the cursor at the nearest character.
-- Long press and double tap select a locale-aware word.
+- Long press and double tap select a locale-aware word. Double tap selection
+  starts on the second touch-down; dragging that second touch extends the
+  selection by words, and the contextual toolbar appears on release.
 - Dragging a selection handle adjusts only that endpoint. Handles do not cross,
   and the selection retains at least one character.
 - A caret inside the text shows a centered teardrop grip beneath it; dragging
@@ -383,8 +385,9 @@ field.setOnFocusChangedListener(listener);
   caret along that line; vertical movement continues to scroll multiline text.
 - Start and end handles use directional Android-style teardrop grips below the
   exact text boundary and remain fully inside the field's drawable area.
-- Tapping inside the highlighted range preserves the selection and shows its
-  contextual toolbar; tapping outside places the cursor normally.
+- Tapping inside the highlighted range collapses the selection at the tapped
+  position. Dragging from highlighted text keeps the selection while the field
+  scrolls; tapping outside places the cursor normally.
 - The contextual toolbar is anchored above the selection start. If that start
   scrolls out of view, the toolbar remains above the top edge of the field.
 - Dragging near an edge automatically scrolls long text.
