@@ -371,11 +371,22 @@ field.setOnFocusChangedListener(listener);
 
 ## Cursor and selection behavior
 
+- Dragging a cursor or selection handle shows a custom rounded magnifier above
+  the active text boundary. The lens redraws the same text, highlight, and caret
+  layout at a larger scale, clips wrapped text to the active line, and chooses a
+  readable background for light or dark text. It disappears when the gesture
+  ends or focus is lost.
+  `ZLayerGroup` draws it after all layers so it remains above other components.
+  The toolbar closes first, then the magnifier opens after 300 ms. When the
+  gesture ends, the magnifier closes and the toolbar returns after 300 ms.
 - `ACTION_DOWN` focuses the topmost enabled field under the pointer.
 - Tapping places the cursor at the nearest character.
 - Long press and double tap select a locale-aware word. Double tap selection
   starts on the second touch-down; dragging that second touch extends the
-  selection by words, and the contextual toolbar appears on release.
+  selection by words, and the contextual toolbar appears after release.
+- Long press in an empty field or at the end caret opens the insertion toolbar
+  after release. Paste appears there when the field allows it and the clipboard
+  has content.
 - Dragging a selection handle adjusts only that endpoint. Handles do not cross,
   and the selection retains at least one character.
 - A caret inside the text shows a centered teardrop grip beneath it; dragging
@@ -394,8 +405,15 @@ field.setOnFocusChangedListener(listener);
 - Left/right movement and deletion operate on user-visible character boundaries.
 - Long text scrolls horizontally to keep the cursor visible.
 - Selection ranges are drawn when the field is focused.
-- The contextual toolbar dynamically shows applicable localized Cut, Copy, Paste,
-  and Select all actions.
+- The contextual toolbar dynamically shows applicable Cut, Copy, Paste, Select all,
+  Share, and Replace actions. Share appears for a nonempty selection outside a
+  password field and opens Android's share chooser with the selected text.
+  Replace appears only when the selected text or cursor is covered by a
+  `SuggestionSpan` with a different candidate, and opens a picker for those
+  candidates. The field's `Editable` must receive suggestion spans from an IME
+  or application; this Canvas field does not generate spelling suggestions.
+  When four or more actions are visible, Share and Replace appear in Android's
+  three-dot overflow menu.
 - Password fields reject Cut and Copy at both the toolbar and input-connection layers.
 - Composing spans from Android keyboards are preserved until committed.
 - Delete, forward-delete, Shift+arrow selection, Ctrl+A/C/X/V, Enter, and printable

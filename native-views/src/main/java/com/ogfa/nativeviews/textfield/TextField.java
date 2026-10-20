@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
@@ -38,6 +40,7 @@ import java.util.Objects;
 
 public final class TextField implements Component {
    public static final long DEFAULT_CURSOR_BLINK_INTERVAL_MS = 500L;
+   private static final long MAGNIFIER_TOOLBAR_DELAY_MS = 100L;
    private final Context context;
    private final View hostView;
    private final String id;
@@ -50,6 +53,8 @@ public final class TextField implements Component {
    private final Paint strokePaint = new Paint(1);
    private final Paint cursorPaint = new Paint(1);
    private final Paint selectionPaint = new Paint(1);
+   private final Paint magnifierPaint = new Paint(1);
+   private final Matrix drawMatrix = new Matrix();
    private final Paint scrollBarPaint = new Paint(1);
    private final Drawable startHandleDrawable;
    private final Drawable endHandleDrawable;
@@ -103,8 +108,11 @@ public final class TextField implements Component {
    private boolean touchLongPressTriggered;
    private boolean touchInsideSelection;
    private boolean touchCursorDragCandidate;
+   private boolean touchLongPressInsertion;
    private boolean touchCursorDragging;
    private boolean selectionHandleDragging;
+   private boolean magnifierVisible;
+   private boolean magnifierPending;
    private boolean doubleTapSelecting;
    private boolean touchStayedInTapRegion;
    private int touchedSelectionHandle;
@@ -118,6 +126,19 @@ public final class TextField implements Component {
    private float selectionDragY;
    private boolean selectionAutoScrollPosted;
    private final Runnable selectionAutoScrollRunnable = this::runSelectionAutoScroll;
+   private final Runnable showMagnifierRunnable = () -> {
+      this.magnifierPending = false;
+      if (this.touchCaptured && this.focused && this.visible) {
+         this.magnifierVisible = true;
+         this.invalidate();
+      }
+   };
+   private final Runnable showSelectionToolbarRunnable = () -> {
+      if (!this.touchCaptured && !this.magnifierVisible
+              && this.owner != null && this.focused) {
+         this.showTextActionMode();
+      }
+   };
    private float touchDownX;
    private float touchDownY;
    private long touchDownTime;
@@ -589,6 +610,7 @@ public final class TextField implements Component {
    }
 
    void detach() {
+      this.hideMagnifier();
       this.hostView.removeCallbacks(this.touchLongPressRunnable);
       this.stopSelectionAutoScroll();
       this.lastTapUpTime = 0L;
@@ -630,6 +652,7 @@ public final class TextField implements Component {
             this.ensureSelection();
             this.ensureCursorVisible();
          } else {
+            this.hideMagnifier();
              this.lastTapUpTime = 0L;
              this.doubleTapSelecting = false;
             this.collapseSelectionOnBlur();
@@ -675,6 +698,16 @@ public final class TextField implements Component {
       return this.selectWordAtOffset(this.cursorOffsetFromTouch(var1, var2));
    }
 
+   boolean isLongPressAtTextEnd(float x, float y) {
+      if (this.editable.length() == 0
+              || this.normalizedSelectionStart() != this.editable.length()
+              || this.normalizedSelectionEnd() != this.editable.length()) return false;
+      PointF caret = this.magnifierSourcePoint();
+      RectF line = this.magnifierLineBounds();
+      return x >= caret.x - this.touchSlop && x <= line.right + this.touchSlop
+              && y >= line.top - this.touchSlop && y <= line.bottom + this.touchSlop;
+   }
+
    private boolean selectWordAtOffset(int offset) {
       if (this.editable.length() != 0 && !this.password && this.selectionEnabled) {
          int[] range = TextBoundaryHelper.wordAt(
@@ -716,6 +749,13 @@ public final class TextField implements Component {
    }
 
    public void draw(Canvas var1) {
+      if (!this.visible) return;
+      var1.getMatrix(this.drawMatrix);
+      this.drawField(var1, true, false);
+   }
+
+   /** The regular pass draws the field chrome around shared text content. */
+   private void drawField(Canvas var1, boolean drawHandles, boolean forceCursor) {
       if (this.visible) {
          this.backgroundPaint.setColor(this.focused ? this.focusedBackgroundColor : this.backgroundColor);
          var1.drawRoundRect(this.bounds, this.cornerRadiusPx, this.cornerRadiusPx, this.backgroundPaint);
@@ -726,7 +766,12 @@ public final class TextField implements Component {
             var3.inset(var2, var2);
             var1.drawRoundRect(var3, Math.max(0.0F, this.cornerRadiusPx - var2), Math.max(0.0F, this.cornerRadiusPx - var2), this.strokePaint);
          }
+         this.drawTextContent(var1, drawHandles, forceCursor);
+      }
+   }
 
+   /** Uses the same layout, selection and caret geometry in both render passes. */
+   private void drawTextContent(Canvas var1, boolean drawHandles, boolean forceCursor) {
          RectF var19 = this.contentBounds();
          int var20 = var1.save();
          var1.clipRect(var19);
@@ -751,7 +796,7 @@ public final class TextField implements Component {
             var1.translate(var19.left, var9);
             var21.draw(var1);
             var1.restore();
-            if (this.focused && this.enabled && this.isCursorVisible()
+            if (this.focused && this.enabled && (forceCursor || this.isCursorVisible())
                     && this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                StaticLayout var22 = this.multilineLayout(var4, this.textPaint, false);
                var11 = clamp(this.normalizedSelectionEnd(), 0, var22.getText().length());
@@ -767,9 +812,9 @@ public final class TextField implements Component {
                        this.cursorPaint);
             }
 
-            this.drawMultilineScrollBar(var1, var19, var21);
+            if (drawHandles) this.drawMultilineScrollBar(var1, var19, var21);
             var1.restoreToCount(var20);
-            if (this.focused && this.enabled && this.editable.length() > 0) {
+            if (drawHandles && this.focused && this.enabled && this.editable.length() > 0) {
                if (this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                   this.drawCursorHandle(var1, var19);
                } else if (!this.password) {
@@ -785,7 +830,7 @@ public final class TextField implements Component {
             }
 
             var1.drawText((CharSequence)var7, 0, ((CharSequence)var7).length(), var10, var9, var6);
-            if (this.focused && this.enabled && this.isCursorVisible()
+            if (this.focused && this.enabled && (forceCursor || this.isCursorVisible())
                     && this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                var11 = this.normalizedSelectionEnd();
                float var12 = var10 + this.measurePrefix(var4, var11);
@@ -804,7 +849,7 @@ public final class TextField implements Component {
             }
 
             var1.restoreToCount(var20);
-            if (this.focused && this.enabled && this.editable.length() > 0) {
+            if (drawHandles && this.focused && this.enabled && this.editable.length() > 0) {
                if (this.normalizedSelectionStart() == this.normalizedSelectionEnd()) {
                   this.drawCursorHandle(var1, var19);
                } else if (!this.password) {
@@ -812,6 +857,140 @@ public final class TextField implements Component {
                }
             }
          }
+   }
+
+   /** Drawn by the group after every layer so the lens stays above the scene. */
+   public void drawMagnifier(Canvas canvas) {
+      if (!this.magnifierVisible || !this.focused || !this.visible) return;
+      if (this.hostView.getWidth() <= 0 || this.hostView.getHeight() <= 0) return;
+      PointF source = this.magnifierSourcePoint();
+      float[] mapped = {source.x, source.y};
+      this.drawMatrix.mapPoints(mapped);
+      float density = this.context.getResources().getDisplayMetrics().density;
+      float margin = 4f * density;
+      float width = Math.min(124f * density,
+              Math.max(1f, this.hostView.getWidth() - margin * 2f));
+      float height = Math.min(52f * density,
+              Math.max(1f, this.hostView.getHeight() - margin * 2f));
+      float halfWidth = width / 2f;
+      float halfHeight = height / 2f;
+      float centerX = Math.max(halfWidth + margin,
+              Math.min(mapped[0], this.hostView.getWidth() - halfWidth - margin));
+      float centerY = mapped[1] - 68f * density;
+      if (centerY - halfHeight < margin) centerY = mapped[1] + 68f * density;
+      centerY = Math.max(halfHeight + margin,
+              Math.min(centerY, this.hostView.getHeight() - halfHeight - margin));
+
+      int save = canvas.save();
+      canvas.setMatrix(new Matrix());
+      RectF lens = new RectF(centerX - halfWidth, centerY - halfHeight,
+              centerX + halfWidth, centerY + halfHeight);
+      this.magnifierPaint.setColor(this.magnifierBackgroundColor());
+      canvas.drawRoundRect(lens, halfHeight, halfHeight, this.magnifierPaint);
+      Path clip = new Path();
+      clip.addRoundRect(lens, halfHeight, halfHeight, Path.Direction.CW);
+      canvas.clipPath(clip);
+      canvas.translate(centerX, centerY);
+      canvas.scale(1.65f, 1.65f);
+      canvas.translate(-mapped[0], -mapped[1]);
+      canvas.concat(this.drawMatrix);
+      canvas.clipRect(this.magnifierLineBounds());
+      this.drawTextContent(canvas, false, true);
+      if (this.normalizedSelectionStart() != this.normalizedSelectionEnd()) {
+         this.cursorPaint.setColor(this.cursorColor);
+         float markerHalfHeight = this.textSizePx * 0.55f;
+         canvas.drawRect(source.x - density * 0.7f,
+                 source.y - markerHalfHeight, source.x + density * 0.7f,
+                 source.y + markerHalfHeight, this.cursorPaint);
+      }
+      canvas.restoreToCount(save);
+      int outlineSave = canvas.save();
+      canvas.setMatrix(new Matrix());
+      this.magnifierPaint.setColor(0x88666666);
+      this.magnifierPaint.setStyle(Style.STROKE);
+      this.magnifierPaint.setStrokeWidth(density);
+      canvas.drawRoundRect(lens, halfHeight, halfHeight, this.magnifierPaint);
+      this.magnifierPaint.setStyle(Style.FILL);
+      canvas.restoreToCount(outlineSave);
+   }
+
+   private PointF magnifierSourcePoint() {
+      int offset = this.magnifierActiveOffset();
+      RectF content = this.contentBounds();
+      CharSequence displayText = this.getDisplayText();
+      if (this.isMultiline()) {
+         StaticLayout layout = this.multilineLayout(displayText, this.textPaint, false);
+         int line = layout.getLineForOffset(clamp(offset, 0, displayText.length()));
+         float top = this.multilineLayoutTop(content, layout);
+         return new PointF(content.left + layout.getPrimaryHorizontal(offset),
+                 top + (layout.getLineTop(line) + layout.getLineBottom(line)) / 2f);
+      }
+      return new PointF(content.left - this.horizontalScrollPx
+              + this.measurePrefix(displayText, offset), content.centerY());
+   }
+
+   private int magnifierActiveOffset() {
+      return this.touchedSelectionHandle == 1
+              ? this.normalizedSelectionStart() : this.getRawSelectionEnd();
+   }
+
+   private int magnifierBackgroundColor() {
+      int fieldColor = this.focused ? this.focusedBackgroundColor : this.backgroundColor;
+      if (Color.alpha(fieldColor) == 255) return fieldColor;
+      int foreground = this.editable.length() == 0 ? this.hintColor : this.textColor;
+      float brightness = Color.red(foreground) * 0.2126f
+              + Color.green(foreground) * 0.7152f
+              + Color.blue(foreground) * 0.0722f;
+      return brightness < 140f ? 0xfff4f4f4 : 0xff353535;
+   }
+
+   private RectF magnifierLineBounds() {
+      RectF content = this.contentBounds();
+      if (!this.isMultiline()) return content;
+      StaticLayout layout = this.multilineLayout(
+              this.getDisplayText(), this.textPaint, false);
+      int line = layout.getLineForOffset(this.magnifierActiveOffset());
+      float top = this.multilineLayoutTop(content, layout);
+      return new RectF(content.left,
+              Math.max(content.top, top + layout.getLineTop(line)),
+              content.right,
+              Math.min(content.bottom, top + layout.getLineBottom(line)));
+   }
+
+   private void showMagnifier() {
+      this.hostView.removeCallbacks(this.showSelectionToolbarRunnable);
+      this.hostView.removeCallbacks(this.showMagnifierRunnable);
+      if (this.owner != null) this.owner.hideSelectionActionMode(this);
+      if (this.magnifierVisible) return;
+      this.magnifierPending = true;
+      this.hostView.postDelayed(this.showMagnifierRunnable, MAGNIFIER_TOOLBAR_DELAY_MS);
+   }
+
+   private void hideMagnifier() {
+      this.hostView.removeCallbacks(this.showSelectionToolbarRunnable);
+      this.hostView.removeCallbacks(this.showMagnifierRunnable);
+      this.magnifierPending = false;
+      if (this.magnifierVisible) {
+         this.magnifierVisible = false;
+         this.invalidate();
+      }
+   }
+
+   private void showSelectionToolbarAfterMagnifier(boolean magnifierWasActive) {
+      if (this.owner == null) return;
+      if (magnifierWasActive) {
+         this.hostView.postDelayed(this.showSelectionToolbarRunnable,
+                 MAGNIFIER_TOOLBAR_DELAY_MS);
+      } else {
+         this.showTextActionMode();
+      }
+   }
+
+   private void showTextActionMode() {
+      if (this.normalizedSelectionStart() != this.normalizedSelectionEnd()) {
+         this.owner.showSelectionActionMode(this);
+      } else {
+         this.owner.showInsertionActionMode(this);
       }
    }
 
@@ -834,8 +1013,10 @@ public final class TextField implements Component {
             this.touchCaptured = this.contains(var1.getX(), var1.getY())
                     || this.containsSelectionHandle(var1.getX(), var1.getY());
             if (this.touchCaptured) {
+                this.hostView.removeCallbacks(this.showSelectionToolbarRunnable);
                 this.touchCursorDragCandidate = false;
                 this.touchCursorDragging = false;
+                this.touchLongPressInsertion = false;
                 this.selectionHandleDragging = false;
                this.owner.requestFocus(this);
                this.touchedSelectionHandle = this.touchedSelectionHandle(var1.getX(), var1.getY());
@@ -848,6 +1029,9 @@ public final class TextField implements Component {
                this.doubleTapSelecting = secondTap && (this.touchedSelectionHandle == 3
                        ? this.selectWordAtOffset(this.normalizedSelectionEnd())
                        : this.selectWordAt(var1.getX(), var1.getY()));
+               if (this.touchedSelectionHandle != 0 || this.doubleTapSelecting) {
+                  this.showMagnifier();
+               }
                if (this.doubleTapSelecting) this.lastTapUpTime = 0L;
                if (this.touchedSelectionHandle == 0) {
                   if (!this.touchInsideSelection && !this.doubleTapSelecting) {
@@ -886,6 +1070,8 @@ public final class TextField implements Component {
 
             return this.touchCaptured;
          case 1:
+            boolean magnifierWasActive = this.magnifierVisible || this.magnifierPending;
+            this.hideMagnifier();
             this.hostView.removeCallbacks(this.touchLongPressRunnable);
             boolean var3 = this.touchCaptured;
             if (this.touchCaptured && this.touchStayedInTapRegion) {
@@ -907,21 +1093,19 @@ public final class TextField implements Component {
             } else {
                this.lastTapUpTime = 0L;
             }
-            if (this.doubleTapSelecting && this.owner != null) {
-               this.owner.showSelectionActionMode(this);
-            }
-
             if (this.touchInsideSelection && !this.touchDragging
                     && this.touchStayedInTapRegion) {
                this.placeCursorFromTouch(var1.getX(), var1.getY());
             }
-            if ((this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
+            if ((this.doubleTapSelecting || this.touchLongPressTriggered
+                    || this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
                     && this.owner != null) {
-               this.owner.showSelectionActionMode(this);
+               this.showSelectionToolbarAfterMagnifier(magnifierWasActive);
             }
             this.touchCaptured = false;
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
+            this.touchLongPressInsertion = false;
             this.touchInsideSelection = false;
             this.doubleTapSelecting = false;
              this.touchCursorDragCandidate = false;
@@ -964,8 +1148,12 @@ public final class TextField implements Component {
                return true;
             } else {
                if (this.touchLongPressTriggered) {
-                  this.applySelectionDrag(var1.getX(), var1.getY());
-                  this.updateSelectionAutoScroll(var1.getX(), var1.getY());
+                  if (this.touchLongPressInsertion) {
+                     this.placeCursorFromTouch(var1.getX(), var1.getY());
+                  } else {
+                     this.applySelectionDrag(var1.getX(), var1.getY());
+                     this.updateSelectionAutoScroll(var1.getX(), var1.getY());
+                  }
                   return true;
                }
 
@@ -976,6 +1164,7 @@ public final class TextField implements Component {
                         && Math.abs(horizontalDistance) >= Math.abs(verticalDistance)) {
                    this.touchDragging = true;
                    this.touchCursorDragging = true;
+                   this.showMagnifier();
                    this.hostView.removeCallbacks(this.touchLongPressRunnable);
                 }
 
@@ -1002,14 +1191,17 @@ public final class TextField implements Component {
                return true;
             }
          case 3:
+            boolean magnifierWasActiveOnCancel = this.magnifierVisible || this.magnifierPending;
+            this.hideMagnifier();
             this.hostView.removeCallbacks(this.touchLongPressRunnable);
             boolean var4 = this.touchCaptured;
             if (this.selectionHandleDragging && this.owner != null) {
-               this.owner.showSelectionActionMode(this);
+               this.showSelectionToolbarAfterMagnifier(magnifierWasActiveOnCancel);
             }
             this.touchCaptured = false;
             this.touchDragging = false;
             this.touchLongPressTriggered = false;
+            this.touchLongPressInsertion = false;
             this.touchInsideSelection = false;
             this.doubleTapSelecting = false;
             this.lastTapUpTime = 0L;
@@ -1026,14 +1218,21 @@ public final class TextField implements Component {
 
    private void handleTouchLongPress() {
       if (this.touchCaptured && !this.touchDragging && this.owner != null) {
-         if (this.selectWordAt(this.touchDownX, this.touchDownY)) {
+         if (this.isLongPressAtTextEnd(this.touchDownX, this.touchDownY)) {
+            this.touchLongPressInsertion = true;
+            this.touchLongPressTriggered = true;
+            this.touchCursorDragCandidate = false;
+            this.hostView.performHapticFeedback(0);
+         } else if (this.selectWordAt(this.touchDownX, this.touchDownY)) {
+            this.showMagnifier();
             this.touchCursorDragCandidate = false;
             this.touchLongPressTriggered = true;
             this.hostView.performHapticFeedback(0);
-            this.owner.showSelectionActionMode(this);
             this.updateSelectionAutoScroll(this.touchDownX, this.touchDownY);
           } else {
+             this.touchLongPressInsertion = true;
              this.touchLongPressTriggered = true;
+             this.hostView.performHapticFeedback(0);
          }
       }
    }

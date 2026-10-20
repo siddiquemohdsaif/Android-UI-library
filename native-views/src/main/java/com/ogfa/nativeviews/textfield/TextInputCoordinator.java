@@ -1,10 +1,13 @@
 package com.ogfa.nativeviews.textfield;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -12,6 +15,8 @@ import android.os.Build.VERSION;
 import android.os.SystemClock;
 import android.util.Log;
 import android.text.Editable;
+import android.text.InputType;
+import android.text.style.SuggestionSpan;
 import android.view.ActionMode;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -23,9 +28,11 @@ import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
+import com.ogfa.nativeviews.R;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 
@@ -76,10 +83,18 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    private void handleLongPress() {
       TextField var1 = this.touchTarget;
       if (var1 != null && var1 == this.focusedField) {
-         if (var1.selectWordAt(this.touchDownX, this.touchDownY)) {
+         if (var1.isLongPressAtTextEnd(this.touchDownX, this.touchDownY)) {
+            this.longPressTriggered = true;
+            this.hostView.performHapticFeedback(0);
+            this.startTextActionMode(true);
+         } else if (var1.selectWordAt(this.touchDownX, this.touchDownY)) {
             this.longPressTriggered = true;
             this.hostView.performHapticFeedback(0);
             this.startSelectionActionMode();
+         } else {
+            this.longPressTriggered = true;
+            this.hostView.performHapticFeedback(0);
+            this.startTextActionMode(true);
          }
       }
    }
@@ -521,6 +536,23 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             }
 
             return true;
+         } else if (var1 == android.R.id.shareText) {
+            if (!hasSelection || password || !this.focusedField.isSelectionEnabled()) return false;
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, var2.subSequence(var3, var4).toString());
+            Intent chooser = Intent.createChooser(send, null);
+            if (findActivity(this.hostView.getContext()) == null) {
+               chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+            try {
+               this.hostView.getContext().startActivity(chooser);
+               return true;
+            } catch (ActivityNotFoundException exception) {
+               return false;
+            }
+         } else if (var1 == android.R.id.replaceText) {
+            return this.showReplacementSuggestions(this.focusedField);
          } else {
             return false;
          }
@@ -552,10 +584,13 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             var2.add(0, android.R.id.copy, 1, context.getString(android.R.string.copy)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             var2.add(0, android.R.id.paste, 2, context.getString(android.R.string.paste)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             var2.add(0, android.R.id.selectAll, 3, context.getString(android.R.string.selectAll)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            var2.add(0, android.R.id.shareText, 4, context.getString(R.string.nativeviews_share)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            var2.add(0, android.R.id.replaceText, 5, context.getString(R.string.nativeviews_replace)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             TextInputCoordinator.this.prepareSelectionMenu(var1, var2);
             TextField field = TextInputCoordinator.this.actionModeField;
             TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null) callback.onCreateActionMode(field, var1, var2);
+            TextInputCoordinator.this.updateSecondaryActionPlacement(var2);
             return var2.hasVisibleItems();
          }
 
@@ -564,6 +599,7 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             TextField field = TextInputCoordinator.this.actionModeField;
             TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null) callback.onPrepareActionMode(field, var1, var2);
+            TextInputCoordinator.this.updateSecondaryActionPlacement(var2);
             return true;
          }
 
@@ -646,6 +682,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       MenuItem copy = menu.findItem(android.R.id.copy);
       MenuItem paste = menu.findItem(android.R.id.paste);
       MenuItem selectAll = menu.findItem(android.R.id.selectAll);
+      MenuItem share = menu.findItem(android.R.id.shareText);
+      MenuItem replace = menu.findItem(android.R.id.replaceText);
       if (cut != null) cut.setVisible(hasSelection && !password && field.isSelectionEnabled() && field.isCutEnabled());
       if (copy != null) copy.setVisible(hasSelection && !password && field.isSelectionEnabled() && field.isCopyEnabled());
       if (paste != null) paste.setVisible(field.isPasteEnabled()
@@ -653,6 +691,90 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       if (selectAll != null) selectAll.setVisible(field.isSelectionEnabled()
               && text.length() > 0 && !(field.getSelectionStart() == 0
               && field.getSelectionEnd() == text.length()));
+      if (share != null) share.setVisible(hasSelection && !password && field.isSelectionEnabled());
+      if (replace != null) replace.setVisible(findActivity(this.hostView.getContext()) != null
+              && !this.replacementSuggestions(field).isEmpty());
+   }
+
+   private void updateSecondaryActionPlacement(Menu menu) {
+      int visibleActions = 0;
+      for (int i = 0; i < menu.size(); i++) {
+         if (menu.getItem(i).isVisible()) visibleActions++;
+      }
+      int placement = visibleActions >= 4
+              ? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_IF_ROOM;
+      MenuItem share = menu.findItem(android.R.id.shareText);
+      MenuItem replace = menu.findItem(android.R.id.replaceText);
+      if (share != null) share.setShowAsAction(placement);
+      if (replace != null) replace.setShowAsAction(placement);
+   }
+
+   private ArrayList<ReplacementSuggestion> replacementSuggestions(TextField field) {
+      ArrayList<ReplacementSuggestion> result = new ArrayList<>();
+      if (field == null || !field.isEnabled() || field.isPassword()
+              || !field.isSelectionEnabled()
+              || (field.getInputType() & InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) {
+         return result;
+      }
+      Editable text = field.getEditable();
+      int start = field.getSelectionStart();
+      int end = field.getSelectionEnd();
+      LinkedHashSet<String> seen = new LinkedHashSet<>();
+      for (SuggestionSpan span : text.getSpans(start, end, SuggestionSpan.class)) {
+         int spanStart = text.getSpanStart(span);
+         int spanEnd = text.getSpanEnd(span);
+         if (spanStart < 0 || spanEnd <= spanStart || spanStart > start || spanEnd < end) continue;
+         String original = text.subSequence(spanStart, spanEnd).toString();
+         for (String suggestion : span.getSuggestions()) {
+            if (suggestion == null || suggestion.isEmpty()
+                    || suggestion.equals(original) || !seen.add(suggestion)) continue;
+            result.add(new ReplacementSuggestion(span, spanStart, spanEnd, original, suggestion));
+            if (result.size() >= SuggestionSpan.SUGGESTIONS_MAX_SIZE) return result;
+         }
+      }
+      return result;
+   }
+
+   private boolean showReplacementSuggestions(TextField field) {
+      Activity activity = findActivity(this.hostView.getContext());
+      ArrayList<ReplacementSuggestion> suggestions = this.replacementSuggestions(field);
+      if (activity == null || suggestions.isEmpty()) return false;
+      String[] labels = new String[suggestions.size()];
+      for (int i = 0; i < suggestions.size(); i++) labels[i] = suggestions.get(i).replacement;
+      new AlertDialog.Builder(activity)
+              .setTitle(R.string.nativeviews_replace)
+              .setItems(labels, (dialog, which) -> {
+                 if (field != this.focusedField) return;
+                 ReplacementSuggestion candidate = suggestions.get(which);
+                 Editable text = field.getEditable();
+                 if (candidate.end > text.length()
+                         || text.getSpanStart(candidate.span) != candidate.start
+                         || text.getSpanEnd(candidate.span) != candidate.end
+                         || !candidate.original.contentEquals(
+                                 text.subSequence(candidate.start, candidate.end))) return;
+                 field.finishComposingText();
+                 field.setSelection(candidate.start, candidate.end);
+                 field.replaceSelection(candidate.replacement, 1, false);
+              })
+              .show();
+      return true;
+   }
+
+   private static final class ReplacementSuggestion {
+      final SuggestionSpan span;
+      final int start;
+      final int end;
+      final String original;
+      final String replacement;
+
+      ReplacementSuggestion(SuggestionSpan span, int start, int end,
+                            String original, String replacement) {
+         this.span = span;
+         this.start = start;
+         this.end = end;
+         this.original = original;
+         this.replacement = replacement;
+      }
    }
 
    private static Activity findActivity(Context var0) {
@@ -694,10 +816,14 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
    }
 
    public void showInsertionActionMode(TextField field) {
+      this.showInsertionActionMode(field, 0.0F, 0.0F);
+   }
+
+   public void showInsertionActionMode(TextField field, float offsetX, float offsetY) {
       if (field != null && field == this.focusedField && field.isEnabled()
               && field.getSelectionStart() == field.getSelectionEnd()) {
-         this.selectionAnchorOffsetX = 0.0F;
-         this.selectionAnchorOffsetY = 0.0F;
+         this.selectionAnchorOffsetX = offsetX;
+         this.selectionAnchorOffsetY = offsetY;
          this.startTextActionMode(true);
       }
    }

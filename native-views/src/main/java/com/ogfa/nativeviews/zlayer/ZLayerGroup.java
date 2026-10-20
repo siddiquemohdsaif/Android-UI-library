@@ -124,6 +124,7 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         for (ZLayer layer : layers) layer.draw(canvas);
         TextField focusedField = textInput.getFocusedField();
         if (focusedField != null) {
+            focusedField.drawMagnifier(canvas);
             hostView.postInvalidateDelayed(focusedField.getCursorBlinkIntervalMs());
         }
         if (autoInvalidate && !componentsById.isEmpty()) {
@@ -297,7 +298,16 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         textInput.hideSelectionActionMode(field);
     }
     @Override public void showInsertionActionMode(TextField field) {
-        textInput.showInsertionActionMode(field);
+        float translationX = 0f;
+        float translationY = 0f;
+        for (ZLayer layer : layers) {
+            if (layer.contains(field.getId())) {
+                translationX = layer.getTranslationX();
+                translationY = layer.getTranslationY();
+                break;
+            }
+        }
+        textInput.showInsertionActionMode(field, translationX, translationY);
     }
 
     @Override
