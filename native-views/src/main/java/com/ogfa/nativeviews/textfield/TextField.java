@@ -1,19 +1,15 @@
 package com.ogfa.nativeviews.textfield;
 
 import android.content.Context;
-import android.content.res.TypedArray;
-import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.Paint.Style;
-import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
 import android.os.Build.VERSION;
 import android.text.Editable;
@@ -36,11 +32,16 @@ import com.ogfa.nativeviews.component.FigmaConfig;
 import com.ogfa.nativeviews.component.Position;
 import com.ogfa.nativeviews.component.Size;
 import com.ogfa.nativeviews.text.FontVariation;
+import com.ogfa.nativeviews.text.selection.TextSelectionController;
+import com.ogfa.nativeviews.text.selection.TextSelectionGeometry;
+import com.ogfa.nativeviews.text.selection.TextSelectionHandles;
+import com.ogfa.nativeviews.text.selection.TextSelectionMagnifier;
 import java.util.Objects;
 
-public final class TextField implements Component {
+public final class TextField implements Component, TextSelectionGeometry {
    public static final long DEFAULT_CURSOR_BLINK_INTERVAL_MS = 500L;
-   private static final long MAGNIFIER_TOOLBAR_DELAY_MS = 100L;
+   private static final long MAGNIFIER_TOOLBAR_DELAY_MS =
+           TextSelectionMagnifier.TOOLBAR_DELAY_MS;
    private final Context context;
    private final View hostView;
    private final String id;
@@ -53,15 +54,9 @@ public final class TextField implements Component {
    private final Paint strokePaint = new Paint(1);
    private final Paint cursorPaint = new Paint(1);
    private final Paint selectionPaint = new Paint(1);
-   private final Paint magnifierPaint = new Paint(1);
    private final Matrix drawMatrix = new Matrix();
    private final Paint scrollBarPaint = new Paint(1);
-   private final Drawable startHandleDrawable;
-   private final Drawable endHandleDrawable;
-   private final Drawable insertionHandleDrawable;
-   private final PointF startHandleHotspot;
-   private final PointF endHandleHotspot;
-   private final PointF insertionHandleHotspot;
+   private final TextSelectionHandles selectionHandles;
    private final RectF contentBounds = new RectF();
    private TextFieldHost owner;
    private String hint;
@@ -180,21 +175,8 @@ public final class TextField implements Component {
       this.hintColor = var1.hintColor;
       this.cursorColor = var1.cursorColor;
       this.selectionHandleColor = var1.selectionHandleColor;
-      TypedArray handles = var2.getContext().obtainStyledAttributes(new int[] {
-              android.R.attr.textSelectHandleLeft,
-              android.R.attr.textSelectHandleRight,
-              android.R.attr.textSelectHandle
-      });
-      try {
-         this.startHandleDrawable = tintHandle(handles.getDrawable(0), this.selectionHandleColor);
-         this.endHandleDrawable = tintHandle(handles.getDrawable(1), this.selectionHandleColor);
-         this.insertionHandleDrawable = tintHandle(handles.getDrawable(2), this.selectionHandleColor);
-      } finally {
-         handles.recycle();
-      }
-      this.startHandleHotspot = findHandleHotspot(this.startHandleDrawable, 1);
-      this.endHandleHotspot = findHandleHotspot(this.endHandleDrawable, 2);
-      this.insertionHandleHotspot = findHandleHotspot(this.insertionHandleDrawable, 3);
+      this.selectionHandles = new TextSelectionHandles(
+              var2.getContext(), this.selectionHandleColor);
       this.selectionColor = var1.selectionColor;
       this.backgroundColor = var1.backgroundColor;
       this.focusedBackgroundColor = var1.focusedBackgroundColor;
@@ -861,57 +843,25 @@ public final class TextField implements Component {
 
    /** Drawn by the group after every layer so the lens stays above the scene. */
    public void drawMagnifier(Canvas canvas) {
-      if (!this.magnifierVisible || !this.focused || !this.visible) return;
-      if (this.hostView.getWidth() <= 0 || this.hostView.getHeight() <= 0) return;
-      PointF source = this.magnifierSourcePoint();
-      float[] mapped = {source.x, source.y};
-      this.drawMatrix.mapPoints(mapped);
-      float density = this.context.getResources().getDisplayMetrics().density;
-      float margin = 4f * density;
-      float width = Math.min(124f * density,
-              Math.max(1f, this.hostView.getWidth() - margin * 2f));
-      float height = Math.min(52f * density,
-              Math.max(1f, this.hostView.getHeight() - margin * 2f));
-      float halfWidth = width / 2f;
-      float halfHeight = height / 2f;
-      float centerX = Math.max(halfWidth + margin,
-              Math.min(mapped[0], this.hostView.getWidth() - halfWidth - margin));
-      float centerY = mapped[1] - 68f * density;
-      if (centerY - halfHeight < margin) centerY = mapped[1] + 68f * density;
-      centerY = Math.max(halfHeight + margin,
-              Math.min(centerY, this.hostView.getHeight() - halfHeight - margin));
+      this.drawMagnifier(canvas, this.hostView, 0f, 0f);
+   }
 
-      int save = canvas.save();
-      canvas.setMatrix(new Matrix());
-      RectF lens = new RectF(centerX - halfWidth, centerY - halfHeight,
-              centerX + halfWidth, centerY + halfHeight);
-      this.magnifierPaint.setColor(this.magnifierBackgroundColor());
-      canvas.drawRoundRect(lens, halfHeight, halfHeight, this.magnifierPaint);
-      Path clip = new Path();
-      clip.addRoundRect(lens, halfHeight, halfHeight, Path.Direction.CW);
-      canvas.clipPath(clip);
-      canvas.translate(centerX, centerY);
-      canvas.scale(1.65f, 1.65f);
-      canvas.translate(-mapped[0], -mapped[1]);
-      canvas.concat(this.drawMatrix);
-      canvas.clipRect(this.magnifierLineBounds());
-      this.drawTextContent(canvas, false, true);
-      if (this.normalizedSelectionStart() != this.normalizedSelectionEnd()) {
-         this.cursorPaint.setColor(this.cursorColor);
-         float markerHalfHeight = this.textSizePx * 0.55f;
-         canvas.drawRect(source.x - density * 0.7f,
-                 source.y - markerHalfHeight, source.x + density * 0.7f,
-                 source.y + markerHalfHeight, this.cursorPaint);
-      }
-      canvas.restoreToCount(save);
-      int outlineSave = canvas.save();
-      canvas.setMatrix(new Matrix());
-      this.magnifierPaint.setColor(0x88666666);
-      this.magnifierPaint.setStyle(Style.STROKE);
-      this.magnifierPaint.setStrokeWidth(density);
-      canvas.drawRoundRect(lens, halfHeight, halfHeight, this.magnifierPaint);
-      this.magnifierPaint.setStyle(Style.FILL);
-      canvas.restoreToCount(outlineSave);
+   /** Draw the lens in an ancestor's canvas, beyond this field's host bounds. */
+   public void drawMagnifier(Canvas canvas, View overlayHost, float hostX, float hostY) {
+      if (!this.magnifierVisible || !this.focused || !this.visible) return;
+      if (overlayHost.getWidth() <= 0 || overlayHost.getHeight() <= 0) return;
+      Matrix contentToOverlay = new Matrix(this.drawMatrix);
+      contentToOverlay.postTranslate(hostX, hostY);
+      TextSelectionMagnifier.draw(canvas, overlayHost, contentToOverlay,
+              this.magnifierSourcePoint(), this.magnifierLineBounds(),
+              this.magnifierBackgroundColor(), this.textSizePx, this.cursorColor,
+              this.normalizedSelectionStart() != this.normalizedSelectionEnd(),
+              content -> this.drawTextContent(content, false, true));
+   }
+
+   /** Whether an ancestor drawing the lens should request another frame. */
+   public boolean isMagnifierActive() {
+      return this.magnifierVisible || this.magnifierPending;
    }
 
    private PointF magnifierSourcePoint() {
@@ -1006,6 +956,16 @@ public final class TextField implements Component {
       return Math.min(clipBounds.bottom, center + this.cursorHeightPx / 2.0F);
    }
 
+   @Override public CharSequence selectionText() { return this.editable; }
+
+   @Override public int selectionOffsetAt(float x, float y) {
+      return this.cursorOffsetFromTouch(x, y);
+   }
+
+   @Override public void applySelection(int anchor, int extent) {
+      this.setSelection(anchor, extent);
+   }
+
    public boolean onTouchEvent(MotionEvent var1) {
       switch (var1.getActionMasked()) {
          case 0:
@@ -1075,10 +1035,9 @@ public final class TextField implements Component {
             this.hostView.removeCallbacks(this.touchLongPressRunnable);
             boolean var3 = this.touchCaptured;
             if (this.touchCaptured && this.touchStayedInTapRegion) {
-               float dx = var1.getX() - this.touchDownX;
-               float dy = var1.getY() - this.touchDownY;
-               this.touchStayedInTapRegion = dx * dx + dy * dy
-                       <= (float)this.touchSlop * (float)this.touchSlop;
+               this.touchStayedInTapRegion = TextSelectionController.isWithinTouchSlop(
+                       var1.getX(), var1.getY(), this.touchDownX, this.touchDownY,
+                       this.touchSlop);
             }
             boolean completedTap = this.touchCaptured && !this.touchDragging
                     && !this.touchLongPressTriggered && !this.doubleTapSelecting
@@ -1119,10 +1078,9 @@ public final class TextField implements Component {
                return false;
             }
             if (this.touchStayedInTapRegion) {
-               float dx = var1.getX() - this.touchDownX;
-               float dy = var1.getY() - this.touchDownY;
-               this.touchStayedInTapRegion = dx * dx + dy * dy
-                       <= (float)this.touchSlop * (float)this.touchSlop;
+               this.touchStayedInTapRegion = TextSelectionController.isWithinTouchSlop(
+                       var1.getX(), var1.getY(), this.touchDownX, this.touchDownY,
+                       this.touchSlop);
                if (!this.touchStayedInTapRegion) {
                   this.hostView.removeCallbacks(this.touchLongPressRunnable);
                }
@@ -1134,9 +1092,9 @@ public final class TextField implements Component {
             } else if (this.touchedSelectionHandle != 0) {
                if ((this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
                        && !this.selectionHandleDragging) {
-                  float dx = var1.getX() - this.touchDownX;
-                  float dy = var1.getY() - this.touchDownY;
-                  if (dx * dx + dy * dy > (float)this.touchSlop * this.touchSlop) {
+                  if (!TextSelectionController.isWithinTouchSlop(
+                          var1.getX(), var1.getY(), this.touchDownX, this.touchDownY,
+                          this.touchSlop)) {
                      this.selectionHandleDragging = true;
                      if (this.owner != null) this.owner.hideSelectionActionMode(this);
                   } else {
@@ -1238,13 +1196,8 @@ public final class TextField implements Component {
    }
 
    private boolean isSecondTap(MotionEvent event) {
-      if (this.lastTapUpTime <= 0L
-              || event.getEventTime() - this.lastTapUpTime
-              > (long)ViewConfiguration.getDoubleTapTimeout()) return false;
-      float dx = event.getX() - this.lastTapX;
-      float dy = event.getY() - this.lastTapY;
-      return dx * dx + dy * dy
-              <= (float)this.doubleTapSlop * (float)this.doubleTapSlop;
+      return TextSelectionController.isSecondTap(event, this.lastTapUpTime,
+              this.lastTapX, this.lastTapY, this.doubleTapSlop);
    }
 
    private boolean isTouchInsideSelection(float x, float y) {
@@ -1256,26 +1209,13 @@ public final class TextField implements Component {
    }
 
    private void extendLongPressSelection(float var1, float var2) {
-      int var3 = this.cursorOffsetFromTouch(var1, var2);
-      if (var3 < this.selectionAnchorStart) {
-         this.setSelection(this.selectionAnchorEnd, var3);
-      } else if (var3 > this.selectionAnchorEnd) {
-         this.setSelection(this.selectionAnchorStart, var3);
-      } else {
-         this.setSelection(this.selectionAnchorStart, this.selectionAnchorEnd);
-      }
-
+      TextSelectionController.extendLongPress(this,
+              this.selectionAnchorStart, this.selectionAnchorEnd, var1, var2);
    }
 
    private void extendDoubleTapSelection(float x, float y) {
-      int[] word = TextBoundaryHelper.wordAt(this.editable, this.cursorOffsetFromTouch(x, y));
-      if (word[0] < this.selectionAnchorStart) {
-         this.setSelection(word[0], this.selectionAnchorEnd);
-      } else if (word[1] > this.selectionAnchorEnd) {
-         this.setSelection(this.selectionAnchorStart, word[1]);
-      } else {
-         this.setSelection(this.selectionAnchorStart, this.selectionAnchorEnd);
-      }
+      TextSelectionController.extendDoubleTap(this,
+              this.selectionAnchorStart, this.selectionAnchorEnd, x, y);
    }
 
    private void applySelectionDrag(float var1, float var2) {
@@ -1293,22 +1233,14 @@ public final class TextField implements Component {
          int movingOffset = this.isMultiline()
                  ? this.handleDragOffsetFromTouch(var1, var2)
                  : this.cursorOffsetFromTouch(var1, var2);
-         int maximumStart = TextBoundaryHelper.previousGrapheme(
-                 this.editable, this.selectionAnchorEnd);
-         this.setSelection(
-                 Math.max(0, Math.min(movingOffset, maximumStart)),
-                 this.selectionAnchorEnd
-         );
+         TextSelectionController.dragStartHandle(this,
+                 movingOffset, this.selectionAnchorEnd);
       } else if (this.touchedSelectionHandle == 2) {
          int movingOffset = this.isMultiline()
                  ? this.handleDragOffsetFromTouch(var1, var2)
                  : this.cursorOffsetFromTouch(var1, var2);
-         int minimumEnd = TextBoundaryHelper.nextGrapheme(
-                 this.editable, this.selectionAnchorStart);
-         this.setSelection(
-                 this.selectionAnchorStart,
-                 Math.min(this.editable.length(), Math.max(movingOffset, minimumEnd))
-         );
+         TextSelectionController.dragEndHandle(this,
+                 this.selectionAnchorStart, movingOffset);
       } else {
          this.extendLongPressSelection(var1, var2);
       }
@@ -1634,123 +1566,15 @@ public final class TextField implements Component {
       return x < content.left || x > content.right ? null : new PointF(x, y);
    }
 
-   private Drawable handleDrawable(int type) {
-      if (type == 1) return this.startHandleDrawable;
-      if (type == 2) return this.endHandleDrawable;
-      return this.insertionHandleDrawable;
-   }
-
-   private PointF handleHotspot(int type) {
-      if (type == 1) return this.startHandleHotspot;
-      if (type == 2) return this.endHandleHotspot;
-      return this.insertionHandleHotspot;
-   }
-
-   private static Drawable tintHandle(Drawable drawable, int color) {
-      if (drawable == null) return null;
-      Drawable tinted = drawable.mutate();
-      tinted.setTint(color);
-      return tinted;
-   }
-
-   private static PointF findHandleHotspot(Drawable drawable, int type) {
-      if (drawable == null) return new PointF(0.5F, 0.0F);
-      int width = drawable.getIntrinsicWidth();
-      int height = drawable.getIntrinsicHeight();
-      float fallbackX = type == 1 ? width : type == 2 ? 0.0F : width / 2.0F;
-      if (width <= 0 || height <= 0 || width > 512 || height > 512) {
-         return new PointF(fallbackX, 0.0F);
-      }
-      Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-      Rect originalBounds = new Rect(drawable.getBounds());
-      try {
-         drawable.setBounds(0, 0, width, height);
-         drawable.draw(new Canvas(bitmap));
-         for (int y = 0; y < height; y++) {
-            int first = -1;
-            int last = -1;
-            for (int x = 0; x < width; x++) {
-               if ((bitmap.getPixel(x, y) >>> 24) >= 64) {
-                  if (first < 0) first = x;
-                  last = x;
-               }
-            }
-            if (first >= 0) {
-               // The start handle points from its top-right corner; the end
-               // handle points from its top-left corner.
-               float x = type == 1 ? last + 1.0F
-                       : type == 2 ? first : (first + last + 1.0F) / 2.0F;
-               return new PointF(x, y);
-            }
-         }
-         return new PointF(fallbackX, 0.0F);
-      } finally {
-         drawable.setBounds(originalBounds);
-         bitmap.recycle();
-      }
-   }
-
-   private Rect handleBounds(PointF endpoint, int type) {
-      Drawable drawable = this.handleDrawable(type);
-      int fallbackSize = Math.round(this.selectionHandleRadius() * 2.0F);
-      int width = drawable == null ? fallbackSize : Math.max(1, drawable.getIntrinsicWidth());
-      int height = drawable == null ? fallbackSize : Math.max(1, drawable.getIntrinsicHeight());
-      PointF hotspot = this.handleHotspot(type);
-      int left = Math.round(endpoint.x - (drawable == null ? width / 2.0F : hotspot.x));
-      int top = Math.round(endpoint.y - hotspot.y);
-      return new Rect(left, top, left + width, top + height);
-   }
-
-   private RectF handleDrawingBounds() {
-      int fallbackSize = Math.round(this.selectionHandleRadius() * 2.0F);
-      float horizontalPadding = Math.max(fallbackSize, Math.max(
-              this.handleWidth(this.startHandleDrawable), Math.max(
-                      this.handleWidth(this.endHandleDrawable),
-                      this.handleWidth(this.insertionHandleDrawable))));
-      float verticalPadding = Math.max(fallbackSize, Math.max(
-              this.handleHeight(this.startHandleDrawable), Math.max(
-                      this.handleHeight(this.endHandleDrawable),
-                      this.handleHeight(this.insertionHandleDrawable))));
-      RectF padded = new RectF(this.bounds);
-      padded.inset(-horizontalPadding, -verticalPadding);
-      return padded;
-   }
-
-   private int handleWidth(Drawable drawable) {
-      return drawable == null ? 0 : Math.max(1, drawable.getIntrinsicWidth());
-   }
-
-   private int handleHeight(Drawable drawable) {
-      return drawable == null ? 0 : Math.max(1, drawable.getIntrinsicHeight());
-   }
-
    private RectF handleTouchBounds() {
-      RectF padded = this.handleDrawingBounds();
-      float touchPadding = Math.max(0.0F, (float)this.touchSlop);
-      padded.inset(-touchPadding, -touchPadding);
-      return padded;
+      return this.selectionHandles.touchBounds(this.bounds,
+              this.selectionHandleRadius(), this.touchSlop);
    }
 
    private void drawSelectionHandle(Canvas canvas, PointF endpoint, int type) {
-      if (endpoint == null) return;
-      Rect handle = this.handleBounds(endpoint, type);
-      int saveCount = canvas.save();
-      canvas.clipRect(this.handleDrawingBounds());
-      Drawable drawable = this.handleDrawable(type);
-      if (drawable != null) {
-         drawable.setBounds(handle);
-         drawable.draw(canvas);
-      } else {
-         // Keep a simple handle under themes without the platform attributes.
-         this.cursorPaint.setColor(this.selectionHandleColor);
-         this.cursorPaint.setStyle(Paint.Style.FILL);
-         float centerX = handle.exactCenterX();
-         canvas.drawRect(centerX - 1.0F, handle.top, centerX + 1.0F,
-                 handle.centerY(), this.cursorPaint);
-         canvas.drawRoundRect(handle.left, handle.centerY(), handle.right, handle.bottom,
-                 handle.width() * 0.25F, handle.width() * 0.25F, this.cursorPaint);
-      }
-      canvas.restoreToCount(saveCount);
+      this.selectionHandles.draw(canvas, endpoint, type, this.bounds,
+              this.selectionHandleRadius(), this.selectionHandleColor,
+              this.cursorPaint);
    }
 
    private int touchedSelectionHandle(float var1, float var2) {
@@ -1785,11 +1609,8 @@ public final class TextField implements Component {
    }
 
    private boolean isHandleHit(float x, float y, PointF endpoint, int type) {
-      if (endpoint == null) return false;
-      Rect handle = this.handleBounds(endpoint, type);
-      float inset = Math.max(0.0F, (float)this.touchSlop);
-      return x >= handle.left - inset && x <= handle.right + inset
-              && y >= handle.top - inset && y <= handle.bottom + inset;
+      return this.selectionHandles.hit(x, y, endpoint, type,
+              this.selectionHandleRadius(), this.touchSlop);
    }
 
    private void drawMultilineScrollBar(Canvas var1, RectF var2, StaticLayout var3) {

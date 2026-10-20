@@ -158,6 +158,7 @@ public final class TextTestActivity extends AppCompatActivity {
                     .setLineSpacing(10f)
                     .setMaxLines(4)
                     .setOverflow(Text.Overflow.ELLIPSIZE_END)
+                    .setSelectionEnabled(true)
                     .setPadding(24f, 18f));
 
             float margin = dp(24);

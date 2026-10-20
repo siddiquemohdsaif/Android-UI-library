@@ -2,8 +2,8 @@
 
 `Text` is a non-editable Android Canvas component rendered directly with
 `TextPaint` and `StaticLayout`. It supports native font shaping, multiline layout,
-alignment, ellipsizing, reusable styles, runtime updates, and an optional lightweight
-click callback without creating a bitmap.
+alignment, ellipsizing, reusable styles, runtime updates, optional read-only
+selection, and an optional lightweight click callback without creating a bitmap.
 
 Package:
 
@@ -171,8 +171,8 @@ private final ZLayer texts = ui.addLayer("text");
 }
 ```
 
-Touch forwarding is required only when at least one text has an
-`OnClickListener`.
+Touch forwarding is required when at least one text has an
+`OnClickListener` or selection enabled.
 
 ## Explicit RectF
 
@@ -393,6 +393,11 @@ All builder styling methods:
 | `setStyle(style)` | Apply a reusable immutable style |
 | `setEnabled(enabled)` | Enable or disable click handling |
 | `setOnClickListener(listener)` | Add optional click behavior |
+| `setSelectionEnabled(enabled)` | Enable long-press and double-tap read-only selection |
+| `setSelectionColor(color)` | Set selection highlight color |
+| `setSelectionHandleColor(color)` | Set selection handle color |
+| `setCopyEnabled(enabled)` | Show or hide Copy in the selection toolbar |
+| `setSelectionActionCallback(callback)` | Customize the selection toolbar |
 
 ## Reusable TextStyle
 
@@ -525,6 +530,49 @@ text.setOnClickListener(null);
 Click handling intentionally adds no sound, haptic, press scale, long-click, or
 animation. Use the future `Button` component when those behaviors are required.
 
+## Read-only selection
+
+Selection is opt-in, so existing labels keep their click behavior:
+
+```java
+Text paragraph = texts.add(
+        new Text.Builder(getContext(), "paragraph", message, position,
+                new Size(760f, 260f))
+                .setSelectionEnabled(true)
+                .setSelectionColor(0x6633b5e5)
+                .setSelectionHandleColor(0xff33b5e5)
+);
+```
+
+Long press or double tap selects a locale-aware word. Dragging after a double tap
+extends the selection by words; dragging after a long press extends it by character
+boundaries. The same themed Android selection handles and handle hit areas used by
+`TextField` adjust either endpoint without crossing. Selection is highlighted across
+wrapped lines. Dragging near an edge scrolls overflowed text. Dragging within
+selected text pans overflowed content; lifting and dragging again continues from
+the last scroll position. During selection drag, the magnifier opens above all
+layers after 100 ms. It sits above the touch point when space permits, or below
+it near the top edge, matching `TextField`'s original placement. The toolbar
+returns 100 ms after the magnifier closes. The floating Android toolbar offers
+Copy, Select all, and Share. It does not open the keyboard or allow editing.
+Tapping within a selection
+collapses it; tapping outside clears it. Selection gestures do not fire the optional
+click callback. With selection enabled, clipped or ellipsized content uses the
+full text layout so dragging can reach text beyond the initially visible region.
+
+`Text` and `TextField` use the same selection controller for word boundaries,
+double tap, touch slop, and endpoint dragging. They also share the themed handle
+renderer, magnifier renderer, and common toolbar actions. Each component maps
+touch coordinates to its own text layout through `TextSelectionGeometry`.
+
+Runtime methods: `isSelectionEnabled()`, `setSelectionEnabled(boolean)`,
+`setSelection(start, end)`, `setSelection(offset)`, `getSelectionStart()`,
+`getSelectionEnd()`, `getSelectionAnchor()`, `getSelectionExtent()`,
+`setCopyEnabled(boolean)`, `setSelectionActionCallback(callback)`, and
+`clearSelection()`. Updating the text clears any active selection. The read-only
+callback is `com.ogfa.nativeviews.text.TextSelectionActionCallback`; it has the
+same create, prepare, and item-click hooks as the `TextField` callback.
+
 ## ZLayer API
 
 ```java
@@ -577,4 +625,5 @@ adb shell am start -n `
 ```
 
 It covers `Position + Size`, `RectF`, resource/default fonts, wrapping, ellipsizing,
-alignment, shadows, runtime mutation, click dispatch, and move-out cancellation.
+alignment, shadows, runtime mutation, read-only selection, click dispatch, and
+move-out cancellation.

@@ -13,6 +13,7 @@ import android.view.inputmethod.InputConnection;
 import com.ogfa.nativeviews.component.Component;
 import com.ogfa.nativeviews.component.BackHandler;
 import com.ogfa.nativeviews.component.ComponentHost;
+import com.ogfa.nativeviews.text.Text;
 import com.ogfa.nativeviews.textfield.TextField;
 import com.ogfa.nativeviews.textfield.TextFieldHost;
 import com.ogfa.nativeviews.textfield.TextInputCoordinator;
@@ -122,6 +123,9 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
     public void draw(Canvas canvas) {
         ensureActive();
         for (ZLayer layer : layers) layer.draw(canvas);
+        for (Component component : componentsById.values()) {
+            if (component instanceof Text) ((Text) component).drawMagnifier(canvas);
+        }
         TextField focusedField = textInput.getFocusedField();
         if (focusedField != null) {
             focusedField.drawMagnifier(canvas);
@@ -176,6 +180,17 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         return handled;
     }
 
+    private void clearTextSelectionsOutside(float x, float y) {
+        for (Component component : componentsById.values()) {
+            if (component instanceof Text) {
+                Text text = (Text) component;
+                if (text.hasSelection() && !text.containsSelectionTouchOnHost(x, y)) {
+                    text.clearSelection();
+                }
+            }
+        }
+    }
+
     /**
      * Runs before a host ViewGroup dispatches to its Android child views. Plain
      * View hosts do not need to call this directly because {@link #onTouchEvent}
@@ -185,6 +200,7 @@ public final class ZLayerGroup implements ComponentHost, TextFieldHost,
         ensureActive();
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
+            clearTextSelectionsOutside(event.getX(), event.getY());
             textFieldDismissGesture = dismissFocusedTextFieldBeforeOutsideTouch(event);
         }
         if (!textFieldDismissGesture) return false;

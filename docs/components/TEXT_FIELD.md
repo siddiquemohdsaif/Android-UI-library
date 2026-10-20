@@ -371,14 +371,16 @@ field.setOnFocusChangedListener(listener);
 
 ## Cursor and selection behavior
 
-- Dragging a cursor or selection handle shows a custom rounded magnifier above
+- Dragging a cursor or selection handle shows a custom rounded magnifier near
   the active text boundary. The lens redraws the same text, highlight, and caret
   layout at a larger scale, clips wrapped text to the active line, and chooses a
   readable background for light or dark text. It disappears when the gesture
   ends or focus is lost.
   `ZLayerGroup` draws it after all layers so it remains above other components.
-  The toolbar closes first, then the magnifier opens after 300 ms. When the
-  gesture ends, the magnifier closes and the toolbar returns after 300 ms.
+  A short child host can instead draw it after its siblings through
+  `drawMagnifier(canvas, parentView, childLeft, childTop)` using the parent's
+  bounds. The toolbar closes first, then the magnifier opens after 100 ms. When
+  the gesture ends, the magnifier closes and the toolbar returns after 100 ms.
 - `ACTION_DOWN` focuses the topmost enabled field under the pointer.
 - Tapping places the cursor at the nearest character.
 - Long press and double tap select a locale-aware word. Double tap selection

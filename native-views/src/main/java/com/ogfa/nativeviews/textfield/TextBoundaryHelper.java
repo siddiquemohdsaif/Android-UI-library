@@ -4,10 +4,10 @@ import java.text.BreakIterator;
 import java.util.Locale;
 
 /** Locale-aware text boundaries shared by touch selection and keyboard navigation. */
-final class TextBoundaryHelper {
+public final class TextBoundaryHelper {
     private TextBoundaryHelper() {}
 
-    static int previousGrapheme(CharSequence text, int offset) {
+    public static int previousGrapheme(CharSequence text, int offset) {
         String value = text == null ? "" : text.toString();
         int target = Math.max(0, Math.min(offset, value.length()));
         int previous = 0;
@@ -19,7 +19,7 @@ final class TextBoundaryHelper {
         return previous;
     }
 
-    static int nextGrapheme(CharSequence text, int offset) {
+    public static int nextGrapheme(CharSequence text, int offset) {
         String value = text == null ? "" : text.toString();
         int length = value.length();
         int current = Math.max(0, Math.min(offset, length));
@@ -51,7 +51,7 @@ final class TextBoundaryHelper {
         return current;
     }
 
-    static int[] wordAt(CharSequence text, int offset) {
+    public static int[] wordAt(CharSequence text, int offset) {
         String value = text == null ? "" : text.toString();
         if (value.isEmpty()) return new int[]{0, 0};
 

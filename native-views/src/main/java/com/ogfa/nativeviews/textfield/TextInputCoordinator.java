@@ -2,12 +2,10 @@ package com.ogfa.nativeviews.textfield;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.ContextWrapper;
-import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -29,6 +27,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import com.ogfa.nativeviews.R;
+import com.ogfa.nativeviews.text.selection.TextSelectionActions;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -518,8 +517,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             return true;
          } else if (var1 == android.R.id.copy) {
             if (password || !this.focusedField.isCopyEnabled() || !hasSelection || var5 == null) return false;
-            var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
-            return true;
+            return TextSelectionActions.copy(this.hostView.getContext(),
+                    this.focusedField.getId(), var2.subSequence(var3, var4));
          } else if (var1 == android.R.id.cut) {
             if (password || !this.focusedField.isCutEnabled() || !hasSelection || var5 == null) return false;
             var5.setPrimaryClip(ClipData.newPlainText(this.focusedField.getId(), var2.subSequence(var3, var4)));
@@ -538,19 +537,8 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             return true;
          } else if (var1 == android.R.id.shareText) {
             if (!hasSelection || password || !this.focusedField.isSelectionEnabled()) return false;
-            Intent send = new Intent(Intent.ACTION_SEND);
-            send.setType("text/plain");
-            send.putExtra(Intent.EXTRA_TEXT, var2.subSequence(var3, var4).toString());
-            Intent chooser = Intent.createChooser(send, null);
-            if (findActivity(this.hostView.getContext()) == null) {
-               chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            }
-            try {
-               this.hostView.getContext().startActivity(chooser);
-               return true;
-            } catch (ActivityNotFoundException exception) {
-               return false;
-            }
+            return TextSelectionActions.share(this.hostView.getContext(),
+                    var2.subSequence(var3, var4));
          } else if (var1 == android.R.id.replaceText) {
             return this.showReplacementSuggestions(this.focusedField);
          } else {
@@ -581,16 +569,15 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
          public boolean onCreateActionMode(ActionMode var1, Menu var2) {
             Context context = TextInputCoordinator.this.hostView.getContext();
             var2.add(0, android.R.id.cut, 0, context.getString(android.R.string.cut)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-            var2.add(0, android.R.id.copy, 1, context.getString(android.R.string.copy)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             var2.add(0, android.R.id.paste, 2, context.getString(android.R.string.paste)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-            var2.add(0, android.R.id.selectAll, 3, context.getString(android.R.string.selectAll)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-            var2.add(0, android.R.id.shareText, 4, context.getString(R.string.nativeviews_share)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+            TextSelectionActions.addCommonActions(var2, context, 1, 3, 4,
+                    context.getString(R.string.nativeviews_share));
             var2.add(0, android.R.id.replaceText, 5, context.getString(R.string.nativeviews_replace)).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
             TextInputCoordinator.this.prepareSelectionMenu(var1, var2);
             TextField field = TextInputCoordinator.this.actionModeField;
             TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null) callback.onCreateActionMode(field, var1, var2);
-            TextInputCoordinator.this.updateSecondaryActionPlacement(var2);
+            TextSelectionActions.updateSecondaryActionPlacement(var2);
             return var2.hasVisibleItems();
          }
 
@@ -599,7 +586,7 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
             TextField field = TextInputCoordinator.this.actionModeField;
             TextSelectionActionCallback callback = field.getSelectionActionCallback();
             if (callback != null) callback.onPrepareActionMode(field, var1, var2);
-            TextInputCoordinator.this.updateSecondaryActionPlacement(var2);
+            TextSelectionActions.updateSecondaryActionPlacement(var2);
             return true;
          }
 
@@ -694,19 +681,6 @@ public final class TextInputCoordinator implements TextFieldHost, AutoCloseable 
       if (share != null) share.setVisible(hasSelection && !password && field.isSelectionEnabled());
       if (replace != null) replace.setVisible(findActivity(this.hostView.getContext()) != null
               && !this.replacementSuggestions(field).isEmpty());
-   }
-
-   private void updateSecondaryActionPlacement(Menu menu) {
-      int visibleActions = 0;
-      for (int i = 0; i < menu.size(); i++) {
-         if (menu.getItem(i).isVisible()) visibleActions++;
-      }
-      int placement = visibleActions >= 4
-              ? MenuItem.SHOW_AS_ACTION_NEVER : MenuItem.SHOW_AS_ACTION_IF_ROOM;
-      MenuItem share = menu.findItem(android.R.id.shareText);
-      MenuItem replace = menu.findItem(android.R.id.replaceText);
-      if (share != null) share.setShowAsAction(placement);
-      if (replace != null) replace.setShowAsAction(placement);
    }
 
    private ArrayList<ReplacementSuggestion> replacementSuggestions(TextField field) {
