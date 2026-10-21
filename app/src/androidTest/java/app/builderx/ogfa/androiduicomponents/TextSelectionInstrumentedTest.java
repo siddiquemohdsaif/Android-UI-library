@@ -7,8 +7,10 @@ import static org.junit.Assert.assertTrue;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.os.SystemClock;
+import android.text.InputType;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -16,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.ogfa.nativeviews.text.Text;
+import com.ogfa.nativeviews.textfield.TextField;
 import com.ogfa.nativeviews.zlayer.ZLayerGroup;
 
 import org.junit.Test;
@@ -88,6 +91,116 @@ public class TextSelectionInstrumentedTest {
         });
     }
 
+    @Test
+    public void doubleTapOnCursorHandleSelectsWordAtCursor() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+            View host = new View(context);
+            host.layout(0, 0, 500, 300);
+            ZLayerGroup group = new ZLayerGroup(host);
+            TextField field = group.addLayer("field").add(new TextField.Builder(context,
+                    "input", new RectF(20f, 30f, 420f, 130f))
+                    .setText("hello world")
+                    .setTextSizePx(40f));
+            Bitmap bitmap = Bitmap.createBitmap(500, 300, Bitmap.Config.ARGB_8888);
+            group.draw(new Canvas(bitmap));
+            group.requestFocus(field);
+            field.setSelection(8);
+
+            PointF handle = cursorHandleEndpoint(field);
+            float x = handle.x;
+            float y = handle.y + 10f;
+            assertTrue(field.containsSelectionHandle(x, y));
+
+            long now = SystemClock.uptimeMillis();
+            dispatch(group, now, now, MotionEvent.ACTION_DOWN, x, y);
+            dispatch(group, now, now + 20, MotionEvent.ACTION_UP, x, y);
+            dispatch(group, now + 100, now + 100, MotionEvent.ACTION_DOWN, x, y);
+            dispatch(group, now + 100, now + 120, MotionEvent.ACTION_UP, x, y);
+
+            assertEquals("world", field.getText().substring(
+                    field.getSelectionStart(), field.getSelectionEnd()));
+            group.release();
+            bitmap.recycle();
+        });
+    }
+
+    @Test
+    public void repeatedScrollKeepsSelectionAndResumesAtStoppedPosition() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+            View host = new View(context);
+            host.layout(0, 0, 500, 300);
+            ZLayerGroup group = new ZLayerGroup(host);
+            String value = "one two three four five six seven eight nine ten "
+                    + "eleven twelve thirteen fourteen fifteen sixteen seventeen "
+                    + "eighteen nineteen twenty twenty-one twenty-two";
+            TextField field = group.addLayer("field").add(new TextField.Builder(context,
+                    "input", new RectF(20f, 30f, 420f, 130f))
+                    .setText(value)
+                    .setTextSizePx(40f)
+                    .setInputType(InputType.TYPE_CLASS_TEXT
+                            | InputType.TYPE_TEXT_FLAG_MULTI_LINE));
+            Bitmap bitmap = Bitmap.createBitmap(500, 300, Bitmap.Config.ARGB_8888);
+            group.draw(new Canvas(bitmap));
+            group.requestFocus(field);
+            int selectedStart = value.indexOf("fourteen");
+            int selectedEnd = selectedStart + "fourteen".length();
+            field.setSelection(selectedStart, selectedEnd);
+            float initialScroll = verticalScroll(field);
+            assertTrue(initialScroll > 0f);
+
+            long now = SystemClock.uptimeMillis();
+            dispatch(group, now, now, MotionEvent.ACTION_DOWN, 330f, 110f);
+            dispatch(group, now, now + 10, MotionEvent.ACTION_MOVE, 390f, 100f);
+            dispatch(group, now, now + 20, MotionEvent.ACTION_MOVE, 390f, 50f);
+            dispatch(group, now, now + 40, MotionEvent.ACTION_UP, 390f, 50f);
+            float stoppedScroll = verticalScroll(field);
+            assertTrue(stoppedScroll > initialScroll);
+            assertEquals(selectedStart, field.getSelectionStart());
+            assertEquals(selectedEnd, field.getSelectionEnd());
+
+            dispatch(group, now + 100, now + 100, MotionEvent.ACTION_DOWN, 390f, 110f);
+            assertEquals(stoppedScroll, verticalScroll(field), 0.5f);
+            dispatch(group, now + 100, now + 120, MotionEvent.ACTION_MOVE, 390f, 50f);
+            dispatch(group, now + 100, now + 140, MotionEvent.ACTION_UP, 390f, 50f);
+            float resumedScroll = verticalScroll(field);
+            assertTrue(resumedScroll > stoppedScroll);
+            assertEquals(selectedStart, field.getSelectionStart());
+            assertEquals(selectedEnd, field.getSelectionEnd());
+
+            dispatch(group, now + 200, now + 200, MotionEvent.ACTION_DOWN, 390f, 50f);
+            dispatch(group, now + 200, now + 220, MotionEvent.ACTION_MOVE, 390f, 110f);
+            dispatch(group, now + 200, now + 240, MotionEvent.ACTION_UP, 390f, 110f);
+            assertTrue(verticalScroll(field) < resumedScroll);
+            assertEquals(selectedStart, field.getSelectionStart());
+            assertEquals(selectedEnd, field.getSelectionEnd());
+
+            for (int i = 0; i < 12; i++) {
+                long gesture = now + 300 + i * 100L;
+                dispatch(group, gesture, gesture, MotionEvent.ACTION_DOWN, 390f, 50f);
+                dispatch(group, gesture, gesture + 20, MotionEvent.ACTION_MOVE, 390f, 110f);
+                dispatch(group, gesture, gesture + 40, MotionEvent.ACTION_UP, 390f, 110f);
+            }
+            assertEquals(0f, verticalScroll(field), 0.5f);
+            assertEquals(selectedStart, field.getSelectionStart());
+            assertEquals(selectedEnd, field.getSelectionEnd());
+            group.release();
+            bitmap.recycle();
+        });
+    }
+
+    private static PointF cursorHandleEndpoint(TextField field) {
+        try {
+            java.lang.reflect.Method method = TextField.class.getDeclaredMethod(
+                    "cursorHandleEndpoint");
+            method.setAccessible(true);
+            return (PointF) method.invoke(field);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
     private static void dispatch(ZLayerGroup group, long downTime, long eventTime,
                                  int action, float x, float y) {
         MotionEvent event = MotionEvent.obtain(downTime, eventTime, action, x, y, 0);
@@ -103,6 +216,16 @@ public class TextSelectionInstrumentedTest {
             java.lang.reflect.Field field = Text.class.getDeclaredField("verticalScrollPx");
             field.setAccessible(true);
             return field.getFloat(text);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private static float verticalScroll(TextField field) {
+        try {
+            java.lang.reflect.Field scroll = TextField.class.getDeclaredField("verticalScrollPx");
+            scroll.setAccessible(true);
+            return scroll.getFloat(field);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError(exception);
         }

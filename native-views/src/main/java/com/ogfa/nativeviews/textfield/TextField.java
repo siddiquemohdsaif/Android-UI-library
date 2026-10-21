@@ -110,6 +110,7 @@ public final class TextField implements Component, TextSelectionGeometry {
    private boolean magnifierPending;
    private boolean doubleTapSelecting;
    private boolean touchStayedInTapRegion;
+   private boolean touchBeganFocused;
    private int touchedSelectionHandle;
    private float cursorDragOffsetX;
    private float cursorDragOffsetY;
@@ -978,7 +979,8 @@ public final class TextField implements Component, TextSelectionGeometry {
                 this.touchCursorDragging = false;
                 this.touchLongPressInsertion = false;
                 this.selectionHandleDragging = false;
-               this.owner.requestFocus(this);
+               this.touchBeganFocused = this.focused;
+               if (!this.focused) this.owner.requestFocus(this);
                this.touchedSelectionHandle = this.touchedSelectionHandle(var1.getX(), var1.getY());
                this.touchInsideSelection = this.touchedSelectionHandle == 0
                        && this.isTouchInsideSelection(var1.getX(), var1.getY());
@@ -995,8 +997,9 @@ public final class TextField implements Component, TextSelectionGeometry {
                if (this.doubleTapSelecting) this.lastTapUpTime = 0L;
                if (this.touchedSelectionHandle == 0) {
                   if (!this.touchInsideSelection && !this.doubleTapSelecting) {
-                     this.placeCursorFromTouch(var1.getX(), var1.getY());
-                      this.touchCursorDragCandidate = true;
+                     // Keep the current scroll and selection until this is known to be a tap.
+                     this.touchCursorDragCandidate = !this.isMultilineScrollable()
+                             || this.normalizedSelectionStart() == this.normalizedSelectionEnd();
                   }
                } else if (!this.doubleTapSelecting) {
                   this.selectionAnchorStart = this.normalizedSelectionStart();
@@ -1041,7 +1044,8 @@ public final class TextField implements Component, TextSelectionGeometry {
             }
             boolean completedTap = this.touchCaptured && !this.touchDragging
                     && !this.touchLongPressTriggered && !this.doubleTapSelecting
-                    && this.touchStayedInTapRegion && this.touchedSelectionHandle == 0
+                    && this.touchStayedInTapRegion
+                    && (this.touchedSelectionHandle == 0 || this.touchedSelectionHandle == 3)
                     && !this.touchInsideSelection
                     && var1.getEventTime() - this.touchDownTime
                     <= (long)ViewConfiguration.getDoubleTapTimeout();
@@ -1055,6 +1059,15 @@ public final class TextField implements Component, TextSelectionGeometry {
             if (this.touchInsideSelection && !this.touchDragging
                     && this.touchStayedInTapRegion) {
                this.placeCursorFromTouch(var1.getX(), var1.getY());
+            } else if (this.touchCaptured && !this.touchDragging
+                    && !this.touchLongPressTriggered && !this.doubleTapSelecting
+                    && this.touchStayedInTapRegion && this.touchedSelectionHandle == 0) {
+               this.placeCursorFromTouch(var1.getX(), var1.getY());
+            }
+            if (this.touchBeganFocused && !this.touchDragging
+                    && !this.touchLongPressTriggered && this.touchStayedInTapRegion
+                    && this.touchedSelectionHandle == 0 && this.owner != null) {
+               this.owner.requestFocus(this);
             }
             if ((this.doubleTapSelecting || this.touchLongPressTriggered
                     || this.touchedSelectionHandle == 1 || this.touchedSelectionHandle == 2)
@@ -1066,6 +1079,7 @@ public final class TextField implements Component, TextSelectionGeometry {
             this.touchLongPressTriggered = false;
             this.touchLongPressInsertion = false;
             this.touchInsideSelection = false;
+            this.touchBeganFocused = false;
             this.doubleTapSelecting = false;
              this.touchCursorDragCandidate = false;
              this.touchCursorDragging = false;
@@ -1161,6 +1175,7 @@ public final class TextField implements Component, TextSelectionGeometry {
             this.touchLongPressTriggered = false;
             this.touchLongPressInsertion = false;
             this.touchInsideSelection = false;
+            this.touchBeganFocused = false;
             this.doubleTapSelecting = false;
             this.lastTapUpTime = 0L;
              this.touchCursorDragCandidate = false;

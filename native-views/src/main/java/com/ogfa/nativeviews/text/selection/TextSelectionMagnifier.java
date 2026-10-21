@@ -35,8 +35,8 @@ public final class TextSelectionMagnifier {
         float halfHeight = height / 2f;
         float centerX = Math.max(halfWidth + margin,
                 Math.min(mapped[0], hostView.getWidth() - halfWidth - margin));
-        float centerY = mapped[1] - 68f * density;
-        if (centerY - halfHeight < margin) centerY = mapped[1] + 68f * density;
+        float centerY = mapped[1] - 47f * density;
+        if (centerY - halfHeight < margin) centerY = mapped[1] + 47f * density;
         centerY = Math.max(halfHeight + margin,
                 Math.min(centerY, hostView.getHeight() - halfHeight - margin));
 
