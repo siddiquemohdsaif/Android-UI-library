@@ -14,6 +14,7 @@ import android.text.InputType;
 import android.text.Layout;
 import android.text.StaticLayout;
 import android.text.TextPaint;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -44,6 +45,7 @@ import java.util.List;
  */
 public final class TextFieldTestActivity extends AppCompatActivity {
 
+    private static final String TAG = "TextFieldTestActivity_top";
     private TextFieldTestView testView;
 
     @Override
@@ -390,6 +392,9 @@ public final class TextFieldTestActivity extends AppCompatActivity {
                         invalidate();
                     })
                     .setOnTextChangedListener((fieldId, text) -> {
+                        if (TOP_FIELD.equals(fieldId)) {
+                            Log.d(TAG, "Top field text: " + text);
+                        }
                         eventMessage = fieldId + ": " + text;
                         invalidate();
                     })

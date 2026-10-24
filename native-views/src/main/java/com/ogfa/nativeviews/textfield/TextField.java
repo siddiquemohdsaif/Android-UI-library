@@ -18,6 +18,7 @@ import android.text.Selection;
 import android.text.SpannableStringBuilder;
 import android.text.StaticLayout;
 import android.text.TextPaint;
+import android.text.TextWatcher;
 import android.text.Layout.Alignment;
 import android.view.MotionEvent;
 import android.view.View;
@@ -153,6 +154,7 @@ public final class TextField implements Component, TextSelectionGeometry {
    private boolean focused;
    private long cursorBlinkStartedAt;
    private OnTextChangedListener textChangedListener;
+   private String lastNotifiedText;
    private OnEditorActionListener editorActionListener;
    private OnFocusChangedListener focusChangedListener;
    private TextSelectionActionCallback selectionActionCallback;
@@ -224,6 +226,18 @@ public final class TextField implements Component, TextSelectionGeometry {
       if (!(this.horizontalPaddingPx * 2.0F >= this.bounds.width()) && !(this.verticalPaddingPx * 2.0F >= this.bounds.height())) {
          this.applyLengthFilter();
          this.setTextInternal(var1.initialText, false);
+         this.lastNotifiedText = this.editable.toString();
+         this.editable.setSpan(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence text, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable text) {
+               // IMEs can replace a suggestion through getEditable() without
+               // calling commitText or setComposingText on our connection.
+               TextField.this.invalidateMultilineLayout();
+               TextField.this.notifyTextChanged();
+               TextField.this.invalidate();
+            }
+         }, 0, this.editable.length(), android.text.Spanned.SPAN_INCLUSIVE_INCLUSIVE);
       } else {
          throw new IllegalArgumentException("TextField padding leaves no drawable content area.");
       }
@@ -1847,8 +1861,12 @@ public final class TextField implements Component, TextSelectionGeometry {
    }
 
    private void notifyTextChanged() {
-      if (this.textChangedListener != null) {
-         this.textChangedListener.onTextChanged(this.id, this.editable.toString());
+      String text = this.editable.toString();
+      if (!text.equals(this.lastNotifiedText)) {
+         this.lastNotifiedText = text;
+         if (this.textChangedListener != null) {
+            this.textChangedListener.onTextChanged(this.id, text);
+         }
       }
 
    }
